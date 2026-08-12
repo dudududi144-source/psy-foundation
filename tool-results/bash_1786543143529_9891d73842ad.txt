@@ -1,5 +1,84 @@
-381 /home/z/my-project/worklog.md
+# PSY FOUNDATION — Shared Worklog
+
+This file is the single shared worklog for the `psy-foundation` project.
+All agents MUST read this before starting and MUST append (never overwrite) their section after finishing.
+
+Project root (proposed): `/home/z/psy-foundation`
+Audit workspace (read-only clones): `/home/z/psy-audit/`  (repos: psy, psy3-clean, psy4, psy5, forge, nova, PromptForge)
+
+Conventions:
+- Each section starts with a line containing exactly `---`.
+- Section header format:
+  ```
+  ---
+  Task ID: <id>
+  Agent: <name>
+  Task: <description>
+
+  Work Log:
+  - ...
+
+  Stage Summary:
+  - ...
+  ```
+- ACTION vocabulary: KEEP | EXTRACT | ADAPT | REWRITE | RETIRE | IGNORE
+- Subsystem table columns: SUBSYSTEM | SOURCE REPO | SOURCE FILE | STATUS | TESTED? | WIRED? | QUALITY | ACTION
+
 ---
+Task ID: M0-0
+Agent: foundation-lead (orchestrator)
+Task: Initialize forensic audit of the PSY device family across all known GitHub repositories under `dudududi144-source`, and prepare to author `psy-foundation`.
+
+Work Log:
+- Queried GitHub API: 7 public repos, 0 forks, no psy6/psy7 on remote (PSY6 is local-only per user).
+- Shallow-cloned all 7 repos to /home/z/psy-audit/.
+- Repos and one-line identity:
+  - `psy`            — single-file HTML instrument (index.html 44KB + soundBank.js 44KB)
+  - `psy3-clean`     — single-file HTML instrument (index.html 45KB), "clean base with critical fixes"
+  - `psy4`           — Next.js 16 app, 1594 tracked files, "PSY LIVE — Smart radio-following psytrance engine with learning" (the biggest/most-evolved)
+  - `psy5`           — single-file HTML instrument (index.html 60KB + factory-presets.js 12KB), "Pooled Engine — No GC Dropouts"
+  - `forge`          — minimal Next.js CI/CD scaffold (23 files, prisma + 2 API routes), "Sovereign CI/CD platform"
+  - `nova`           — Next.js 16 agent/orchestration app (~180 TS/TSX files, Prisma, mini-services, gateway worker)
+  - `PromptForge`    — Python AI software-development orchestrator (32 .py files, gateway+src+tests+ui)
+- Security pre-scan:
+  - `psy4/.env` committed but only contains `DATABASE_URL=file:/home/z/my-project/db/custom.db` (local SQLite path, low severity, bad hygiene).
+  - `nova/.env.production` committed but is a TEMPLATE — all real API keys (ZAI, DASHSCOPE, TOKENROUTER) are commented out.
+  - `nova/src/lib/api-keys.ts` and `tokenrouter.ts` read keys from env / globalThis at runtime — no hardcoded secrets.
+  - grep for sk-*/Bearer/api_key patterns across all repos: no hardcoded high-entropy secrets found.
+  - Conclusion: no critical credential leak requiring rotation. Recommend: remove committed `.env` files, add to .gitignore.
+- Dispatching 3 parallel audit subagents:
+  - M0-A: deep audit of `psy4` (Next.js, the most evolved musical engine)
+  - M0-B: deep audit of monolith HTML instruments `psy`, `psy3-clean`, `psy5`
+  - M0-C: deep audit of infra/agent layer `forge`, `nova`, `PromptForge`
+
+Stage Summary:
+- Audit scope locked: 7 repos, no remote psy6.
+- Security: clean enough to proceed; only hygiene fixes needed (untrack .env files).
+- Next: collect 3 subsystem tables and synthesize architecture proposal.
+
+---
+Task ID: M0-C
+Agent: infra-auditor
+Task: Deep forensic audit of the infrastructure/agent layer: `forge`, `nova`, `PromptForge`.
+
+Work Log:
+- Read worklog.md M0-0 baseline (security pre-scan summary, 3-repo dispatch).
+- FORGE: read package.json, prisma/schema.prisma, src/app/api/health/route.ts, src/lib/db.ts, wrangler.jsonc, open-next.config.ts, ARCHITECTURE.md, README.md, src/app/page.tsx, src/app/layout.tsx, next.config.js. Globbed `.github/workflows/` → ci.yml + deploy.yml + ingest.yml (read all 3).
+- FORGE findings: only 1 API route exists (`/api/health` — stubbed, DB check is TODO comment). README claims `/api/build` POST + `/api/build/[buildId]` GET — DO NOT EXIST. Prisma schema defines Project/Run/Secret/AuditLog models but NO route imports `db` or uses any model. Homepage `StatusCard` hardcodes "operational"/"idle". `ingest.yml` is a 16-line stub that downloads a ZIP and echoes its size — no parse, no build, no upload. `deploy.yml` builds OpenNext + `wrangler deploy`. No benchmark code, no audio/music awareness anywhere. ARCHITECTURE.md "Future Considerations: queue system, plugin architecture" = aspirational.
+- NOVA: read package.json, prisma/schema.prisma (EMPTY — only datasource + generator, comment says "NOVA v1 does not use a database"), .env.production (template, all keys commented), wrangler.jsonc, README.md, worklog.md (7397 lines), Dockerfile, docker-compose.yml, Caddyfile, start-dev.sh, worker.js, nova-server.cjs, nova-gateway-worker.js. Read all 9 API routes (build/architect, build/code, build/result, enhance, refine, run, settings, backup, forge/deploy). Read lib files: api-keys.ts, tokenrouter.ts, llm.ts, dashscope.ts, model-circuit-breaker.ts, build-store.ts, static-analysis.ts. Grepped src/ for audio|music|beat|DSP|transport|psy|synth|sequencer|midi|chord — all hits are incidental (UI suggestion strings, "synthesize" verb in research/review agents, modal CSS classnames). No musical technology anywhere.
+- NOVA findings: prompt-to-HTML-app generator with architect→coder→analyze→probe→autofix pipeline. 9 API routes confirmed via `find`. Multi-LLM cascade Z.AI→DashScope→TokenRouter with circuit breaker (3 fails → 2-min cooldown). SSE streaming with keepalive. In-memory globalThis store (NO database). IndexedDB client-side cache. Code execution sandbox (python3/node/bash, 30s timeout, 200KB cap, restricted env). 80+ test files. README claims "Next.js 16" but package.json shows `next@15.5.21` (README lie). mini-services/ is EMPTY (only .gitkeep). worker.js = Cloudflare proxy to hardcoded `preview-chat-dc1fb2f6-89e3-4024-9cca-d9323b5fe643.space-z.ai` (same chat_id as the JWT in nova-server.cjs). nova-gateway-worker.js = standalone NVIDIA Build API proxy with embedded HTML UI (separate prototype). nova-server.cjs = standalone 144-line prototype with HARDCODED JWT (see security finding).
+- NOVA forge-bridge: `src/app/api/forge/deploy/route.ts` POSTs to `FORGE_URL + /api/forge/projects/create` and `/api/forge/projects/:id/files/update` and `/api/forge/projects/:id/workflows` — NONE of these endpoints exist in forge repo. Default FORGE_URL is `https://forge.rabotatony.workers.dev`. Bridge is dead.
+- PROMPTFORGE: read pyproject.toml, README.md, docs/ARCHITECTURE.md, ui/index.html (437 lines, Hebrew RTL self-contained). Read all Python: cli.py, core/{engine,supervisor,resilience,config,observability,auth}.py, agents/{base,coding,research,review,testing}_agent.py, gateway/worker.py, integrations/{nvidia_api,supabase}.py, models/schemas.py. Read tests/unit/* (6 test files). Read gateway/worker.js (Cloudflare Worker, reads NVIDIA_API_KEY from env — clean).
+- PROMPTFORGE findings: Python orchestrator using NVIDIA Build API (LLM backend via httpx). Clean architecture patterns: supervisor + WIP=5 semaphore + circuit breaker + token-bucket rate limiter + retry-with-backoff + structured logger + pydantic schemas. BUT agents are STUBS — CodingAgent.plan() returns hardcoded 3-step list, execute_step just calls nvidia.chat_completion and returns `{"code": "..."}`, verify() only checks `len(code) > 50`. No file I/O, no git ops, no real testing/reviewing. SupabaseClient class exists but is NOT called anywhere. github_token in EngineConfig but no GitHub integration code. README's "User -> Gateway -> [Nova | PromptForge | Forge] -> Deploy" architecture is aspirational — no actual Nova/Forge integration in code. CLI has 3 commands: `run`, `status`, `version`. No musical technology.
+- SECURITY VERIFICATION (re-running pre-scan with broader regex):
+  - forge: NO secrets, NO auth, NO API integration. Clean (also empty).
+  - nova/.env.production: confirmed TEMPLATE — all real keys (ZAI/DASHSCOPE/TOKENROUTER) commented out. Clean.
+  - nova/src/lib/api-keys.ts + tokenrouter.ts + dashscope.ts: all read keys from `globalThis.__novaSettings` (UI-set) → `process.env` → optional SDK config file. No hardcoded secrets. Confirms lead's pre-scan.
+  - nova/src/lib/llm.ts: dynamic-imports z-ai-web-dev-sdk, uses `ZAI.default.create()` which auto-loads `/etc/.z-ai-config`. Clean.
+  - **NEW SECURITY FINDING (missed by M0-0 pre-scan):** `/home/z/psy-audit/nova/nova-server.cjs` line 12 hardcodes a Z.AI session JWT: `token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiODUxZmE2MjItNDYwOC00YzM0LTkxMTUtYTk4ODkwYzllYTIyIiwiY2hhdF9pZCI6ImNoYXQtZGMxZmIyZjYtODllMy00MDI0LTljY2EtZDkzMjNiNWZlNjQzIiwicGxhdGZvcm0iOiJ6YWkifQ.rYEOt9X7HidHwBaJyarGUKhFx3Nvud0eoVYM3x9U0-0'` with `userId: '851fa622-4608-4c34-9115-a98890c9ea22'` and `chatId: 'chat-dc1fb2f6-89e3-4024-9cca-d9323b5fe643'`. Pre-scan grep for `sk-`/`Bearer`/`api_key` missed this because it's a JWT (`eyJ...`) with `Authorization: Bearer Z.ai` (literal string, not a key). The same chat_id appears in `worker.js` line 4 (`preview-chat-dc1fb2f6-...space-z.ai`). This is a real Z.ai session credential committed to a public repo. The file is a 144-line standalone prototype (not used by main nova Next.js app), but the credential leak is real. Recommend: rotate the Z.ai chat session, delete nova-server.cjs from history.
+  - PromptForge: gateway/worker.js reads `env.NVIDIA_API_KEY` (Cloudflare secret). Python `EngineConfig` reads from env via pydantic-settings. No hardcoded secrets. Clean.
+
+Stage Summary:
 - **Forge** = doc-only scaffold. README + ARCHITECTURE.md describe a CI/CD platform; code is a single stubbed health route + an unused Prisma schema + 3 minimal GitHub workflows (lint/typecheck/deploy/ingest-echo). The user's intended CODE→TEST→BENCHMARK→BUILD→ARTIFACT→FORGE pipeline does not exist anywhere in code. ACTION: foundation should treat forge as a greenfield skeleton to be REWRITTEN — at most EXTRACT the Prisma schema skeleton (Project/Run/Secret/AuditLog) and the libSQL/Turso adapter pattern from `src/lib/db.ts` (60 lines, decent).
 - **Nova** = real, working prompt-to-HTML-app generator (agent layer, NOT musical tech). 9 API routes, multi-LLM cascade, SSE streaming, sandboxed code execution, 80+ tests. NO database (Prisma schema is empty placeholder). NO musical technology. NO protocol/SDK for PSY devices to call. Forge-bridge endpoint points at nonexistent forge routes (dead). Standalone prototypes (nova-server.cjs, nova-gateway-worker.js, worker.js) are leftover artifacts. ACTION for foundation: IGNORE — nova is the user's "generation/orchestration" layer per stated division of labor, fully decoupled from musical technology. Foundation should not import anything from nova. The only EXTRACT candidates are conceptual patterns (multi-LLM cascade with circuit breaker, SSE keepalive, sandboxed code execution with restricted env) which foundation may want to re-implement natively if it ever needs an LLM-backed analysis service. The hardcoded JWT in nova-server.cjs is a security finding for the lead to address.
 - **PromptForge** = Python CLI orchestrator with clean architectural patterns but stub agents. CodingAgent returns LLM output as a string, verify() checks `len(code) > 50`. Supabase + GitHub integrations are configured-but-uncalled. No musical technology. No actual code-generation loop (no file writes, no git, no deploy). Python stack is a separate universe from a TypeScript foundation. ACTION for foundation: IGNORE as code. The patterns (circuit breaker + token-bucket + retry-with-backoff + supervisor with WIP limit + structured logger with request_id ContextVar) are textbook and worth ADAPTING conceptually if foundation ever builds a TS orchestrator — but the code itself is not reusable cross-language.
@@ -300,3 +379,122 @@ Stage Summary:
 - ARCHITECTURE: monorepo (bun workspaces), packages/transport|protocol|device-sdk|fixtures|analysis|dsp|music|material|scheduler|learning, apps/reference-lab|sync-lab|benchmark-lab, data/, docs/. Each package: src/ + tests/ + README.md + package.json. Single source of truth enforced by ownership rules.
 - BUILD ORDER: M1 transport+protocol+device-sdk+fixtures → M2 scheduler+analysis → M3 music+material → M4 learning → M5 dsp → M6 labs.
 - FIRST BUILD: packages/transport (MusicalTransport interface + BeatEstimator + PhaseCorrector + ConfidenceTracker) and packages/fixtures (synthetic radio corpus) IN PARALLEL, because transport needs fixtures to be tested deterministically.
+
+---
+Task ID: M1-FIX
+Agent: fixtures-builder
+Task: Build the `packages/fixtures` synthetic radio corpus for psy-foundation.
+
+Work Log:
+- Read worklog + audited existing repo: confirmed `packages/fixtures/{src,tests}/` existed empty; root package.json/tsconfig.base.json/biome.json already in place; transport package built with 12 passing tests using inline beat generators.
+- Created `packages/fixtures/package.json` (name `@psy-foundation/fixtures`, ESM, src entrypoints) and `tsconfig.json` (extends base, excludes dist/tests).
+- Created `src/types.ts`: `Anomaly` union (14 variants) + `Fixture` interface with full JSDoc and invariants.
+- Created `src/rng.ts`: deterministic `mulberry32(seed)` PRNG — no `Math.random`.
+- Created `src/kick.ts`: `synthesizeKick(at, sampleRate, signal, gain=1)` writing a ~60ms decaying 50Hz sine burst with 1ms attack; samples are ADDED (not overwritten) so bass/lead/pad layers compose additively.
+- Created `src/generators.ts`: 14 pure generator functions + helpers (`makeSignal`, `clampSignal`, `addSustainedTone`). Each generator is deterministic; only `generateJitter150` consumes the RNG (default seed 42). Key design decisions:
+  - perfect/jitter/missing/false/half/sparse/dense/lead: 16 bars @ 150 BPM, durationSec = 64*(60/150) = 25.6s.
+  - double-time: 16 bars @ 75 BPM (51.2s) with quiet ghost kicks at midpoints.
+  - tempo-ramp: linear bpm(t)=130+2t integrated beat-by-beat over 20s → strictly decreasing intervals.
+  - tempo-jump: 8 bars @ 130 BPM + 8 bars @ 160 BPM → exactly one discontinuous interval change.
+  - missing-beat: beat 32 (bar 9 downbeat) removed → one 2x interval.
+  - gap-500ms / gap-2s: gap replaces the normal interval after beat 24; duration extended to fit.
+  - breakdown: 140 BPM, bars 5-8 (beats 16-31) have no kicks, only an A-minor pad; ~7.3s gap tests relock.
+- Created `src/corpus.ts`: `corpus: Fixture[]` (14 entries built at module load) + `getFixture(id)` that throws on miss.
+- Created `src/index.ts`: re-exports types (via `export type`), `corpus`, `getFixture`, `mulberry32`, `synthesizeKick`, and all 14 generators — `verbatimModuleSyntax`-safe.
+- Created `tests/fixtures.test.ts`: 10 tests covering (1) count+unique ids, (2) signal length = ceil(durationSec*sampleRate), (3) monotonic beats in [0,durationSec], (4) perfect-150 intervals within 1ms of 60/150, (5) missing-beat exactly one 2x interval, (6) tempo-ramp strictly decreasing, (7) tempo-jump exactly one discontinuity, (8) breakdown gap > 5x base interval, (9) determinism via Buffer byte-compare of repeated generator calls, (10) getFixture success + throw.
+- Ran `bun test packages/fixtures` → 10/10 pass, 2665 expect() calls, ~475ms (determinism test 296ms due to building 28 fixture copies).
+- Ran `bunx biome check packages/fixtures` → initial organizeImports + format issues in corpus.ts/generators.ts/kick.ts/tests; auto-fixed with `biome check --write` (reordered imports, removed trailing comma in `gain = 1`). Re-checked: 0 issues, exit 0. Did NOT touch root package.json or transport test files (pre-existing lint issues there are out of scope).
+- Re-ran full monorepo `bun test` → 22/22 pass (12 transport + 10 fixtures), confirming fixtures import cleanly and transport still green.
+
+Stage Summary:
+- Built `@psy-foundation/fixtures` with 14 deterministic fixtures: perfect-150, jitter-150, tempo-ramp, tempo-jump, missing-beat, false-kick, half-time, double-time, gap-500ms, gap-2s, sparse, dense-bass, lead-heavy, breakdown.
+- All 44100 Hz mono Float32Array signals, lengths = ceil(durationSec*44100), clamped to [-1,1].
+- 10/10 tests pass; full monorepo 22/22 pass; `biome check packages/fixtures` clean (exit 0).
+- Trickiest fixtures: tempo-ramp (had to integrate beat-by-beat using instantaneous bpm(t) to guarantee strictly-decreasing intervals under float precision), breakdown (coordinating the 4-bar pad window with the beat-skip logic so exactly one large gap appears and the pad doesn't overlap returning kicks), and double-time (51.2s / 2.26M-sample signal — largest in the corpus, but still builds in <50ms).
+- Corpus is now the canonical test input for transport, scheduler, analysis, and benchmark packages going forward.
+
+---
+Task ID: M1-LEAD
+Agent: foundation-lead (orchestrator)
+Task: Build MILESTONE 1 of psy-foundation: transport + protocol + device-sdk + fixtures + transport benchmark.
+
+Work Log:
+- Scaffolded /home/z/psy-foundation as bun-workspaces monorepo (root package.json, tsconfig.base.json with strict + noUncheckedIndexedAccess + allowImportingTsExtensions, biome.json, .gitignore, CI workflow, README, architecture doc).
+- Built packages/transport myself: types.ts (MusicalTransport + BeatObservation + Observed/Estimated/PredictedBeatTime separation), beatEstimator.ts (PLL with octave folding, adapted from psy4 BeatPLL), phaseCorrector.ts (relock + nudge), confidenceTracker.ts (jitter-based + decay), transport.ts (TransportClock = single source of truth wiring all three, revision-bump for determinism). 12 tests, all pass.
+- Dispatched subagent M1-FIX for packages/fixtures: 14 synthetic radio fixtures (perfect, jitter, ramp, jump, missing, false-kick, half/double-time, gaps, sparse, dense-bass, lead-heavy, breakdown), each deterministic (mulberry32), with ground-truth beats. 10 tests, all pass.
+- Built packages/protocol myself: events.ts (MusicalEvent union: Beat/Section/Energy/Drop/Note/Pattern), state.ts (TransportState, MusicalContext, DeviceCapabilities, DeviceState, SessionState, Material, MusicalAction with do-nothing, MusicalOutcome, Experience), channel.ts (Channel abstraction + InMemoryChannel). 8 tests, all pass.
+- Built packages/device-sdk myself: device.ts (PsyDevice interface), host.ts (DeviceHost: register/unregister, pushTransport with revision-dedup, pushContext, event routing via Channel, findByRole, dispose), reference.ts (ReferenceDevice proving graceful degradation — keeps last-known transport after host disappears). 12 tests, all pass.
+- Wrote benchmarks/transport-accuracy.ts: phase error mean/median/P95/max + bpm error + lock rate across all 14 fixtures. Added "benchmarks:transport" script.
+- Wrote docs/research/transport-benchmark-m1.md documenting results honestly, including the sparse half-time limitation exposed by the benchmark.
+
+Stage Summary:
+- M1 COMPLETE. 4 packages, 42 tests all green, typecheck clean (0 errors), lint clean.
+- Benchmark evidence: perfect-150 median 0.01ms P95 3.7ms bpm-error ~1e-9. Octave folding verified on missing/false/half/double. Gap recovery verified (500ms + 2s). Breakdown recovery verified (4-bar silence). Jitter cost linear (13ms median for ±10ms input). Tempo ramp/jump tracked with expected smoothing lag.
+- KNOWN LIMITATION (documented, not hidden): sparse fixture locks to half-time (75bpm) from cold start — octave fold doesn't trigger when bpm estimate drifts. Fix scheduled for M2 analysis (multi-hypothesis tempo tracker). The benchmark exposes this with numbers per the "every claim has evidence" rule.
+- Next: git commit + push, then M2 (scheduler + analysis).
+
+---
+Task ID: M2-LEAD
+Agent: foundation-lead (orchestrator)
+Task: Build MILESTONE 2 of psy-foundation: scheduler + analysis.
+
+Work Log:
+- Built packages/scheduler: MusicalPlan/PatternTrack/PatternStep/ScheduledEvent types (adapted from psy5 step schema), Rng (mulberry32, dependency-free), schedule() pure function (swing, humanize, probability, per-step locks, polyrhythm, multi-bar). barBeatToAudioTime, step(), emptyTrack helpers. 18 tests, all pass.
+- Built packages/analysis: dsp.ts (fft, hannWindow, spectrum, magnitudeSpectrum), features.ts (spectralCentroid/flatness/flux, rmsEnergy, zeroCrossingRate, bandEnergy, bassActivity, transientDensity), onset.ts (detectOnsets with adaptive spectral-flux threshold + minInterval suppression), pitch.ts (detectPitch via autocorrelation with subharmonic-avoidance, chroma, dominantPitchClass, midiToName), tempo.ts (estimateTempo multi-hypothesis with octave candidates, pickMusicalWinner with preferred-range tie-breaking), inference.ts (inferMusical: role occupancy / energy class / section label, refineTempoWithContext: doubles sub-100 bpm into preferred range), analyzer.ts (Analyzer stream wrapper). 26 tests, all pass.
+- THE SPARSE FIX: refineTempoWithContext doubles a winning hypothesis below 100 bpm into the preferred range [100,180] when doubling lands in range. Tested explicitly: sparse fixture now estimates 150 BPM (was 75 in M1). Verified in benchmark.
+- Wrote benchmarks/analysis-accuracy.ts: onset detection + tempo estimation on all 14 fixtures. Results: perfect/jitter/missing/false/half/gap/breakdown all 0-1 bpm error. Sparse FIXED. Dense-bass 48.5 bpm error (known limitation — extra onsets from bass notes). Double-time 75 bpm error (half/double ambiguity, musically valid).
+- Disabled noUncheckedIndexedAccess for analysis package (legitimate for DSP code with heavy array indexing). Fixed duplicate identifier bug in Analyzer (private fields conflicting with getters).
+- All 86 tests pass, typecheck clean, lint clean.
+
+Stage Summary:
+- M2 COMPLETE. 6 packages total (transport, protocol, device-sdk, fixtures, scheduler, analysis), 86 tests, all green.
+- The M1 sparse half-time limitation is FIXED and quantitatively verified.
+- Known new limitations (documented honestly): dense-bass onset confusion, tempo-jump averaging, double-time ambiguity. All are expected single-hypothesis estimator behaviors addressable in future iterations.
+- Next: refresh ZIP, commit, then M3 (music + material).
+
+---
+Task ID: M3-LEAD
+Agent: foundation-lead (orchestrator)
+Task: Build MILESTONE 3 of psy-foundation: music + material. Also set up ZIP download via web app.
+
+Work Log:
+- Set up ZIP delivery: copied psy-foundation.zip to /home/z/my-project/public/, added prominent green "Download ZIP" button at top of the status page. Verified: HTTP 200, application/zip, 81KB, download attribute works.
+- Built packages/music: scales.ts (18 scales/modes incl. phrygian-dominant from psy audit + degree/pc conversions + stableDegrees), chords.ts (18 chord types + voiceChord with smooth voice leading + chordTension scoring), motif.ts (call-&-response generator extracted from psy/index.html:200-281 + variation operators: transpose, invert, fragment, retrograde, vary), bass.ts (kb3/four-on-floor/offbeat/syncopated patterns + tension curves: flat/build/release/peak/valley), rhythm.ts (fourOnFloor/offbeatHats/psyKick/drivingHats/backbeat + swing/humanize/combine/invertRhythm/density). 43 tests, all pass.
+- Built packages/material: types.ts (typed payloads for 9 material kinds: Motif/Rhythm/BassPattern/DrumPattern/Fill/Phrase/FXGesture/Preset/Texture), material.ts (createMaterial builder + MaterialLibrary with query by type/role/style/bpm/rootPc/energy + markUsed + addReward + toJSON/fromJSON), factory.ts (makeMotifMaterial/makeBassPatternMaterial/makeRhythmMaterial/makeDrumPatternMaterial/makeFillMaterial/makePresetMaterial/makeFXGestureMaterial/makeTextureMaterial), seed.ts (createSeedLibrary: 18 starter materials across all types). 23 tests, all pass.
+- Fixed a spread-undefined bug in factory.ts (opts.steps undefined was overriding DEFAULTS.steps in generateMotif).
+- All 152 tests pass across 8 packages. typecheck clean. lint clean.
+
+Stage Summary:
+- M3 COMPLETE. 8 packages total (transport, protocol, device-sdk, fixtures, scheduler, analysis, music, material), 152 tests, all green.
+- The psy motif generator (the most valuable domain asset from the audit) is now in foundation, generalized and tested.
+- Seed material library provides 18 ready-to-use materials across all types.
+- ZIP is downloadable via the web app at /psy-foundation.zip.
+- Next: refresh ZIP, commit, update page, then M4 (learning).
+
+---
+Task ID: R-FIX
+Agent: fixtures-rebuilder
+Task: Rebuild packages/fixtures after accidental deletion.
+
+Work Log:
+- Read worklog M1-FIX section (lines 383-415) for the original build record: 14 deterministic fixtures, 10 tests, mulberry32 RNG, additive kick/bass/lead/pad synthesis, biome-clean.
+- Audited existing repo state: `/home/z/psy-foundation/packages/fixtures/{src,tests}/` existed empty; root package.json (bun workspaces), tsconfig.base.json (strict + noUncheckedIndexedAccess + verbatimModuleSyntax + allowImportingTsExtensions), biome.json (single quotes, no semicolons, es5 trailing commas, 2-space indent, 100 col) all in place.
+- Created `packages/fixtures/package.json` (name `@psy-foundation/fixtures`, ESM, src entrypoints, bun test / tsc / biome scripts) and `tsconfig.json` (extends base, outDir dist, rootDir src, noUncheckedIndexedAccess:false override to allow clean numeric array indexing in DSP code, excludes dist/tests).
+- Created `src/types.ts`: `Anomaly` union (14 variants) + `Fixture` interface exactly per spec.
+- Created `src/rng.ts`: `Rng` class wrapping mulberry32 PRNG with `next()` and `range(min,max)` — deterministic, no Math.random.
+- Created `src/kick.ts`: `synthesizeKick` (60ms decaying 50Hz sine burst with pitch envelope), `synthesizeBassNote` (sustained sine with attack/release), `synthesizeLead` (sawtooth-ish via 3 harmonics), `synthesizePad` (low sustained harmonics with 0.5s fades). All samples ADDED to signal (additive). NOTE: removed unused `import { Rng }` that the spec template included but never used (would trigger biome noUnusedImports).
+- Created `src/generators.ts`: 14 pure generator functions + helpers (`makeSignal`, `beatsAtBpm` with start=0 default so beats fit within durationSec, `clampSignal` to keep signals in [-1,1] after additive layers). Design decisions per fixture:
+  - perfect/jitter/missing/false/half/sparse/dense/lead: 16 bars @ 150 BPM, durationSec = 64*(60/150) = 25.6s.
+  - jitter: per-beat ±10ms via Rng(2), independent jitter per beat (not cumulative).
+  - tempo-ramp: integrated bpm(t)=130+2t analytically — beat n at t = (-130 + sqrt(130^2 + 240n))/2 over durationSec=20.5s → 50 beats, strictly decreasing intervals.
+  - tempo-jump: 32 beats @ 130 BPM + 32 beats @ 160 BPM, durationSec ~27.27s → exactly one discontinuous interval change (0.4615→0.375).
+  - missing-beat: beat index 32 skipped → 63 beats, one 0.8s (2x) interval.
+  - false-kick: 64 main kicks + 1 extra gain-0.3 kick at 16.2s (midpoint of beats 40&41) → 65 groundTruthBeats sorted ascending.
+  - half-time: 64 beats, odd indices at gain 0.3.
+  - double-time: 75 BPM, 64 main + 63 ghost (gain 0.4) = 127 beats, durationSec=51.2s (largest signal, ~2.26M samples).
+  - gap-500ms / gap-2s: 0.5s / 2s silence added after beat 24, shifting all subsequent beats — durationSec extended by gap amount.
+  - sparse: kicks only on bar positions 0 and 2 (32 kicks) → tempts half-time (75 BPM) detection.
+  - dense-bass: 64 kicks + 55Hz bass notes between each consecutive kick pair.
+  - lead-heavy: 64 kicks + continuous 440Hz lead across full duration.
+  - breakdown: 140 BPM 16 bars; bars 5-8 (beats 16-31) no kicks, 110Hz pad fills that 6.86s window; 48 kicks total, one ~7.3s gap (17x normal interval).
+  - Convention: groundTruthBeats = all rendered synthesizeKick calls (so missing-beat=63, false-kick=65, double-time=127, sparse=32, breakdown=48). groundTruthBpm = musical truth (null for ramp/jump where bpm varies).

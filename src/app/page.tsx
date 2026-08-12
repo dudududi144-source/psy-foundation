@@ -86,33 +86,6 @@ export default function Home() {
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 space-y-10">
-        {/* Download banner */}
-        <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-base font-semibold text-emerald-200">Download the repository</span>
-                <span className="text-xs text-emerald-400/70 font-mono">psy-foundation.zip</span>
-              </div>
-              <p className="mt-1 text-xs text-emerald-300/80">
-                Complete monorepo — 8 packages, 152 tests, benchmarks, docs, CI, seed library. Ready to push to GitHub.
-              </p>
-            </div>
-            <a
-              href="/psy-foundation.zip"
-              download="psy-foundation.zip"
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 shrink-0"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Download ZIP
-            </a>
-          </div>
-        </section>
-
         {/* Identity / warning */}
         <section>
           <p className="text-sm text-zinc-400 max-w-3xl leading-relaxed">
