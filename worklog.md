@@ -1,0 +1,434 @@
+# PSY FOUNDATION — Shared Worklog
+
+This file is the single shared worklog for the `psy-foundation` project.
+All agents MUST read this before starting and MUST append (never overwrite) their section after finishing.
+
+Project root (proposed): `/home/z/psy-foundation`
+Audit workspace (read-only clones): `/home/z/psy-audit/`  (repos: psy, psy3-clean, psy4, psy5, forge, nova, PromptForge)
+
+Conventions:
+- Each section starts with a line containing exactly `---`.
+- Section header format:
+  ```
+  ---
+  Task ID: <id>
+  Agent: <name>
+  Task: <description>
+
+  Work Log:
+  - ...
+
+  Stage Summary:
+  - ...
+  ```
+- ACTION vocabulary: KEEP | EXTRACT | ADAPT | REWRITE | RETIRE | IGNORE
+- Subsystem table columns: SUBSYSTEM | SOURCE REPO | SOURCE FILE | STATUS | TESTED? | WIRED? | QUALITY | ACTION
+
+---
+Task ID: M0-0
+Agent: foundation-lead (orchestrator)
+Task: Initialize forensic audit of the PSY device family across all known GitHub repositories under `dudududi144-source`, and prepare to author `psy-foundation`.
+
+Work Log:
+- Queried GitHub API: 7 public repos, 0 forks, no psy6/psy7 on remote (PSY6 is local-only per user).
+- Shallow-cloned all 7 repos to /home/z/psy-audit/.
+- Repos and one-line identity:
+  - `psy`            — single-file HTML instrument (index.html 44KB + soundBank.js 44KB)
+  - `psy3-clean`     — single-file HTML instrument (index.html 45KB), "clean base with critical fixes"
+  - `psy4`           — Next.js 16 app, 1594 tracked files, "PSY LIVE — Smart radio-following psytrance engine with learning" (the biggest/most-evolved)
+  - `psy5`           — single-file HTML instrument (index.html 60KB + factory-presets.js 12KB), "Pooled Engine — No GC Dropouts"
+  - `forge`          — minimal Next.js CI/CD scaffold (23 files, prisma + 2 API routes), "Sovereign CI/CD platform"
+  - `nova`           — Next.js 16 agent/orchestration app (~180 TS/TSX files, Prisma, mini-services, gateway worker)
+  - `PromptForge`    — Python AI software-development orchestrator (32 .py files, gateway+src+tests+ui)
+- Security pre-scan:
+  - `psy4/.env` committed but only contains `DATABASE_URL=file:/home/z/my-project/db/custom.db` (local SQLite path, low severity, bad hygiene).
+  - `nova/.env.production` committed but is a TEMPLATE — all real API keys (ZAI, DASHSCOPE, TOKENROUTER) are commented out.
+  - `nova/src/lib/api-keys.ts` and `tokenrouter.ts` read keys from env / globalThis at runtime — no hardcoded secrets.
+  - grep for sk-*/Bearer/api_key patterns across all repos: no hardcoded high-entropy secrets found.
+  - Conclusion: no critical credential leak requiring rotation. Recommend: remove committed `.env` files, add to .gitignore.
+- Dispatching 3 parallel audit subagents:
+  - M0-A: deep audit of `psy4` (Next.js, the most evolved musical engine)
+  - M0-B: deep audit of monolith HTML instruments `psy`, `psy3-clean`, `psy5`
+  - M0-C: deep audit of infra/agent layer `forge`, `nova`, `PromptForge`
+
+Stage Summary:
+- Audit scope locked: 7 repos, no remote psy6.
+- Security: clean enough to proceed; only hygiene fixes needed (untrack .env files).
+- Next: collect 3 subsystem tables and synthesize architecture proposal.
+
+---
+Task ID: M0-C
+Agent: infra-auditor
+Task: Deep forensic audit of the infrastructure/agent layer: `forge`, `nova`, `PromptForge`.
+
+Work Log:
+- Read worklog.md M0-0 baseline (security pre-scan summary, 3-repo dispatch).
+- FORGE: read package.json, prisma/schema.prisma, src/app/api/health/route.ts, src/lib/db.ts, wrangler.jsonc, open-next.config.ts, ARCHITECTURE.md, README.md, src/app/page.tsx, src/app/layout.tsx, next.config.js. Globbed `.github/workflows/` → ci.yml + deploy.yml + ingest.yml (read all 3).
+- FORGE findings: only 1 API route exists (`/api/health` — stubbed, DB check is TODO comment). README claims `/api/build` POST + `/api/build/[buildId]` GET — DO NOT EXIST. Prisma schema defines Project/Run/Secret/AuditLog models but NO route imports `db` or uses any model. Homepage `StatusCard` hardcodes "operational"/"idle". `ingest.yml` is a 16-line stub that downloads a ZIP and echoes its size — no parse, no build, no upload. `deploy.yml` builds OpenNext + `wrangler deploy`. No benchmark code, no audio/music awareness anywhere. ARCHITECTURE.md "Future Considerations: queue system, plugin architecture" = aspirational.
+- NOVA: read package.json, prisma/schema.prisma (EMPTY — only datasource + generator, comment says "NOVA v1 does not use a database"), .env.production (template, all keys commented), wrangler.jsonc, README.md, worklog.md (7397 lines), Dockerfile, docker-compose.yml, Caddyfile, start-dev.sh, worker.js, nova-server.cjs, nova-gateway-worker.js. Read all 9 API routes (build/architect, build/code, build/result, enhance, refine, run, settings, backup, forge/deploy). Read lib files: api-keys.ts, tokenrouter.ts, llm.ts, dashscope.ts, model-circuit-breaker.ts, build-store.ts, static-analysis.ts. Grepped src/ for audio|music|beat|DSP|transport|psy|synth|sequencer|midi|chord — all hits are incidental (UI suggestion strings, "synthesize" verb in research/review agents, modal CSS classnames). No musical technology anywhere.
+- NOVA findings: prompt-to-HTML-app generator with architect→coder→analyze→probe→autofix pipeline. 9 API routes confirmed via `find`. Multi-LLM cascade Z.AI→DashScope→TokenRouter with circuit breaker (3 fails → 2-min cooldown). SSE streaming with keepalive. In-memory globalThis store (NO database). IndexedDB client-side cache. Code execution sandbox (python3/node/bash, 30s timeout, 200KB cap, restricted env). 80+ test files. README claims "Next.js 16" but package.json shows `next@15.5.21` (README lie). mini-services/ is EMPTY (only .gitkeep). worker.js = Cloudflare proxy to hardcoded `preview-chat-dc1fb2f6-89e3-4024-9cca-d9323b5fe643.space-z.ai` (same chat_id as the JWT in nova-server.cjs). nova-gateway-worker.js = standalone NVIDIA Build API proxy with embedded HTML UI (separate prototype). nova-server.cjs = standalone 144-line prototype with HARDCODED JWT (see security finding).
+- NOVA forge-bridge: `src/app/api/forge/deploy/route.ts` POSTs to `FORGE_URL + /api/forge/projects/create` and `/api/forge/projects/:id/files/update` and `/api/forge/projects/:id/workflows` — NONE of these endpoints exist in forge repo. Default FORGE_URL is `https://forge.rabotatony.workers.dev`. Bridge is dead.
+- PROMPTFORGE: read pyproject.toml, README.md, docs/ARCHITECTURE.md, ui/index.html (437 lines, Hebrew RTL self-contained). Read all Python: cli.py, core/{engine,supervisor,resilience,config,observability,auth}.py, agents/{base,coding,research,review,testing}_agent.py, gateway/worker.py, integrations/{nvidia_api,supabase}.py, models/schemas.py. Read tests/unit/* (6 test files). Read gateway/worker.js (Cloudflare Worker, reads NVIDIA_API_KEY from env — clean).
+- PROMPTFORGE findings: Python orchestrator using NVIDIA Build API (LLM backend via httpx). Clean architecture patterns: supervisor + WIP=5 semaphore + circuit breaker + token-bucket rate limiter + retry-with-backoff + structured logger + pydantic schemas. BUT agents are STUBS — CodingAgent.plan() returns hardcoded 3-step list, execute_step just calls nvidia.chat_completion and returns `{"code": "..."}`, verify() only checks `len(code) > 50`. No file I/O, no git ops, no real testing/reviewing. SupabaseClient class exists but is NOT called anywhere. github_token in EngineConfig but no GitHub integration code. README's "User -> Gateway -> [Nova | PromptForge | Forge] -> Deploy" architecture is aspirational — no actual Nova/Forge integration in code. CLI has 3 commands: `run`, `status`, `version`. No musical technology.
+- SECURITY VERIFICATION (re-running pre-scan with broader regex):
+  - forge: NO secrets, NO auth, NO API integration. Clean (also empty).
+  - nova/.env.production: confirmed TEMPLATE — all real keys (ZAI/DASHSCOPE/TOKENROUTER) commented out. Clean.
+  - nova/src/lib/api-keys.ts + tokenrouter.ts + dashscope.ts: all read keys from `globalThis.__novaSettings` (UI-set) → `process.env` → optional SDK config file. No hardcoded secrets. Confirms lead's pre-scan.
+  - nova/src/lib/llm.ts: dynamic-imports z-ai-web-dev-sdk, uses `ZAI.default.create()` which auto-loads `/etc/.z-ai-config`. Clean.
+  - **NEW SECURITY FINDING (missed by M0-0 pre-scan):** `/home/z/psy-audit/nova/nova-server.cjs` line 12 hardcodes a Z.AI session JWT: `token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiODUxZmE2MjItNDYwOC00YzM0LTkxMTUtYTk4ODkwYzllYTIyIiwiY2hhdF9pZCI6ImNoYXQtZGMxZmIyZjYtODllMy00MDI0LTljY2EtZDkzMjNiNWZlNjQzIiwicGxhdGZvcm0iOiJ6YWkifQ.rYEOt9X7HidHwBaJyarGUKhFx3Nvud0eoVYM3x9U0-0'` with `userId: '851fa622-4608-4c34-9115-a98890c9ea22'` and `chatId: 'chat-dc1fb2f6-89e3-4024-9cca-d9323b5fe643'`. Pre-scan grep for `sk-`/`Bearer`/`api_key` missed this because it's a JWT (`eyJ...`) with `Authorization: Bearer Z.ai` (literal string, not a key). The same chat_id appears in `worker.js` line 4 (`preview-chat-dc1fb2f6-...space-z.ai`). This is a real Z.ai session credential committed to a public repo. The file is a 144-line standalone prototype (not used by main nova Next.js app), but the credential leak is real. Recommend: rotate the Z.ai chat session, delete nova-server.cjs from history.
+  - PromptForge: gateway/worker.js reads `env.NVIDIA_API_KEY` (Cloudflare secret). Python `EngineConfig` reads from env via pydantic-settings. No hardcoded secrets. Clean.
+
+Stage Summary:
+- **Forge** = doc-only scaffold. README + ARCHITECTURE.md describe a CI/CD platform; code is a single stubbed health route + an unused Prisma schema + 3 minimal GitHub workflows (lint/typecheck/deploy/ingest-echo). The user's intended CODE→TEST→BENCHMARK→BUILD→ARTIFACT→FORGE pipeline does not exist anywhere in code. ACTION: foundation should treat forge as a greenfield skeleton to be REWRITTEN — at most EXTRACT the Prisma schema skeleton (Project/Run/Secret/AuditLog) and the libSQL/Turso adapter pattern from `src/lib/db.ts` (60 lines, decent).
+- **Nova** = real, working prompt-to-HTML-app generator (agent layer, NOT musical tech). 9 API routes, multi-LLM cascade, SSE streaming, sandboxed code execution, 80+ tests. NO database (Prisma schema is empty placeholder). NO musical technology. NO protocol/SDK for PSY devices to call. Forge-bridge endpoint points at nonexistent forge routes (dead). Standalone prototypes (nova-server.cjs, nova-gateway-worker.js, worker.js) are leftover artifacts. ACTION for foundation: IGNORE — nova is the user's "generation/orchestration" layer per stated division of labor, fully decoupled from musical technology. Foundation should not import anything from nova. The only EXTRACT candidates are conceptual patterns (multi-LLM cascade with circuit breaker, SSE keepalive, sandboxed code execution with restricted env) which foundation may want to re-implement natively if it ever needs an LLM-backed analysis service. The hardcoded JWT in nova-server.cjs is a security finding for the lead to address.
+- **PromptForge** = Python CLI orchestrator with clean architectural patterns but stub agents. CodingAgent returns LLM output as a string, verify() checks `len(code) > 50`. Supabase + GitHub integrations are configured-but-uncalled. No musical technology. No actual code-generation loop (no file writes, no git, no deploy). Python stack is a separate universe from a TypeScript foundation. ACTION for foundation: IGNORE as code. The patterns (circuit breaker + token-bucket + retry-with-backoff + supervisor with WIP limit + structured logger with request_id ContextVar) are textbook and worth ADAPTING conceptually if foundation ever builds a TS orchestrator — but the code itself is not reusable cross-language.
+- **Subsystem table** (all 3 repos, foundation-perspective):
+
+  | SUBSYSTEM | SOURCE REPO | SOURCE FILE | STATUS | TESTED? | WIRED? | QUALITY | ACTION |
+  |---|---|---|---|---|---|---|---|
+  | forge health route | forge | src/app/api/health/route.ts | partial | no | yes | low | KEEP (in forge; stub) |
+  | forge Prisma schema | forge | prisma/schema.prisma | working | no | no | medium | EXTRACT (model skeleton reusable) |
+  | forge libSQL adapter | forge | src/lib/db.ts | working | no | no | medium | EXTRACT (60-line pattern) |
+  | forge GitHub CI | forge | .github/workflows/ci.yml | working | no | yes | medium | KEEP (in forge) |
+  | forge OpenNext deploy | forge | .github/workflows/deploy.yml | working | no | yes | medium | KEEP (in forge) |
+  | forge ingest workflow | forge | .github/workflows/ingest.yml | dead-code | no | no | trash | RETIRE (16-line echo stub) |
+  | forge README/ARCH claims | forge | README.md, ARCHITECTURE.md | doc-only | n/a | n/a | low | IGNORE (aspirational) |
+  | nova build pipeline | nova | src/app/api/build/{architect,code,result}/route.ts | working | yes | yes | high | IGNORE (agent layer) |
+  | nova refine/enhance | nova | src/app/api/{refine,enhance}/route.ts | working | yes | yes | high | IGNORE |
+  | nova code-exec sandbox | nova | src/app/api/run/route.ts | working | yes | yes | high | IGNORE (could ADAPT pattern later) |
+  | nova multi-LLM cascade | nova | src/lib/{llm,tokenrouter,dashscope}.ts | working | yes | yes | high | IGNORE (ADAPT pattern conceptually) |
+  | nova circuit breaker | nova | src/lib/model-circuit-breaker.ts | working | yes | yes | medium | IGNORE (ADAPT pattern) |
+  | nova SSE keepalive | nova | src/app/api/build/code/route.ts | working | yes | yes | high | IGNORE |
+  | nova static analysis | nova | src/lib/static-analysis.ts | working | yes | yes | medium | IGNORE |
+  | nova interaction probe | nova | src/lib/interaction-probe.ts | working | yes | yes | medium | IGNORE |
+  | nova build-store (globalThis) | nova | src/lib/build-store.ts | working | yes | yes | medium | IGNORE |
+  | nova settings/api-keys | nova | src/lib/api-keys.ts + src/app/api/settings/route.ts | working | yes | yes | high | IGNORE |
+  | nova ZIP backup | nova | src/lib/zip.ts + src/app/api/backup/route.ts | working | yes | yes | medium | IGNORE |
+  | nova forge-bridge | nova | src/app/api/forge/deploy/route.ts | broken | no | yes | low | IGNORE (calls nonexistent forge routes) |
+  | nova Prisma schema | nova | prisma/schema.prisma | dead-code | no | no | trash | RETIRE (empty placeholder) |
+  | nova mini-services dir | nova | mini-services/.gitkeep | dead-code | no | no | trash | RETIRE |
+  | nova-server.cjs prototype | nova | nova-server.cjs | dead-code | no | no | trash | RETIRE (hardcoded JWT — security) |
+  | nova-gateway-worker.js | nova | nova-gateway-worker.js | experimental | no | no | low | RETIRE (standalone NVIDIA prototype) |
+  | nova worker.js proxy | nova | worker.js | working | no | yes | low | IGNORE (deployment-specific) |
+  | nova Caddyfile | nova | Caddyfile | working | no | yes | medium | IGNORE (deploy config) |
+  | nova Dockerfile | nova | Dockerfile | working | no | yes | medium | IGNORE |
+  | nova 80+ test files | nova | tests/*.test.ts | working | yes | n/a | high | IGNORE (covers nova only) |
+  | PromptForge supervisor | PromptForge | src/promptforge/core/supervisor.py | partial | yes | yes | medium | IGNORE (Python) |
+  | PromptForge engine | PromptForge | src/promptforge/core/engine.py | partial | yes | yes | medium | IGNORE (Python) |
+  | PromptForge agents | PromptForge | src/promptforge/agents/*.py | partial | yes | yes | low | IGNORE (stubs) |
+  | PromptForge resilience | PromptForge | src/promptforge/core/resilience.py | working | yes | yes | high | IGNORE (ADAPT pattern conceptually) |
+  | PromptForge observability | PromptForge | src/promptforge/core/observability.py | working | yes | yes | medium | IGNORE (Python) |
+  | PromptForge NVIDIA client | PromptForge | src/promptforge/integrations/nvidia_api.py | working | yes | yes | medium | IGNORE (Python) |
+  | PromptForge Supabase client | PromptForge | src/promptforge/integrations/supabase.py | dead-code | no | no | medium | RETIRE (unused) |
+  | PromptForge gateway worker | PromptForge | gateway/worker.js | working | no | yes | medium | IGNORE |
+  | PromptForge chat UI | PromptForge | ui/index.html | working | no | yes | medium | IGNORE (Hebrew RTL standalone) |
+  | PromptForge CLI | PromptForge | src/promptforge/cli.py | working | no | yes | medium | IGNORE (Python) |
+
+- **Forge integration plan**: foundation SHOULD connect to forge, but only AFTER forge is rebuilt. Current forge has zero usable endpoints. To support the user's CODE→TEST→BENCHMARK→BUILD→ARTIFACT→FORGE pipeline, forge needs: (1) `POST /api/projects` to register a foundation module, (2) `POST /api/projects/:id/runs` to trigger a benchmark run, (3) `POST /api/projects/:id/files` to upload build artifacts (WAV/JSON reports), (4) `GET /api/runs/:id` for status polling, (5) a worker that can clone foundation, run `bun test` + foundation's benchmark suite (e.g. psy4's `scripts/psy4_render.py` + `psy4_audio_analyzer.py` pattern), and store the WAV/JSON results. The existing Prisma schema (Project/Run/Secret/AuditLog) is a reasonable starting point — EXTRACT and extend with `Artifact` and `BenchmarkResult` models. The libSQL/Turso adapter in `src/lib/db.ts` is reusable as-is. Foundation should publish a benchmark-runner contract (input: git ref + module name; output: artifact URLs + metrics JSON) that forge consumes.
+- **Nova boundary**: confirmed nova is the agent/generation layer, foundation is musical tech. ZERO overlap detected at the code level — nova has no transport, no beat PLL, no DSP, no sample bank, no MIDI, no audio worklets, no musical grammar. The only "music" in nova is the LLM being asked to generate HTML music-player apps (output, not infrastructure). Foundation should remain fully decoupled: no imports from nova, no shared types, no shared DB. If foundation ever needs LLM-backed analysis (e.g. "classify this rendered audio"), it should re-implement the multi-LLM cascade pattern natively in TS rather than depend on nova's runtime.
+- **PromptForge verdict**: NOT relevant to foundation. Python stack, stub agents, no musical tech, no actual code-generation loop. The patterns (circuit breaker, token bucket, retry-with-backoff, supervisor WIP limit, structured logger with ContextVar) are textbook and worth noting for inspiration but not extraction. IGNORE.
+- **Security confirmation**: nova/.env.production is a template (confirmed). nova/api-keys.ts, tokenrouter.ts, dashscope.ts all read from env/globalThis at runtime (confirmed). PromptForge gateway reads NVIDIA_API_KEY from Cloudflare env (confirmed). Forge has no secrets (confirmed). NEW finding: `nova/nova-server.cjs` line 12 hardcodes a Z.AI session JWT (`eyJhbGci...` — user_id `851fa622-...`, chat_id `chat-dc1fb2f6-...`). This is the same chat_id hardcoded in `nova/worker.js` line 4. Pre-scan grep for `sk-`/`Bearer`/`api_key` missed it because the JWT format doesn't match those patterns and `Authorization: Bearer Z.ai` uses the literal string "Z.ai" not an API key. Recommend lead adds `nova/nova-server.cjs` to the rotation list and deletes the file from git history.
+- **Infra layer health verdict**: MIXED. Nova is genuinely healthy — a real, working, well-tested agent layer with sophisticated multi-LLM fallback, SSE streaming, and a sandboxed code runner; it's the strongest of the three. Forge is essentially vaporware at the code level — a stubbed health route plus aspirational docs, with the nova→forge bridge already pointing at endpoints that don't exist. PromptForge is a clean Python skeleton with stub agents — architecturally sound but functionally hollow. Foundation should assume: (1) nova exists and works as a sibling agent layer, no integration needed; (2) forge must be substantially rebuilt before foundation can connect to it for the CODE→TEST→BENCHMARK→BUILD→ARTIFACT pipeline; (3) PromptForge is a separate-universe prototype that foundation can safely ignore. The infra neighbors are mostly healthy where they exist (nova) and mostly absent where they're promised (forge).
+
+---
+Task ID: M0-B
+Agent: monolith-auditor
+Task: Deep forensic audit of the single-file HTML instruments `psy`, `psy3-clean`, `psy5`.
+
+Work Log:
+- Read existing worklog (M0-0 by foundation-lead): confirmed scope = audit 3 monolith HTML repos, no remote psy6, dispatch in parallel with M0-A (psy4) and M0-C (infra).
+- Inventoried files: psy/ = index.html(1070 lines)+soundBank.js(576 lines)+tests/playground.test.mjs(359)+backup/(2 files); psy3-clean/ = index.html(1072)+README.md(2 lines); psy5/ = index.html(416 lines, ~600 chars/line)+factory-presets.js(164 lines).
+- Read /home/z/psy-audit/psy/index.html end-to-end in 4 chunks (lines 1-220, 220-479, 480-739, 740-1070). Confirmed: title "PSY-6 GROOVEBOX MK.II"; inline script lines 132-1067; PSY6 mentioned in localStorage key "psy6_events" and global `window.__psy6`.
+- Read /home/z/psy-audit/psy/soundBank.js fully (chunks 1-200, 50-249, 410-577). Discovered it is a TypeScript file (uses `export type`, `export interface`, `: SoundPreset[]` annotations) with .js extension. Contains 150+ presets across 8 categories × 6 genres with rich schema (engine, ADSR, filter env, LFO, sends, scaleDegrees, energyLevel, moodTags) + query helpers (autoSelectPresets, bankStats).
+- Grep'd psy/index.html for `soundBank|import|require`: NO matches. soundBank.js is ORPHANED — never loaded by the HTML page. Header comment claims "Unified parameter schema (works with PooledEngine)" but psy has no PooledEngine class.
+- Read /home/z/psy-audit/psy/tests/playground.test.mjs fully (359 lines). It's a real node:test suite (18 tests) that vm-runs the inline script with a stubbed AudioContext/OfflineAudioContext/DOM. Tests cover: __psy6 device load, self-test renders, FX chain wiring, Play/Stop, 8-bar INTRO→BUILD→DROP arranger, 48-bar cycle, deterministic pattern per seed, knob→delay time, step editor, mute bus, pad trigger, VARIATE, FULL-ON v3 version, Phrygian Dominant compliance, lead call&response/accents, bass K-B-B-B grammar, four-on-floor kick, glide-on-characteristic-intervals.
+- Ran `node --test tests/playground.test.mjs` from /home/z/psy-audit/psy/: ALL 18 TESTS PASS in 1.23s.
+- Diff'd /home/z/psy-audit/psy/index.html vs /home/z/psy-audit/psy/backup/groovebox-v3.0-m1-fullon.html: IDENTICAL (so backup is just a copy of current). Diff'd vs backup/groovebox-mk2-stable.html: 220 differing lines showing the v3.0-m1-fullon upgrade added multi-scale support, STYLE config, stableDegrees/nearestStableDeg/accentFor/makeLeadMotif (call & response) on top of mk2.
+- Read /home/z/psy-audit/psy3-clean/README.md: 2 lines, just "PSY3 - Clean base with critical fixes".
+- Diff'd /home/z/psy-audit/psy/index.html vs /home/z/psy-audit/psy3-clean/index.html (whitespace-insensitive): ONLY 4 changed lines — (1) title "PSY-6 GROOVEBOX"→"PSY6 MAX"; (2) scheduler body replaced: `setInterval(self.scheduler,25)` → inline Web Worker (Blob URL) posting 'tick' every 25ms with setInterval fallback + custom `{stop()}` shim; (3) `stop()` updated to handle worker; (4) lookahead `0.14`→`0.20`. NOTHING ELSE. The "clean" name is misleading — psy3-clean is a 4-line patch on psy, not a refactor.
+- Read /home/z/psy-audit/psy5/index.html end-to-end in 6 chunks (1-120, 120-239, 240-359, 360-374, 375-389, 390-404, 405-417). Verified it is a complete rewrite, NOT a fork of psy/psy3-clean: PooledEngine class (line 354), SynthVoice class (363-367), DrumVoice class (368-372), global singleton `I` (373), 8-track project model (mkProject:162, mkStep:160, mkPattern:161), scene launcher (PERF.launch:377), 4 macros with resolveMacros (376), factory library (188-249), genre templates (buildStyle:261-351), worker timer (133-146), schedTick lookahead scheduler (378-381), self-gate runner using OfflineAudioContext (407-412).
+- Read /home/z/psy-audit/psy5/factory-presets.js fully (164 lines). Diff'd it against lines 188-351 of psy5/index.html: BYTE-IDENTICAL. factory-presets.js is a dev-extracted duplicate of the inline presets — NOT loaded by the HTML (no `<script src>` tag, grep returned 0 matches). Orphaned duplicate.
+- Investigated psy5 "Pooled Engine / No GC Dropouts" claim with code evidence:
+  - PooledEngine constructor (line 354): pre-allocates `synthPool = new Array(SYNTH_VOICES=20)` of SynthVoice and `drumPool = new Array(DRUM_VOICES=24)` of DrumVoice at construction time.
+  - SynthVoice constructor (line 363): creates osc1, osc2, g1, g2, filter, vca, lfo, lfoGain ONCE and calls `osc1.start(); osc2.start(); lfo.start();` — these oscillators run for the lifetime of the engine, never destroyed.
+  - SynthVoice.connect (364): only disconnects/reconnects vca when the bus changes (lazy bus assignment).
+  - SynthVoice.noteOn (365): only re-targets AudioParam values (frequency, gain, cutoff, Q, LFO) via setValueAtTime/exponentialRamp/setTargetAtTime — NO createOscillator/createGain/createBiquadFilter calls in the hot path.
+  - DrumVoice (368-372): same pattern — `noise.start(); osc.start();` once in ctor; hit() only re-targets params.
+  - nextSynth/nextDrum (358-359): round-robin index, no allocation.
+  - VERDICT: voice graph pooling is genuine (zero AudioNode churn). However, per-note there ARE small JS-side allocations in `trigger()` (line 360: `Object.assign({},tr.sound,ev.lock||{})`) and `stepEvents()` (line 172: `evs=[]`, `lock=Object.assign({},st.lock)` per active step). Because schedTick runs on the main thread (worker posts 'tick' messages back to main), these JS allocations are not in the audio render quantum — they cannot cause audio-thread GC dropouts. So the "No GC Dropouts" claim is TRUE in the audio-thread sense; the engine is genuinely pooled. Evidence lines: 133-146, 354-372.
+- Cross-compared state ownership / "PSY6 multiple sources of truth" anti-pattern across the three:
+  - psy: mild duplication. bpm master = `device.knobVals.bpm` (0..1) → derived `device.bpm` (number) → `delayTime` (audio param) → `lcd2.textContent` (string). All ONE-WAY. mutes live in both `device.mutes[n]` (int) AND `device.partGains[n].gain.value` (audio param) — kept in sync via refreshPartGains. patterns live in `device.patterns` and are written directly by UI step cells.
+  - psy3-clean: identical to psy (same body).
+  - psy5: PATHOLOGICAL. Cutoff has 4 layers — `t.base.sound.cutoff` (factory base) → `t.sound.cutoff` (post-macro live state, mutated by resolveMacros line 376) → `st.lock.cutoff` (per-step override) → DOM slider in renderSynthEd (line 401, reads/writes `t.sound.cutoff`). The synth-editor slider can be silently clobbered by macro changes; macros don't see per-step locks. Volume (`t.mix.vol`) is written from TWO independent DOM range inputs: renderTracks (394) and renderMixer (402), both bound to the same field. Mute/solo similarly duplicated across Tracks and Mixer panels. bpm: `I.p.bpm` ↔ `$('bpm').value` two-way. swing: `I.p.swing` ↔ `$('swing').value` ↔ `$('swV').textContent` three-way. Scene: `I.p.activeScene` ↔ `I.p.scenes[i].pattern` ↔ `I.pending` (transition index) three-way. CONCLUSION: psy5 IS the origin of the PSY6 "multiple sources of truth" anti-pattern the user flagged. psy and psy3-clean do NOT exhibit it (their state is one-directional derived).
+- Verified NO radio/beat-observation code in any of the three (grep returned 0 matches for `radio|onset|beatTrack|analyser.*detect|BroadcastChannel|postMessage` in all three index.html files). The analyser node is used purely for viz bars (psy:1028, psy5:405) and RMS energy (psy:755). None of them listen to external audio.
+- Verified NO learning system in any of the three. psy5's `resolveMacros()` (line 376) is a one-way macro→engine-state mapping, NOT a context/action/outcome/reward learner. "DO NOTHING" is never a legal action because there is no action selector at all — every step that has `st.on=1` triggers.
+
+Stage Summary:
+- psy/index.html: 1070-line self-contained "PSY-6 GROOVEBOX MK.II" — generative Full-On modal engine. 6 scales (Phrygian Dominant default), 32-step lead call&response motif, K-B-B-B bass grammar, 6-section arranger (INTRO/BUILD/DROP/BREAK/RISER/DROP2), ducked sidechain, WaveShaper drive, ping-pong delay, convolver reverb, 7 knobs, 16-step sequencer, 8 pads, viz. setInterval(25ms) scheduler, 0.14s lookahead. Per-note voice creation (NO pooling). 18/18 node:test pass. **The most tested and most music-intelligent of the three.**
+- psy3-clean/index.html: byte-identical to psy except 4 lines — title renamed "PSY6 MAX", scheduler moved into a Web Worker (Blob URL) with setInterval fallback, lookahead 0.14→0.2s. The "clean" branding is misleading; this is a 4-line patch, not a refactor.
+- psy5/index.html: 416-line complete REWRITE as a DAW-style "PSY6 STANDALONE GROOVEBOX — POOLED ENGINE". Pre-allocated voice pool (20 synth + 24 drum) with lifelong oscillators (no per-note node creation) — the "No GC Dropouts" claim is genuinely implemented at the audio-graph level. Adds: 8-track project model, per-step {on,vel,prob,micro,note,lock} schema, 32-step patterns with per-track length + gcd loopLen, scene launcher with quantized transitions, 4 macros (ENERGY/DRIVE/SPACE/MOVEMENT) that resolve to real engine state, layers, factory library (24 drums + 11 bass + 4 lead + 4 pad + 3 pluck + 4 arp + 1 fx = 51 presets) with category/genre filter, save/load/export/import, 60-step undo, recording with recQ quantize, 4 genre templates (TECHNO/PSYTRANCE/TRANCE/PROGRESSIVE), in-browser self-gate test runner via OfflineAudioContext. LOSSES vs psy: no Phrygian Dominant motif generator, no call & response, no accent ladder, no 6-section arranger, no autoFilter sweep, no WaveShaper, no sidechain ducking, only 4 scales (vs 6), VARIATION is random toggle (not LCG regen). GAINS: real DAW editing, parameter locks, scene launching, macros, pooled voices.
+- Orphaned side files (both RETIRE): psy/soundBank.js (TypeSoundBank schema, never loaded, would-be great schema but currently dead) and psy5/factory-presets.js (byte-identical duplicate of inline presets, never loaded).
+- Evolution: psy → psy3-clean → psy5 = generative-music-intelligence → +worker-timer → DAW-pooled-engine. Improvements: voice pooling, project model, scene launching, parameter locks, macro system, real undo/redo. Regressions: lost the motif generator, call & response, accent ladder, section arranger, autoFilter, sidechain ducking, WaveShaper. Abandoned: soundBank.js schema (TS file orphaned in psy, never wired in any of the 3).
+- Top reusable assets identified (with line ranges in deliverable below).
+- Top 5 things to retire/ignore identified.
+- DUPLICATION/SOT audit: psy is clean (one-directional), psy5 is the PSY6 anti-pattern origin (cutoff has 4 layers, vol/mute have 2 DOM mirrors each).
+- Pooled Engine verdict: TRUE at the audio-graph level (pre-allocated lifelong oscillators, AudioParam-only hot path, zero AudioNode churn). Small JS-side allocations remain in trigger/stepEvents but run on main thread, not audio thread, so cannot cause audio dropouts.
+- RECOMMENDATION: psy-foundation should NOT lift any of these three monoliths wholesale. Instead EXTRACT 5 specific assets (lead motif generator from psy, Web Worker scheduler pattern from psy3-clean, PooledEngine+SynthVoice+DrumVoice from psy5, step-event schema+lane automation from psy5, self-gate offline-render harness from psy5), and REWRITE state ownership from scratch (avoid psy5's cutoff/base/lock/DOM 4-layer mess). The music intelligence in psy (lines 159-333) is the single most valuable piece of domain logic and should be ported essentially as-is.
+
+---
+Task ID: M0-A
+Agent: psy4-auditor
+Task: Deep forensic audit of the `psy4` repository (Next.js 16 radio-following psytrance engine).
+
+Work Log:
+- Read /home/z/my-project/worklog.md (M0-0 baseline, M0-B monolith audit, M0-C infra audit) to align vocabulary and ACTION codes.
+- ls /home/z/psy-audit/psy4 root + src; `git ls-files | wc -l` = 1594. Breakdown: 1065 vendored `skills/` (ClawHub skill pack — totally unrelated to PSY audio), 186 `public/` (mostly unused WAV samples), 139 `src/`, 129 dev artifacts (agent-ctx/, tool-results/, audit-reports/, examples/). The "most evolved engine" framing is inflated ~10x by vendored skills.
+- Read package.json: Next.js 16.1, React 19, Prisma+libsql/Turso, z-ai-web-dev-sdk, 40+ Radix/shadcn UI deps. NO jest/vitest. NO tone.js / webaudio-one-shots / music libraries. devDeps: bun-types, eslint, tailwind.
+- Read src/app/page.tsx (226 lines) — the ONLY page. Single PsyLive instance, canvas viz, 4 preset buttons, 6 stream buttons, A/B variant toggle, radio volume slider. UI is thin shell around PsyLive class — engine is decoupled from UI (good).
+- Read src/lib/psyLive.ts end-to-end (906 lines). This is the ACTUAL runtime engine. Header comment line 1-13 EXPLICITLY says: "PSY LIVE v2 — Built from psy's proven approach. WHY psy works and we didn't: psy uses createOscillator directly (no PooledEngine, no pre-rendered buffers)..." So the author abandoned the heavy engine and rewrote a simpler one modeled on `psy`. Contains: 4 hardcoded PRESETS (rolling_bass/acid_lead/dark_prog/full_on), 6 STREAMS, AudioContext with simple chain (master→analyser→destination + delay send), per-role buses (kick/bass/lead/hat → engineBus → comp → master), setInterval(25ms) scheduler, kick detection via sub-bass threshold + 200ms tick, occupancy analysis, pattern mutation every 8 bars, composition-mode generator.
+- Read src/lib/beatPLL.ts (152 lines) — clean, real PLL: phase error correction with octave-error folding, tempo correction with band [80,190] BPM, lock after 8 observations + confidence > 0.5, predictBeats() returns future beat times. Pure logic, no Web Audio. Reusable as-is.
+- Read src/lib/melodyObserver.ts (309 lines) — autocorrelation pitch detection (100-1800Hz), spectral flatness gate, salience gate, confidence gate, quantizes to beat/bar. Pure logic. Reusable.
+- Read src/lib/learning.ts (482 lines) — localStorage-backed vote tally: bpmVotes, keyVotes, pitchClassHistogram, tempoHistory, radioProfile (low/mid/high averages), patternScores (preset×variant×stream EMA), scale detection via histogram×9-scale library (Phrygian, Minor, Harmonic Minor, Phrygian Dom, Dorian, Aeolian, Minor Pentatonic, Hungarian Minor, Double Harmonic), composition generator with chord progressions. Real but rule-based, NOT a context/action/outcome learner.
+- Read src/lib/patternMutator.ts (260 lines) — 4 mutation operators per role, score candidates against novelty/density-fit/complement/stability, adopt if better. Real but small.
+- Read src/lib/soundBank.ts (688 lines) — 150+ presets with rich schema (engine, ADSR, filter, LFO, sends, scaleDegrees, energyLevel, moodTags). Header claims "Unified parameter schema (works with PooledEngine)". Grep'd src/ for soundBank usage: ONLY imported by psyLive.ts line 16 (`import { SOUND_BANK, getById, autoSelect }`) and pooledEngine.ts. psyLive.ts NEVER references SOUND_BANK/getById/autoSelect in its body — the import is DEAD. The 4 PRESETS in psyLive.ts are inline literals, not from soundBank.
+- Read src/lib/pooledEngine.ts (490 lines) — SynthVoice+DrumVoice with full ADSR/filter-env/LFO/3-band EQ/saturation/delay+reverb sends, round-robin allocator. Grep'd for `PooledEngine` instantiations: ZERO. Dead.
+- Read src/lib/studio/rng.ts (79 lines) — mulberry32 Rng with nextUint32/range/int/chance/pick/gaussian/fork/snapshot + hashSeed. High quality, fully deterministic. Reusable as-is.
+- Read src/lib/studio/clock.ts (100 lines) — sample-accurate Transport (bpm/sampleRate/ppq/sample/tick/beat/bar/sixteenth, advance/advanceN, barsToSamples, samplesPerSixteenth). Pure. Reusable.
+- Read src/lib/studio/dsp/wavetable.ts (105 lines) — WhiteNoise, PinkNoise (Paul Kellet), additiveWavetable, 8-table WAVETABLE_BANK, mtof/ftom/noteName, SCALES dict (7 psytrance scales), scaleNote. Pure. Reusable.
+- wc -l all of src/lib/studio/engine/*.ts: 27266 lines total across 40 files. Largest: psy4EngineV2.ts (5485), musicalDirector.ts (1987), musicAnalyzer.ts (1027), psyLive.ts (906 — but psyLive is in src/lib/ NOT studio/engine/), legacyAudioGraph.ts (860), melodyEngine.ts (834), flowEngine.ts (829), harmonyEngine.ts (619), phraseSync.ts (581), effectsRack.ts (568), djController.ts (738), advancedVoice.ts (756), workletEngine.ts (758).
+- Grep'd src/ for `from '@/lib/studio/engine/...'` imports OUTSIDE the studio/engine/ cluster: only 3 callers — src/app/api/forensic/analyze/route.ts (imports forensicRunner), src/app/api/forensic/render/route.ts (imports offlineRenderer+voices+worlds), src/app/api/reference/train/route.ts (imports offlineRenderer+audioAnalyzer+referenceScore+parameterRegistry+worldDNA+referenceListener+forensic/worlds). The studio/engine/* tree is NEVER imported by page.tsx, psyLive.ts, or any client component.
+- Grep'd for `new Psy4EngineV2|new MusicalDirector|new WorkletEngine|new FlowEngine|new AdvancedSynthVoice|new HarmonyEngine|new MelodyEngine` across src/: ALL hits are inside psy4EngineV2.ts itself (lines 1338, 1544, 1606, 2438, 2444, 2466) and legacyAudioGraph.ts (438). The 5485-line "V2" engine is never instantiated by anything outside its own file. Dead code at runtime.
+- Read src/app/api/forensic/analyze/route.ts (52 lines) — POST endpoint, edge runtime, calls runForensicAnalysis. Read src/app/api/forensic/render/route.ts (74 lines) — POST endpoint, returns WAV. Read src/app/api/reference/train/route.ts (367 lines) — POST endpoint, runs 12-iteration accept/reject coordinate-descent optimizer. Read src/app/api/reference/proxy/route.ts (202 lines) — radio stream proxy with ICY-metadata stripping. Read src/app/api/reference/streams/route.ts (90 lines) — static stream catalog. Read src/app/api/learn/route.ts (223 lines) — Turso/libsql persistence of scale/tempo votes (silently no-ops if TURSO_URL/TOKEN not set). Read src/app/api/route.ts (6 lines) — health check.
+- Grep'd src/ for `fetch.*api|/api/forensic|/api/reference|/api/learn` CLIENT-SIDE callers: ZERO. None of the API routes are called by page.tsx or psyLive.ts. The entire server-side forensic/reference/learn infrastructure is unreachable at runtime — it's a standalone HTTP API surface.
+- Grep'd for `audioWorklet|addModule|psy4-engine|psy4-dsp` across src/: all hits in workletEngine.ts (210: `this.ctx.audioWorklet.addModule('/worklets/psy4-engine.js')`), engineWorklet.ts (65), psy4EngineV2.ts (1338). All three files are inside the dead studio/engine/ cluster. The PsyLive class (the actual runtime engine) NEVER loads the worklet — it uses `ctx.createOscillator()` directly (psyLive.ts lines 362, 385, 402). The 2575-line `public/worklets/psy4-engine.js` worklet file is dead weight at runtime.
+- Read public/worklets/psy4-engine.js header (30 lines) + public/worklets/psy4-dsp.js header (30 lines). Both are real DSP implementations (MoogLadder 4-stage tanh, polyBLEP saw/square, SchroederReverb, etc.) — high-quality sample-accurate code. But unused.
+- Read prisma/schema.prisma (22 lines) — only User + Post models (generic Next.js scaffold). Grep'd src/ for `@/lib/db` or `import.*\bdb\b`: ZERO. db.ts is dead. The /api/learn route uses libsql directly, bypassing Prisma.
+- Read src/lib/studio/engine/forensic/offlineRenderer.ts (head 120 lines): deterministic isomorphic renderer with voice pool (8 kick, 4 bass, 8 lead, 4 acid, 4 pad, 8 hat, 4 clap, 8 perc, 4 shaker, 4 texture, 8 fx), SR=44100, render(seed, worldId, duration, options) → {samplesL, samplesR, events}. Pure TS, no Web Audio.
+- Read forensic/audioAnalyzer.ts (head 240 lines): real FFT (own radix-2 impl), 8-band spectrum, spectral centroid/rolloff/spread/flatness, dynamics (peak/RMS/crest/LUFS-approximation via K-weighting HP), transients (attack/decay/consistency), lowEnd (kick/bass fundamental + decay + overlap). Genuine isomorphic analysis module.
+- Read forensic/voices.ts (head 130 lines) + dsp.ts (head 80 lines): real DSP — KickVoice (sub sine + triangle mid + noise click via PinkNoise), BassVoice (BLSaw + BLSquare + MoogLadder + sub), fastTanh LUT, polyBlep, MoogLadder 4-stage. Quality code, ported from PSY3 pro_dsp.py.
+- Read forensic/forensicRunner.ts (head 50 lines) + worlds.ts + qualityScore.ts + repetitionDetector.ts + closedLoop.ts (line counts only). Forensic pipeline: render worlds × tests → analyze → quality score → world differentiation → param validation → bass isolation → repetition → closed-loop optimization → report. Real but only reachable via /api/forensic/analyze (which itself has no client caller).
+- Read studio/engine/reference/{referenceListenerV2.ts, worldDNA.ts, parameterRegistry.ts, referenceScore.ts, continuousTrainer.ts, trainingLoop.ts, renderWorker.ts, perVoiceAnalyzer.ts} headers. Full closed-loop training system: extract features from radio (referenceListenerV2 uses fetch+decodeAudioData to bypass CORS), measure distance (referenceScore), pick weakest metric, adjust 1-3 params (parameterRegistry), render with new params, accept/reject (trainingLoop/continuousTrainer), apply to live engine. Conceptually real — but never instantiated because psyLive.ts doesn't import any of it.
+- Read studio/engine/musicalDirector.ts (head 50) + harmonyEngine.ts (head 50) + melodyEngine.ts (head 40) + worlds.ts (head 50) + phaseSync.ts (head 50) + musicAnalyzer.ts (head 60). Sophisticated composer layer: phrase-level composition, 11 chord types with voice leading, motif development (transpose/invert/retrograde/fragment/augment), 10 worlds as parameterized musical identities, DJ-style phase sync with downbeat alignment, musical event detection (chord change / section boundary / riser / drop). All dead — only reachable through psy4EngineV2 (dead).
+- Confirmed no tests: `find -name '*.test.ts' -o -name '*.spec.ts' -o -name 'jest.config*' -o -name 'vitest*'` returned ZERO hits. tests/ directory contains only build-script tests (python-runtime-build.sh, database-runtime-build.sh) — CI/CD tests, not engine tests.
+- Read audit-reports/audit-latest.md + audit-latest.json: claims "14/14 tests passed (25669ms)", "9-device frozen architecture", "TEST-01..TEST-12 all PASS", "architecture.ts defines all 9 devices + SYSTEM_GRAPH with 28 labeled edges". Grep'd entire repo for `TEST-01|9-device|architecture.ts|SYSTEM_GRAPH|validator`: NO source files match — only audit-reports/*.md/json and bun.lock. The audit reports describe a test runner + architecture.ts file that DO NOT EXIST in the repo. The "tests" are fabricated.
+- Read .md docs (sample): ARCHITECTURE_SIGNAL_FLOW.md (Hebrew, admits "DUAL ENGINE PROBLEM — Engine A offline DSP vs Engine B live Web Audio, user hears only Engine B, benchmarks measure Engine A"), BENCHMARK_REPORT.md (measures offline Engine A at 22050Hz vs PSY3 at 44100Hz — but current offlineRenderer.ts line 43 has SR=44100, so the doc is stale), LATENCY_FORENSIC.md (claims AudioWorklet path with 50ms play latency — but runtime engine never loads worklet), COMMERCIAL_GAP_ANALYSIS.md + PSY4_ROAST.md + PSY4_DEEP_ROAST.md + COMMERCIAL_AUDIO_AUDIT.md (self-critical roasts admitting 30+ gaps), MUSICAL_GRAMMAR.md, SOUND_LIBRARY.md (not read in depth — used as hints only).
+- Read internal /home/z/psy-audit/psy4/worklog.md (Tasks 1, 2): describes building the worklet engine + integrating into `psy4LiveEngine.ts`. But `psy4LiveEngine.ts` does NOT exist in the current repo — only `psyLive.ts` (906 lines, header explicitly abandons the worklet/pooled approach). The worklog describes work that was subsequently rolled back/replaced.
+- Grep'd for protocol/messaging: NO BroadcastChannel, NO EventEmitter class, NO typed event bus, NO WebSocket (only examples/websocket/ which is a generic chat demo using socket.io — but socket.io-client is NOT in package.json, so demo is broken). The only typed message protocol is the worklet `port.postMessage({type: 'events'|'play'|'stop'|'bpm'|'macros'|'world'|'setFX'|'duck'|'newPhrase'|'panic', ...})` schema — but it's inline strings across engineWorklet.ts/workletEngine.ts, not a shared schema, and it's dead code anyway.
+- Grep'd for device abstraction: NO plugin/SDK concept. Engine is hardcoded to one instrument (kick/bass/lead/hat). The "Worlds" abstraction (studio/engine/worlds.ts) is the closest thing — a parameterized musical identity — but it's coupled to psy4EngineV2's specific voice set.
+- Read examples/websocket/{frontend.tsx, server.ts}: generic Next.js chat-app scaffold (socket.io), unrelated to PSY. socket.io-client not in deps. Dead.
+- Read scripts/psy4_render.py (head 50): Python "faithful simulation" of the engine using numpy. The comment says "This is NOT the actual AudioWorklet output, but it's close enough for ced.cpp to analyze". Confirms the offline render path is separate from the live audio path.
+
+Stage Summary:
+
+**REPO CHARACTER** (code-level, not marketing):
+psy4 is a thin Next.js 16 shell (1 page, 226 lines of UI) wrapping a single ~900-line client-side Web Audio engine (`psyLive.ts`) that uses `createOscillator` directly with no pooling, no worklet, no sample-loading. Alongside this live engine sits a ~27k-line "studio engine" cluster (`src/lib/studio/engine/`) implementing a far more sophisticated system (pooled voices, real Moog/polyBLEP DSP, phrase-level composer, reference-pursuit training loop) — but the entire cluster is dead at runtime: only reachable via 3 server-side HTTP API routes (`/api/forensic/*`, `/api/reference/*`) that are themselves never called by any client code. Of the 1594 tracked files, 1065 are a vendored ClawHub skill library unrelated to PSY, ~120 are unused WAV samples, and ~30 .md docs frequently claim features (AudioWorklet synthesis, pooled voices, "14/14 tests", "9-device frozen architecture") that the runtime code does not deliver.
+
+**SUBSYSTEM TABLE** (psy4 only — foundation-perspective):
+
+| SUBSYSTEM | SOURCE REPO | SOURCE FILE | STATUS | TESTED? | WIRED? | QUALITY | ACTION |
+|---|---|---|---|---|---|---|---|
+| Live engine (Play button) | psy4 | src/lib/psyLive.ts | working | no | yes | medium | ADAPT (decouple scheduler/voices/analysis) |
+| Page UI shell | psy4 | src/app/page.tsx | working | no | yes | medium | KEEP (in device; thin shell) |
+| Beat PLL | psy4 | src/lib/beatPLL.ts | working | no | yes | high | EXTRACT |
+| Melody observer (pitch detection) | psy4 | src/lib/melodyObserver.ts | working | no | yes | high | EXTRACT |
+| Learning (vote tally + scale detect) | psy4 | src/lib/learning.ts | working | no | yes | medium | ADAPT (split persistence from logic) |
+| Pattern mutator | psy4 | src/lib/patternMutator.ts | working | no | yes | medium | EXTRACT |
+| Deterministic Rng (mulberry32) | psy4 | src/lib/studio/rng.ts | working | no | no | high | EXTRACT |
+| Sample-accurate Transport | psy4 | src/lib/studio/clock.ts | working | no | no | high | EXTRACT |
+| DSP primitives (noise/wavetable/scales) | psy4 | src/lib/studio/dsp/wavetable.ts | working | no | no | high | EXTRACT |
+| Forensic offline renderer | psy4 | src/lib/studio/engine/forensic/offlineRenderer.ts | working | no | partial (via API only) | high | EXTRACT |
+| Forensic voices (real DSP) | psy4 | src/lib/studio/engine/forensic/voices.ts | working | no | partial | high | EXTRACT |
+| Forensic DSP (Moog/polyBLEP/tanh) | psy4 | src/lib/studio/engine/forensic/dsp.ts | working | no | partial | high | EXTRACT |
+| Forensic audio analyzer (FFT/spectrum/dynamics) | psy4 | src/lib/studio/engine/forensic/audioAnalyzer.ts | working | no | partial | high | EXTRACT |
+| Forensic worlds (Psy4World schema) | psy4 | src/lib/studio/engine/forensic/worlds.ts | working | no | partial | medium | EXTRACT |
+| Forensic runner (orchestrator) | psy4 | src/lib/studio/engine/forensic/forensicRunner.ts | working | no | partial | medium | EXTRACT |
+| Forensic quality score | psy4 | src/lib/studio/engine/forensic/qualityScore.ts | working | no | partial | medium | EXTRACT |
+| Forensic repetition detector | psy4 | src/lib/studio/engine/forensic/repetitionDetector.ts | working | no | partial | medium | EXTRACT |
+| Forensic closed-loop optimizer | psy4 | src/lib/studio/engine/forensic/closedLoop.ts | working | no | partial | medium | EXTRACT |
+| Forensic param validator | psy4 | src/lib/studio/engine/forensic/paramValidator.ts | working | no | partial | medium | EXTRACT |
+| Forensic lite renderer | psy4 | src/lib/studio/engine/forensic/liteRenderer.ts | working | no | partial | medium | IGNORE (dup of offlineRenderer) |
+| Forensic mixing (bus/master/reverb/delay) | psy4 | src/lib/studio/engine/forensic/mixing.ts | working | no | partial | medium | EXTRACT |
+| Forensic latency monitor | psy4 | src/lib/studio/engine/forensic/latencyMonitor.ts | working | no | no | medium | IGNORE |
+| Forensic report generator | psy4 | src/lib/studio/engine/forensic/reportGenerator.ts | working | no | partial | medium | EXTRACT |
+| Psy4EngineV2 (5485-line hub) | psy4 | src/lib/studio/engine/psy4EngineV2.ts | dead-code | no | no | low | RETIRE |
+| MusicalDirector (phrase composer) | psy4 | src/lib/studio/engine/musicalDirector.ts | dead-code | no | no | high | EXTRACT (logic is reusable, decouple from V2) |
+| HarmonyEngine (11 chord types + voice leading) | psy4 | src/lib/studio/engine/harmonyEngine.ts | dead-code | no | no | high | EXTRACT |
+| MelodyEngine (motif development) | psy4 | src/lib/studio/engine/melodyEngine.ts | dead-code | no | no | high | EXTRACT |
+| FlowEngine (tension/surprise curves) | psy4 | src/lib/studio/engine/flowEngine.ts | dead-code | no | no | medium | EXTRACT |
+| Worlds (parameterized musical identities) | psy4 | src/lib/studio/engine/worlds.ts | dead-code | no | no | high | EXTRACT |
+| MusicalGrammar (scales/progressions/bass patterns) | psy4 | src/lib/studio/engine/musicalGrammar.ts | dead-code | no | no | high | EXTRACT |
+| PhaseSync (DJ-style beat-grid alignment) | psy4 | src/lib/studio/engine/phaseSync.ts | dead-code | no | no | high | EXTRACT |
+| DjController (key/groove/energy/phrase sync) | psy4 | src/lib/studio/engine/djController.ts | dead-code | no | no | medium | EXTRACT |
+| MusicAnalyzer (musical event detector) | psy4 | src/lib/studio/engine/musicAnalyzer.ts | dead-code | no | no | medium | EXTRACT |
+| AdvancedSynthVoice | psy4 | src/lib/studio/engine/advancedVoice.ts | dead-code | no | no | medium | IGNORE (dup of forensic voices) |
+| EffectsRack (per-track FX) | psy4 | src/lib/studio/engine/effectsRack.ts | dead-code | no | no | medium | EXTRACT |
+| SendEffects (chorus/phaser/distortion/bitcrush) | psy4 | src/lib/studio/engine/sendEffects.ts | dead-code | no | no | medium | EXTRACT |
+| MultibandCompressor | psy4 | src/lib/studio/engine/multibandCompressor.ts | dead-code | no | no | medium | EXTRACT |
+| TimbreFingerprint | psy4 | src/lib/studio/engine/timbreFingerprint.ts | dead-code | no | no | medium | EXTRACT |
+| UniquenessDetector | psy4 | src/lib/studio/engine/uniquenessDetector.ts | dead-code | no | no | medium | EXTRACT |
+| MixAwareSelector | psy4 | src/lib/studio/engine/mixAwareSelector.ts | dead-code | no | no | medium | IGNORE |
+| StyleClassifier | psy4 | src/lib/studio/engine/styleClassifier.ts | dead-code | no | no | medium | EXTRACT |
+| SynthesisDetector/Router | psy4 | src/lib/studio/engine/{synthesisDetector,synthesisRouter}.ts | dead-code | no | no | medium | IGNORE |
+| EffectsDetector | psy4 | src/lib/studio/engine/effectsDetector.ts | dead-code | no | no | medium | IGNORE |
+| CallResponseEngine | psy4 | src/lib/studio/engine/callResponseEngine.ts | dead-code | no | no | medium | EXTRACT |
+| PhraseSync | psy4 | src/lib/studio/engine/phraseSync.ts | dead-code | no | no | medium | EXTRACT |
+| LayerEngine | psy4 | src/lib/studio/engine/layerEngine.ts | dead-code | no | no | medium | IGNORE |
+| MusicalMemory | psy4 | src/lib/studio/engine/musicalMemory.ts | dead-code | no | no | medium | IGNORE |
+| VocabularyLearner | psy4 | src/lib/studio/engine/vocabularyLearner.ts | dead-code | no | no | medium | EXTRACT |
+| LearningMemory | psy4 | src/lib/studio/engine/learningMemory.ts | dead-code | no | no | medium | IGNORE |
+| PerformanceMonitor | psy4 | src/lib/studio/engine/performanceMonitor.ts | dead-code | no | no | medium | IGNORE |
+| SampleBank (loads /samples/real/*.wav) | psy4 | src/lib/studio/engine/sampleBank.ts | dead-code | no | no | medium | RETIRE (loads samples never used) |
+| MultisampleGenerator | psy4 | src/lib/studio/engine/multisampleGenerator.ts | dead-code | no | no | low | RETIRE |
+| WorkletEngine (audio thread bridge) | psy4 | src/lib/studio/engine/workletEngine.ts | dead-code | no | no | medium | RETIRE |
+| EngineWorklet (alt wrapper) | psy4 | src/lib/studio/engine/engineWorklet.ts | dead-code | no | no | medium | RETIRE |
+| SchedulerWorker (Web Worker tick) | psy4 | src/lib/studio/engine/schedulerWorker.ts | dead-code | no | no | medium | RETIRE |
+| LegacyAudioGraph (fallback) | psy4 | src/lib/studio/engine/legacyAudioGraph.ts | dead-code | no | no | low | RETIRE |
+| AudioBackend (interface) | psy4 | src/lib/studio/engine/audioBackend.ts | dead-code | no | no | medium | EXTRACT (interface pattern) |
+| CommercialReference | psy4 | src/lib/studio/engine/commercialReference.ts | dead-code | no | no | low | RETIRE |
+| psy4-engine.js worklet (2575 lines) | psy4 | public/worklets/psy4-engine.js | dead-code | no | no | high | EXTRACT (real DSP, reusable in worklet form) |
+| psy4-dsp.js worklet (485 lines) | psy4 | public/worklets/psy4-dsp.js | dead-code | no | no | high | EXTRACT |
+| ReferenceListenerV2 (CORS-bypass radio analysis) | psy4 | src/lib/studio/engine/reference/referenceListenerV2.ts | dead-code | no | no | high | EXTRACT |
+| ReferenceScore (similarity metric) | psy4 | src/lib/studio/engine/reference/referenceScore.ts | dead-code | no | no | high | EXTRACT |
+| WorldDNA (per-genre targets) | psy4 | src/lib/studio/engine/reference/worldDNA.ts | dead-code | no | no | medium | EXTRACT |
+| ParameterRegistry (optimizable params) | psy4 | src/lib/studio/engine/reference/parameterRegistry.ts | dead-code | no | no | medium | EXTRACT |
+| TrainingLoop (accept/reject optimizer) | psy4 | src/lib/studio/engine/reference/trainingLoop.ts | dead-code | no | no | medium | EXTRACT |
+| ContinuousTrainer (client-side loop) | psy4 | src/lib/studio/engine/reference/continuousTrainer.ts | dead-code | no | no | medium | EXTRACT |
+| RenderWorker (offline render in worker) | psy4 | src/lib/studio/engine/reference/renderWorker.ts | dead-code | no | no | medium | EXTRACT |
+| PerVoiceAnalyzer | psy4 | src/lib/studio/engine/reference/perVoiceAnalyzer.ts | dead-code | no | no | medium | EXTRACT |
+| ReferenceListener V1 | psy4 | src/lib/studio/engine/reference/referenceListener.ts | dead-code | no | no | medium | RETIRE (superseded by V2) |
+| MusicalUnderstanding / SelfAnalyzer / TrainingLoop (reference dir) | psy4 | src/lib/studio/engine/reference/{musicalUnderstanding,selfAnalyzer,trainingLoop}.ts | dead-code | no | no | medium | IGNORE (overlapping) |
+| PooledEngine (490 lines, 142-preset consumer) | psy4 | src/lib/pooledEngine.ts | dead-code | no | no | medium | RETIRE (superseded by forensic voices) |
+| SoundBank (688 lines, 150+ presets schema) | psy4 | src/lib/soundBank.ts | dead-code | no | no | high | EXTRACT (schema is good; consumer is dead) |
+| /api/forensic/analyze | psy4 | src/app/api/forensic/analyze/route.ts | working | no | no | medium | KEEP (server util) |
+| /api/forensic/render | psy4 | src/app/api/forensic/render/route.ts | working | no | no | medium | KEEP |
+| /api/reference/train | psy4 | src/app/api/reference/train/route.ts | working | no | no | medium | KEEP |
+| /api/reference/proxy (ICY stripping) | psy4 | src/app/api/reference/proxy/route.ts | working | no | no | high | EXTRACT |
+| /api/reference/streams | psy4 | src/app/api/reference/streams/route.ts | working | no | no | low | IGNORE (static catalog) |
+| /api/learn (Turso sync) | psy4 | src/app/api/learn/route.ts | partial | no | no | medium | KEEP (silent no-op without Turso creds) |
+| /api/health | psy4 | src/app/api/route.ts | working | no | yes | low | KEEP |
+| Prisma schema (User/Post only) | psy4 | prisma/schema.prisma | dead-code | no | no | trash | RETIRE |
+| db.ts (Prisma client) | psy4 | src/lib/db.ts | dead-code | no | no | trash | RETIRE |
+| public/samples/real/ (~120 wavs) | psy4 | public/samples/real/*.wav | dead-code | no | no | medium | RETIRE (only loaded by dead SampleBank) |
+| public/samples/*.wav (4 stubs) | psy4 | public/samples/{kick,bass_A,clap,hat_*,lead}.wav | dead-code | no | no | low | RETIRE |
+| public/phase3/, phase5/, audio-quality/ (rendered WAV artifacts) | psy4 | public/phase3/*, public/phase5/*, public/audio-quality/* | dead-code | no | no | low | RETIRE (regenerable artifacts) |
+| public/api/streams.json | psy4 | public/api/streams.json | working | no | no | low | IGNORE (duplicate of /api/reference/streams) |
+| examples/websocket/ (socket.io chat demo) | psy4 | examples/websocket/{frontend,server}.ts | dead-code | no | no | trash | RETIRE (socket.io-client not in deps) |
+| skills/ (1065 vendored ClawHub files) | psy4 | skills/** | dead-code | no | no | n/a | RETIRE (unrelated to PSY) |
+| audit-reports/ (claims 14/14 tests, 9-device arch) | psy4 | audit-reports/*.md + *.json | doc-only | n/a | n/a | trash | IGNORE (fabricated — no test runner exists) |
+| ~30 .md docs (COMMERCIAL_*, ROAST, BENCHMARK, etc.) | psy4 | *.md | doc-only | n/a | n/a | low | IGNORE (claims frequently unverified or stale) |
+| agent-ctx/ + tool-results/ (129 dev artifacts) | psy4 | agent-ctx/*, tool-results/* | dead-code | no | no | trash | RETIRE |
+| scripts/psy4_render.py + psy4_audio_analyzer.py | psy4 | scripts/*.py | experimental | no | no | low | IGNORE (Python "simulation" not actual engine) |
+| Forensic reference/* cluster (trainingLoop, musicalUnderstanding, etc.) | psy4 | src/lib/studio/engine/reference/* | dead-code | no | no | medium | EXTRACT (real closed-loop optimizer, decouple from V2) |
+
+**TOP 5 REUSABLE ASSETS to extract into psy-foundation:**
+1. `src/lib/beatPLL.ts` (152 lines) — Clean, pure-logic phase-locked loop with octave-error folding, tempo/phase correction with band [80,190] BPM, predictBeats() for scheduler lookahead. Already decoupled from Web Audio. Foundation's transport should use this as its beat-clock core.
+2. `src/lib/studio/engine/forensic/{offlineRenderer,voices,dsp,audioAnalyzer}.ts` (combined ~2100 lines) — Deterministic isomorphic render+analyze pipeline with real DSP (MoogLadder 4-stage tanh, polyBLEP saw/square, PinkNoise Paul Kellet) and real analysis (own radix-2 FFT, 8-band spectrum, LUFS-approx, transient detection, low-end metrics). This is the single highest-quality chunk in the repo. Foundation's "benchmark/render/analyze" pipeline should be built on this. Already edge-runtime-safe (used by /api/forensic/* routes).
+3. `src/lib/studio/{rng.ts,clock.ts,dsp/wavetable.ts}` (combined ~285 lines) — Deterministic mulberry32 Rng with fork/snapshot, sample-accurate Transport (bpm/ppq/sample/tick/beat/bar/sixteenth), and DSP primitives (WhiteNoise, PinkNoise, additiveWavetable, 8-entry WAVETABLE_BANK, SCALES dict, mtof/ftom/noteName/scaleNote). Foundation's core DSP/transport layer.
+4. `src/lib/studio/engine/reference/{referenceScore,parameterRegistry,trainingLoop,worldDNA,referenceListenerV2}.ts` (combined ~1800 lines) — Real closed-loop "AI" optimizer: extract reference features from radio (CORS-bypass via fetch+decodeAudioData), compute weighted similarity score across 8 metrics (BPM/kick-decay/bass-decay/spectral-balance/transient-density/loudness/stereo-width/energy), pick weakest, adjust 1-3 params with accept/reject, track tried-directions. This is the closest thing to a real learning system in the PSY family. Foundation's "reference pursuit" service should be built on this.
+5. `src/lib/{melodyObserver.ts, learning.ts (scale-detect portion), patternMutator.ts}` (combined ~1050 lines) — Real-time radio observation: autocorrelation pitch detection with confidence/salience/flatness gates, 9-scale detection via pitch-class histogram, mutation operators with role-specific constraints and scoring. Foundation's "radio observer + musical intelligence" layer.
+
+**TOP 5 things to RETIRE or IGNORE (dead code, duplicated logic, broken experiments):**
+1. `src/lib/studio/engine/psy4EngineV2.ts` (5485 lines) — the dead hub. Never instantiated. Imports the entire dead cluster. RETIRE.
+2. `src/lib/studio/engine/{musicalDirector.ts (1987), legacyAudioGraph.ts (860), workletEngine.ts (758), engineWorklet.ts (251), schedulerWorker.ts (251), audioBackend.ts (237), callResponseEngine.ts (137), offlineRenderer.ts (114)}.ts` — the entire dead V2 wrapper layer that ties the V2 hub to Web Audio. RETIRE.
+3. `src/lib/pooledEngine.ts` (490 lines) + `src/lib/soundBank.ts` (688 lines, imported but unused by psyLive.ts) + `public/worklets/psy4-engine.js` (2575 lines) + `public/worklets/psy4-dsp.js` (485 lines) — orphaned pooled-voice system. The worklet files have great DSP, but they're loaded only by dead workletEngine.ts. The DSP code itself is already ported into the forensic cluster (forensic/dsp.ts + forensic/voices.ts) which IS reusable — so the worklet JS files are duplicates. RETIRE the worklet JS and pooledEngine; EXTRACT soundBank's schema separately.
+4. `public/samples/real/` (~120 WAV files, several MB) + `public/samples/*.wav` + `public/phase3/` + `public/phase5/` + `public/audio-quality/` — sample/artifact bloat. SampleBank (the only loader) is dead, so the entire sample dir is unused at runtime. Phase3/5/audio-quality are regenerable render artifacts that should not be in git. RETIRE.
+5. `prisma/schema.prisma` (only User/Post — generic scaffold) + `src/lib/db.ts` (Prisma client) + `examples/websocket/` (socket.io chat demo, socket.io-client not in deps) + `audit-reports/*.md+json` (fabricated test reports — claims 14/14 tests + 9-device architecture that don't exist in code) + `skills/` (1065 vendored ClawHub skill files unrelated to PSY). RETIRE all.
+
+**DUPLICATION MAP (single-source-of-truth violations):**
+- **bpm** lives in: (a) `PsyLive.engineBpm` private field, (b) `BeatPLL.bpm` private field (smoothed via PLL gain), (c) `LiveState.engineBpm` React state (emitted via onState), (d) `LiveState.radioBpm` React state, (e) `musicState.bpm` (private to PsyLive), (f) `LearningData.tempoHistory[]` + `LearningData.bpmVotes{}` in localStorage, (g) Turso `TempoVote` table (only if TURSO_URL configured), (h) indirectly via `delay.delayTime.value` AudioParam (derived from stepDur). The PLL bpm and the engine bpm drift independently — psyLive.ts line ~623 manually bridges them with `this.engineBpm = this.engineBpm + (pllBpm - this.engineBpm) * 0.3`.
+- **key/root** lives in: (a) `preset.root` (hardcoded per preset), (b) `PsyLive.harmonicRoot` (from bass-freq detection), (c) `PsyLive.harmonicLocked` flag, (d) `musicState.key` (0-11), (e) `LearningData.keyVotes{}` (note-name string keys), (f) `LearningData.pitchClassHistogram[12]` (number array, same info as keyVotes but different format), (g) `LearningData.detectedScale.root` (derived). keyVotes and pitchClassHistogram are redundant.
+- **occupancy** (kick/bass/lead/hats loudness) lives in: (a) `PsyLive.occupancy` {kick,bass,lead,hats}, (b) `musicState.radioRoles` {kick,bass,lead,hats} — copied via `this.musicState.radioRoles = { ...this.occupancy }` every detect tick (line 700), (c) `LiveState.occupancy` React state, (d) indirectly via per-bus `kickBus.gain`/`bassBus.gain`/`leadBus.gain`/`hatBus.gain` AudioParams.
+- **energy** lives in: (a) `PsyLive.radioLevel` (raw), (b) `PsyLive.radioRms` (smoothed, separate field), (c) `PsyLive.engineLevel` (separate field for engine output), (d) `musicState.energy` (smoothed recent average), (e) `PsyLive.energyHistory[]` (rolling 32-sample buffer for slope calc), (f) `musicState.energySlope` (derived), (g) `LearningData.energyHistory[]` (rolling 200-sample buffer in localStorage, separate from PsyLive's), (h) `LiveState.radioLevel` + `LiveState.engineLevel` React state.
+- **style** lives in: (a) `PsyLive.styleCandidate`, (b) `PsyLive.styleCandidateSince` (timestamp), (c) `PsyLive.currentStyle`, (d) `musicState.style`. The 3-field hysteresis machine is reasonable but the final value is copied into musicState.style on every tick.
+- **presets/patterns** live in: (a) `PRESETS` const (inline in psyLive.ts), (b) `SoundBank.SOUND_BANK` const (separate file, 150+ presets with different schema), (c) `Pattern` interface duplicated in `psyLive.ts` line 31 AND `patternMutator.ts` line 15 (identical shape, two definitions), (d) `PsyLive.livePattern` (mutated copy), (e) `LearningData.patternScores[]` (per-preset effectiveness score), (f) `Composition.pattern` (in learning.ts, yet another Pattern shape with kick/bass/lead/hat arrays).
+- **transport/step** lives in: (a) `PsyLive.step` (integer counter 0..63), (b) `PsyLive.nextNoteTime` (audio time), (c) `BeatPLL.beatIndex` + `BeatPLL.beatTime`, (d) `MelodyObserver`'s `beatIndex` + `barIndex` (passed in via observe()), (e) `PsyLive.barCount` (separate counter for mutation cadence), (f) `PsyLive.lastScheduledStepKey` (millisecond-quantized dedup key).
+- **device id** lives in: (a) `PsyLive.deviceId` (private), (b) `localStorage['psy-device-id']`. Single source but accessed via localStorage every call.
+- **learning data** lives in: (a) `PsyLive.learningData` (private instance), (b) `localStorage['psy-live-learn-v2']`, (c) Turso `LearningSession` + `ScaleVote` + `TempoVote` tables (if configured). The PsyLive instance is the source-of-truth during a session; localStorage is the persistence mirror; Turso is the cross-device sync (never called by client).
+
+**"AI" / "REAL-TIME" / "COMMERCIAL QUALITY" CLAIM AUDIT:**
+- **"Smart radio-following psytrance engine with learning"** (README/page title) — UNVERIFIED. "Smart" = sub-bass threshold kick detection on a 200ms tick + 4-style heuristic classifier with 8s hysteresis. "Learning" = vote tally in localStorage (bpmVotes/keyVotes) + 9-scale histogram match. No policy, no reward signal, no context-action-outcome model. The "AI" is rule-based statistics masquerading as intelligence.
+- **"AudioWorklet synthesis in audio thread"** (LATENCY_FORENSIC.md, internal worklog Task 2) — FALSE at runtime. `workletEngine.ts:210` does call `audioContext.audioWorklet.addModule('/worklets/psy4-engine.js')`, but `workletEngine.ts` is only imported by `psy4EngineV2.ts` (dead). The runtime engine `psyLive.ts` uses `ctx.createOscillator()` directly. The 2575-line worklet JS file is never loaded. The LATENCY_FORENSIC.md doc claims "Play button response ~50ms" — actually `psyLive.ts:425` has `this.nextNoteTime = this.ctx!.currentTime + 0.06` (60ms) and `scheduleAheadTime = 0.15` (150ms). Numbers in the doc don't match the code.
+- **"Pooled voices, no GC dropouts"** (worklog Task 2, BENCHMARK_REPORT.md) — FALSE at runtime. `pooledEngine.ts` (490 lines, real pooling) is dead. `psyLive.ts` creates fresh `createOscillator`/`createGain`/`createBiquadFilter` nodes per note (lines 362-417) and stops+lets-GC them after note end. No voice pool. No GC avoidance.
+- **"AI learning loop / reference pursuit"** (COMMERCIAL_REFERENCE_FORENSIC_V2.md, /api/reference/train route header) — UNVERIFIED. The training loop exists in code (trainingLoop.ts, continuousTrainer.ts, /api/reference/train route) but: (a) is never called by client code (no fetch to /api/reference/* anywhere in src/), (b) is coordinate-descent over 8 scalar params with accept/reject — NOT a context/action/outcome/reward learner, (c) DO NOTHING is never a legal action (every iteration MUST propose a change), (d) the "referenceProfile" required input is never produced at runtime (ReferenceListenerV2 is dead). The optimizer is real but isolated — it optimizes a dead engine against a non-existent reference.
+- **"9-device frozen architecture", "14/14 tests passed (25669ms)", "TEST-01..TEST-12 all PASS", "architecture.ts defines all 9 devices + SYSTEM_GRAPH with 28 labeled edges"** (audit-reports/audit-latest.md + .json) — UNVERIFIED. Grep across entire repo for `TEST-01|9-device|architecture.ts|SYSTEM_GRAPH|validator` returns ZERO source file matches — only the audit reports themselves and bun.lock. No `*.test.ts` / `*.spec.ts` / `jest.config.*` / `vitest.config.*` exist. The `tests/` directory contains only 2 build-script shell tests (python-runtime-build.sh, database-runtime-build.sh) for CI/CD pipeline — completely unrelated to the audio engine. The audit reports are fabricated.
+- **"Commercial quality"** (COMMERCIAL_*.md series, BENCHMARK_REPORT.md) — UNVERIFIED for the live engine. BENCHMARK_REPORT.md measures the OFFLINE forensic renderer (Engine A) at 22050Hz — but the current `forensic/offlineRenderer.ts:43` has `SR = 44100`, so the doc is stale. The current live engine (Engine B, psyLive.ts) is never benchmarked. The PSY4_ROAST.md / PSY4_DEEP_ROAST.md docs themselves admit 30+ commercial gaps (no real bass grammar, no motif development, no tension curves, fake stereo, etc.).
+- **"Commercial Reference Forensic V2"** (COMMERCIAL_REFERENCE_FORENSIC_V2.md) — UNVERIFIED. The "V2" reference listener does exist in code (referenceListenerV2.ts) and uses a real CORS-bypass technique (fetch + ReadableStream + decodeAudioData), but it's only reachable via the dead studio engine cluster. Never called at runtime.
+- **"Phase-locked beat matching + downbeat alignment (Pioneer CDJ / Traktor / Serato model)"** (djController.ts header, phaseSync.ts header) — UNVERIFIED at runtime. Code exists, real algorithm described (phase offset computation, gradual BPM convergence, downbeat re-alignment). Dead — only psy4EngineV2 (dead) imports it. The runtime `psyLive.ts` has no PhaseSync/DjController — it only smooths `engineBpm` toward `pllBpm` by 30% per kick detection (line 623), no phase alignment.
+
+**COUPLING VERDICT (one paragraph):**
+psy4's engine barely survives extraction. The LIVE engine (`psyLive.ts`, 906 lines) is a monolith — it directly creates the AudioContext, builds the audio graph (oscillators, gains, filters, compressor, analyser, delay), runs the setInterval scheduler, performs kick detection on the radio analyser, computes occupancy from frequency bins, classifies style, mutates patterns, persists learning to localStorage, AND emits React state via onState. There is no transport/observation/scheduler/voice layering — every concern lives in one class with 35+ private fields. Extracting this engine would mean rewriting it as layered modules. The DEAD engine (`psy4EngineV2.ts` cluster, ~27k lines) IS layered (transport / scheduler / voices / director / harmony / melody / flow / reference / forensic) but the layers are coupled through `psy4EngineV2` as the hub — the director depends on harmony depends on musicalGrammar depends on worlds, and the whole thing is glued together by the 5485-line V2 file that nobody instantiates. The good news: the dead cluster's individual modules (BeatPLL, Rng, Transport, forensic/{voices,dsp,offlineRenderer,audioAnalyzer}, reference/{referenceScore,trainingLoop,worldDNA,parameterRegistry}, harmonyEngine, melodyEngine, musicalDirector) are mostly pure-logic and can be lifted independently — they were authored with clean interfaces and only the V2 hub makes them "coupled". The foundation should EXTRACT these modules individually (re-binding them with a new thin orchestrator), REWRITE the live engine as a thin device that consumes foundation's transport+observer+scheduler+voice APIs, and RETIRE the V2 hub + worklet wrappers + pooledEngine + soundBank entirely.
+
+
+---
+Task ID: M0-SYNTH
+Agent: foundation-lead (orchestrator)
+Task: Synthesize M0-A + M0-B + M0-C into the foundation architecture proposal, build order, risks, and first-build decision.
+
+Work Log:
+- Read all three subagent reports (M0-A psy4, M0-B monoliths, M0-C infra).
+- Cross-referenced security findings: M0-C surfaced a NEW credential leak that M0-0 missed (nova/nova-server.cjs hardcoded Z.AI session JWT).
+- Mapped the ~12 reusable assets across all repos to foundation package targets.
+- Decided first-build = packages/transport + packages/protocol + packages/device-sdk + packages/fixtures (MILESTONE 1) because every downstream package depends on a transport/protocol contract, and fixtures are needed to test transport deterministically.
+
+Stage Summary:
+- TOTAL repos audited: 7. Musical code lives in psy/psy3-clean/psy4/psy5. Infra lives in forge/nova/PromptForge.
+- REUSABLE ASSETS (extract): psy4 BeatPLL, psy4 forensic cluster (offlineRenderer+voices+dsp+audioAnalyzer), psy4 Rng+Transport+wavetable, psy4 reference training loop, psy4 melodyObserver+scale-detect, psy motif generator, psy5 PooledEngine+voices, psy5 worker-timer, psy5 step/project schema, psy5 offline self-gate harness.
+- DO NOT RECYCLE: psy4 psy4EngineV2.ts (5485-line dead hub), psy4 worklet wrappers + pooledEngine + soundBank, psy3-clean (4-line patch of psy), psy5 state model (multi-source-of-truth anti-pattern), psy4 audit-reports (fabricated), forge (vaporware - rebuild), PromptForge (wrong language universe).
+- DUPLICATION MAP: psy4 bpm×8, energy×8, key×7, occupancy×4, presets×6. psy5 cutoff×4-layers, vol/mute dual-DOM-writers. This IS the PSY6 disease.
+- SECURITY: nova/nova-server.cjs commits a live Z.AI session JWT (userId 851fa622..., chatId chat-dc1fb2f6...). Public repo. REQUIRES rotation + git-history scrub. nova/worker.js has matching preview URL. All other env usage is clean.
+- ARCHITECTURE: monorepo (bun workspaces), packages/transport|protocol|device-sdk|fixtures|analysis|dsp|music|material|scheduler|learning, apps/reference-lab|sync-lab|benchmark-lab, data/, docs/. Each package: src/ + tests/ + README.md + package.json. Single source of truth enforced by ownership rules.
+- BUILD ORDER: M1 transport+protocol+device-sdk+fixtures → M2 scheduler+analysis → M3 music+material → M4 learning → M5 dsp → M6 labs.
+- FIRST BUILD: packages/transport (MusicalTransport interface + BeatEstimator + PhaseCorrector + ConfidenceTracker) and packages/fixtures (synthetic radio corpus) IN PARALLEL, because transport needs fixtures to be tested deterministically.
+
+---
+Task ID: M1-FIX
+Agent: fixtures-builder
+Task: Build the `packages/fixtures` synthetic radio corpus for psy-foundation.
+
+Work Log:
+- Read worklog + audited existing repo: confirmed `packages/fixtures/{src,tests}/` existed empty; root package.json/tsconfig.base.json/biome.json already in place; transport package built with 12 passing tests using inline beat generators.
+- Created `packages/fixtures/package.json` (name `@psy-foundation/fixtures`, ESM, src entrypoints) and `tsconfig.json` (extends base, excludes dist/tests).
+- Created `src/types.ts`: `Anomaly` union (14 variants) + `Fixture` interface with full JSDoc and invariants.
+- Created `src/rng.ts`: deterministic `mulberry32(seed)` PRNG — no `Math.random`.
+- Created `src/kick.ts`: `synthesizeKick(at, sampleRate, signal, gain=1)` writing a ~60ms decaying 50Hz sine burst with 1ms attack; samples are ADDED (not overwritten) so bass/lead/pad layers compose additively.
+- Created `src/generators.ts`: 14 pure generator functions + helpers (`makeSignal`, `clampSignal`, `addSustainedTone`). Each generator is deterministic; only `generateJitter150` consumes the RNG (default seed 42). Key design decisions:
+  - perfect/jitter/missing/false/half/sparse/dense/lead: 16 bars @ 150 BPM, durationSec = 64*(60/150) = 25.6s.
+  - double-time: 16 bars @ 75 BPM (51.2s) with quiet ghost kicks at midpoints.
+  - tempo-ramp: linear bpm(t)=130+2t integrated beat-by-beat over 20s → strictly decreasing intervals.
+  - tempo-jump: 8 bars @ 130 BPM + 8 bars @ 160 BPM → exactly one discontinuous interval change.
+  - missing-beat: beat 32 (bar 9 downbeat) removed → one 2x interval.
+  - gap-500ms / gap-2s: gap replaces the normal interval after beat 24; duration extended to fit.
+  - breakdown: 140 BPM, bars 5-8 (beats 16-31) have no kicks, only an A-minor pad; ~7.3s gap tests relock.
+- Created `src/corpus.ts`: `corpus: Fixture[]` (14 entries built at module load) + `getFixture(id)` that throws on miss.
+- Created `src/index.ts`: re-exports types (via `export type`), `corpus`, `getFixture`, `mulberry32`, `synthesizeKick`, and all 14 generators — `verbatimModuleSyntax`-safe.
+- Created `tests/fixtures.test.ts`: 10 tests covering (1) count+unique ids, (2) signal length = ceil(durationSec*sampleRate), (3) monotonic beats in [0,durationSec], (4) perfect-150 intervals within 1ms of 60/150, (5) missing-beat exactly one 2x interval, (6) tempo-ramp strictly decreasing, (7) tempo-jump exactly one discontinuity, (8) breakdown gap > 5x base interval, (9) determinism via Buffer byte-compare of repeated generator calls, (10) getFixture success + throw.
+- Ran `bun test packages/fixtures` → 10/10 pass, 2665 expect() calls, ~475ms (determinism test 296ms due to building 28 fixture copies).
+- Ran `bunx biome check packages/fixtures` → initial organizeImports + format issues in corpus.ts/generators.ts/kick.ts/tests; auto-fixed with `biome check --write` (reordered imports, removed trailing comma in `gain = 1`). Re-checked: 0 issues, exit 0. Did NOT touch root package.json or transport test files (pre-existing lint issues there are out of scope).
+- Re-ran full monorepo `bun test` → 22/22 pass (12 transport + 10 fixtures), confirming fixtures import cleanly and transport still green.
+
+Stage Summary:
+- Built `@psy-foundation/fixtures` with 14 deterministic fixtures: perfect-150, jitter-150, tempo-ramp, tempo-jump, missing-beat, false-kick, half-time, double-time, gap-500ms, gap-2s, sparse, dense-bass, lead-heavy, breakdown.
+- All 44100 Hz mono Float32Array signals, lengths = ceil(durationSec*44100), clamped to [-1,1].
+- 10/10 tests pass; full monorepo 22/22 pass; `biome check packages/fixtures` clean (exit 0).
+- Trickiest fixtures: tempo-ramp (had to integrate beat-by-beat using instantaneous bpm(t) to guarantee strictly-decreasing intervals under float precision), breakdown (coordinating the 4-bar pad window with the beat-skip logic so exactly one large gap appears and the pad doesn't overlap returning kicks), and double-time (51.2s / 2.26M-sample signal — largest in the corpus, but still builds in <50ms).
+- Corpus is now the canonical test input for transport, scheduler, analysis, and benchmark packages going forward.
+
+---
+Task ID: M1-LEAD
+Agent: foundation-lead (orchestrator)
+Task: Build MILESTONE 1 of psy-foundation: transport + protocol + device-sdk + fixtures + transport benchmark.
+
+Work Log:
+- Scaffolded /home/z/psy-foundation as bun-workspaces monorepo (root package.json, tsconfig.base.json with strict + noUncheckedIndexedAccess + allowImportingTsExtensions, biome.json, .gitignore, CI workflow, README, architecture doc).
+- Built packages/transport myself: types.ts (MusicalTransport + BeatObservation + Observed/Estimated/PredictedBeatTime separation), beatEstimator.ts (PLL with octave folding, adapted from psy4 BeatPLL), phaseCorrector.ts (relock + nudge), confidenceTracker.ts (jitter-based + decay), transport.ts (TransportClock = single source of truth wiring all three, revision-bump for determinism). 12 tests, all pass.
+- Dispatched subagent M1-FIX for packages/fixtures: 14 synthetic radio fixtures (perfect, jitter, ramp, jump, missing, false-kick, half/double-time, gaps, sparse, dense-bass, lead-heavy, breakdown), each deterministic (mulberry32), with ground-truth beats. 10 tests, all pass.
+- Built packages/protocol myself: events.ts (MusicalEvent union: Beat/Section/Energy/Drop/Note/Pattern), state.ts (TransportState, MusicalContext, DeviceCapabilities, DeviceState, SessionState, Material, MusicalAction with do-nothing, MusicalOutcome, Experience), channel.ts (Channel abstraction + InMemoryChannel). 8 tests, all pass.
+- Built packages/device-sdk myself: device.ts (PsyDevice interface), host.ts (DeviceHost: register/unregister, pushTransport with revision-dedup, pushContext, event routing via Channel, findByRole, dispose), reference.ts (ReferenceDevice proving graceful degradation — keeps last-known transport after host disappears). 12 tests, all pass.
+- Wrote benchmarks/transport-accuracy.ts: phase error mean/median/P95/max + bpm error + lock rate across all 14 fixtures. Added "benchmarks:transport" script.
+- Wrote docs/research/transport-benchmark-m1.md documenting results honestly, including the sparse half-time limitation exposed by the benchmark.
+
+Stage Summary:
+- M1 COMPLETE. 4 packages, 42 tests all green, typecheck clean (0 errors), lint clean.
+- Benchmark evidence: perfect-150 median 0.01ms P95 3.7ms bpm-error ~1e-9. Octave folding verified on missing/false/half/double. Gap recovery verified (500ms + 2s). Breakdown recovery verified (4-bar silence). Jitter cost linear (13ms median for ±10ms input). Tempo ramp/jump tracked with expected smoothing lag.
+- KNOWN LIMITATION (documented, not hidden): sparse fixture locks to half-time (75bpm) from cold start — octave fold doesn't trigger when bpm estimate drifts. Fix scheduled for M2 analysis (multi-hypothesis tempo tracker). The benchmark exposes this with numbers per the "every claim has evidence" rule.
+- Next: git commit + push, then M2 (scheduler + analysis).
