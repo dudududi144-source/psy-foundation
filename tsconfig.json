@@ -24,9 +24,10 @@
       }
     ],
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"],
+      "@psy-foundation/transport": ["../psy-foundation/packages/transport/src/index.ts"],
+      "@psy-foundation/music": ["../psy-foundation/packages/music/src/index.ts"],
+      "@psy-foundation/learning": ["../psy-foundation/packages/learning/src/index.ts"]
     }
   },
   "include": [
