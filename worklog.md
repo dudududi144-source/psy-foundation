@@ -738,3 +738,34 @@ Stage Summary:
 - LICENSE, CONTRIBUTING, data, protocol docs, benchmark results — all present.
 - LIVE ON GITHUB: https://github.com/dudududi144-source/psy-foundation
 - USER CAN NOW BURN/REVOKE THE TOKEN.
+
+---
+Task ID: RECONCILIATION-GATE
+Agent: foundation-lead (orchestrator)
+Task: Reconciliation + Canonical Foundation Gate. Audit psy4 vs foundation, document gaps, NO migration.
+
+Work Log:
+- GATE 1: Froze foundation state (HEAD 9063064, 250 tests, clean). Created FOUNDATION_FREEZE.md.
+- GATE 2: Re-cloned psy4 (HEAD 6d15032). Read actual code: foundation/transport/MusicalTransport.ts (295 lines, epoch/holdover/source/predictBeats/subscribe/seek), foundation/radio/RadioObservationLayer.ts (strict signal/observation separation), the 414ms scheduler bug + fix in psyLive.ts. Read all 7 test-result JSONs: 104 PSY4 foundation tests pass (transport 60 + radio 44).
+- GATE 3: Created audit/FOUNDATION_RECONCILIATION.md — 10-domain comparison table. Transport/Radio/Scheduler = NOT CANONICAL. Protocol/Device-SDK/Music/Material/DSP/Fixtures/Learning = CANONICAL CANDIDATES.
+- GATE 4: Forensic transport comparison — 10 critical gaps documented (epoch, source, holdover, AudioContext, predictBeats, subscribe, seek, setTempo, out-of-order, stale events).
+- GATE 5: Scheduler risk analysis — documented the 414ms bug (predictBeats(0.15) at 145 BPM = empty array) and PSY4's fix (compute 16th-note times from beat grid). Foundation scheduler is offline-only; adapter required.
+- GATE 6: Radio separation analysis — PSY4 enforces SIGNAL→FEATURES→OBSERVATION→INFERENCE→TRANSPORT. Foundation Analyzer mixes them. 4 critical gaps.
+- GATE 7-8: Protocol + Device SDK — both canonical candidates (PSY4 has no competing protocol/device-sdk).
+- GATE 10: Created apps/consumer-contract/ with 14 skipped gap-tests (documenting what's missing) + 2 passing contract tests (proving what works).
+- GATE 11: Created FOUNDATION_API.md — versioned API reference for all 10 packages.
+- GATE 18: Created audit/MIGRATION_PLAN.md (5 phases A-E, Phase A only performed) + audit/CONTRACT_GAPS.md (17 critical + 7 low-risk gaps).
+- GATE 22: Created FOUNDATION_STATUS.md — final report.
+- All 252 tests pass, 14 skipped (gap docs), 0 fail. typecheck clean (14 packages). lint clean.
+- Git committed (063e553).
+- Pushed to GitHub: 9063064..063e553 main -> main (success).
+- Token NEVER exposed. unset after push.
+- Refreshed ZIP at /home/z/my-project/download/psy-foundation.zip (166KB, 130 files, 252+14 tests verified from extracted copy).
+
+Stage Summary:
+- RECONCILIATION GATE COMPLETE. Per Rule 0: NO migration, NO runtime replacement, NO new musical engine.
+- PSY4 runtime is SAFE and untouched.
+- 17 critical contract gaps documented (10 transport + 4 radio + 3 scheduler).
+- Foundation is canonical candidate for 7 of 10 domains; NOT canonical for transport/radio/scheduler.
+- Next steps (post-gate): Phase B of migration plan — bring foundation transport up to PSY4's feature level.
+- USER CAN NOW BURN/REVOKE THE TOKEN.
