@@ -645,3 +645,23 @@ Stage Summary:
 - ZIP location: /home/z/my-project/psy-foundation.zip (86KB).
 - The download banner was removed from the website per user's request.
 - Everything is git-committed so it survives workspace resets.
+
+---
+Task ID: M4-FINAL
+Agent: foundation-lead (orchestrator)
+Task: Build M4 (learning) and deliver the ZIP to /home/z/my-project/download/ (the chat file-list folder).
+
+Work Log:
+- Found the download folder: /home/z/my-project/download/ (singular, lowercase) — this is what surfaces files to the chat.
+- Built packages/learning: types.ts (Experience, LearnedRecord, Decision, LearningStats), contextKey.ts (deterministic context fingerprint with energy/bpm quantization), reward.ts (defaultReward sounded+0.3/skipped 0/collided -0.5, sustainedReward, antiCollisionReward), store.ts (ExperienceStore with aggregation + toJSON/fromJSON), policy.ts (epsilon-greedy with abstention — DO NOTHING always a candidate, cold-start on unknown, exploit best avg reward, abstain when best below threshold), stats.ts (computeStats — regret, retrieval quality, exploration/abstention rates), learner.ts (Learner facade). 32 tests.
+- THE ABSTENTION MECHANISM: if the best action's avg reward is below abstainThreshold (default 0.1), the policy returns do-nothing. This is the "sometimes the best move is not to play" principle.
+- Fixed lint: removed all `!` non-null assertions in policy.ts (replaced with null checks + throw). Removed unused `contexts` variable in stats.ts.
+- All 182 tests pass across 9 packages. typecheck clean. lint clean.
+- Git committed (220234b).
+- Built ZIP and routed to /home/z/my-project/download/psy-foundation.zip (99KB, 89 files, 0 node_modules, 0 .git).
+- Verified: extracted to /tmp, ran bun install + bun test → 182/182 pass from the extracted copy.
+
+Stage Summary:
+- M4 COMPLETE. 9 packages total (transport, protocol, device-sdk, fixtures, scheduler, analysis, music, material, learning), 182 tests, all green.
+- ZIP delivered to /home/z/my-project/download/psy-foundation.zip — should surface in the chat file list.
+- Git committed (220234b) — work persists.
