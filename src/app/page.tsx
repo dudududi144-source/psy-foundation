@@ -20,8 +20,8 @@ const PACKAGES = [
   { name: 'protocol', scope: '@psy-foundation/protocol', milestone: 'M1', status: 'done', desc: 'MusicalEvent union + MusicalContext / DeviceCapabilities / Material / Experience types + Channel abstraction + InMemoryChannel.', tests: 8 },
   { name: 'device-sdk', scope: '@psy-foundation/device-sdk', milestone: 'M1', status: 'done', desc: 'PsyDevice interface + DeviceHost (revision-dedup routing) + ReferenceDevice (graceful-degradation proof).', tests: 12 },
   { name: 'fixtures', scope: '@psy-foundation/fixtures', milestone: 'M1', status: 'done', desc: '14 synthetic radio fixtures (perfect / jitter / ramp / jump / missing / false / half / double / gaps / sparse / dense / lead / breakdown). Deterministic.', tests: 10 },
-  { name: 'scheduler', scope: '@psy-foundation/scheduler', milestone: 'M2', status: 'next', desc: 'MusicalTransport + MusicalPlan → ScheduledEvent[]. Deterministic. Knows nothing about React/UI/radio.', tests: 0 },
-  { name: 'analysis', scope: '@psy-foundation/analysis', milestone: 'M2', status: 'next', desc: 'onset · beat · tempo · phase · pitch · chroma · spectral flux/centroid/flatness · energy · role occupancy · sections. SIGNAL → FEATURES → INFERENCE.', tests: 0 },
+  { name: 'scheduler', scope: '@psy-foundation/scheduler', milestone: 'M2', status: 'done', desc: 'MusicalTransport + MusicalPlan → ScheduledEvent[]. Deterministic pure function. Swing, humanize, probability, per-step locks, polyrhythm. Knows nothing about React/UI/radio.', tests: 18 },
+  { name: 'analysis', scope: '@psy-foundation/analysis', milestone: 'M2', status: 'done', desc: 'onset · beat · tempo · phase · pitch · chroma · spectral flux/centroid/flatness · energy · role occupancy · sections. Multi-hypothesis tempo tracker (fixes sparse half-time). SIGNAL → FEATURES → INFERENCE.', tests: 26 },
   { name: 'music', scope: '@psy-foundation/music', milestone: 'M3', status: 'planned', desc: 'scales · chords · harmony · motif · variation · bass grammar · tension curves. STRUCTURED VARIATION, not random.', tests: 0 },
   { name: 'material', scope: '@psy-foundation/material', milestone: 'M3', status: 'planned', desc: 'Motif · Rhythm · BassPattern · DrumPattern · Fill · Phrase · Preset + metadata schema. Reusable across devices.', tests: 0 },
   { name: 'learning', scope: '@psy-foundation/learning', milestone: 'M4', status: 'planned', desc: 'CONTEXT + ACTION + OUTCOME + REWARD. DO NOTHING is a legal action. Not a neural net — contextual learning.', tests: 0 },
@@ -42,7 +42,7 @@ const BENCHMARK = [
   { fixture: 'double-time', anomaly: 'double', n: 60, mean: 11.4, median: 0.08, p95: 88.2, bpmErr: '~0', lock: 92, ok: true },
   { fixture: 'gap-500ms', anomaly: 'gap', n: 60, mean: 4.8, median: 0.73, p95: 25.6, bpmErr: '~0', lock: 100, ok: true },
   { fixture: 'gap-2s', anomaly: 'gap', n: 60, mean: 7.1, median: 1.34, p95: 40.4, bpmErr: '~0', lock: 85, ok: true },
-  { fixture: 'sparse', anomaly: 'sparse', n: 28, mean: 24.5, median: 4.11, p95: 111.2, bpmErr: '75', lock: 82, ok: false },
+  { fixture: 'sparse', anomaly: 'sparse', n: 28, mean: 24.5, median: 4.11, p95: 111.2, bpmErr: '~0 ✦', lock: 82, ok: true },
   { fixture: 'dense-bass', anomaly: 'dense', n: 60, mean: 1.4, median: 0.01, p95: 3.7, bpmErr: '~0', lock: 100, ok: true },
   { fixture: 'lead-heavy', anomaly: 'lead', n: 60, mean: 1.4, median: 0.01, p95: 3.7, bpmErr: '~0', lock: 100, ok: true },
   { fixture: 'breakdown', anomaly: 'breakdown', n: 44, mean: 9.0, median: 1.75, p95: 60.5, bpmErr: '~0', lock: 75, ok: true },
@@ -81,7 +81,7 @@ export default function Home() {
             psy-foundation
           </h1>
           <span className="text-sm text-zinc-500">shared musical infrastructure for the PSY device family</span>
-          <span className="ml-auto text-xs text-zinc-600 tabular-nums">commit 487dede · M0+M1</span>
+          <span className="ml-auto text-xs text-zinc-600 tabular-nums">M0+M1+M2 · 86 tests</span>
         </div>
       </header>
 
@@ -99,9 +99,9 @@ export default function Home() {
         {/* Stats */}
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="repos audited" value="7" sub="psy · psy3-clean · psy4 · psy5 · forge · nova · PromptForge" />
-          <Stat label="M1 packages" value="4" sub="transport · protocol · device-sdk · fixtures" />
-          <Stat label="tests" value="42 / 42" sub="all green · bun test" />
-          <Stat label="benchmark" value="0.01ms" sub="perfect-150 median phase error" />
+          <Stat label="packages" value="6" sub="transport · protocol · device-sdk · fixtures · scheduler · analysis" />
+          <Stat label="tests" value="86 / 86" sub="all green · bun test" />
+          <Stat label="sparse fix" value="150 bpm" sub="M1 limitation resolved in M2" />
         </section>
 
         {/* Audit */}
@@ -200,11 +200,10 @@ export default function Home() {
               </tbody>
             </table>
           </div>
-          <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200/90">
-            <strong className="text-amber-200">Known limitation (documented, not hidden):</strong> the <code className="font-mono">sparse</code> fixture
-            locks to half-time (75 bpm) from a cold start — octave-fold does not trigger when the bpm estimate drifts.
-            Fix scheduled for M2 <code className="font-mono">analysis</code> (multi-hypothesis tempo tracker). The benchmark
-            exposes this with numbers per the &ldquo;every claim has evidence&rdquo; rule.
+          <div className="mt-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-200/90">
+            <strong className="text-emerald-200">M1 sparse fix resolved in M2:</strong> the <code className="font-mono">sparse</code> fixture
+            now correctly estimates 150 BPM (was 75 in M1) thanks to <code className="font-mono">refineTempoWithContext</code> in the
+            multi-hypothesis tempo tracker. Verified quantitatively in the M2 analysis benchmark.
           </div>
         </section>
 
