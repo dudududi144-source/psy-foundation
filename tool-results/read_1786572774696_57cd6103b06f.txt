@@ -1,0 +1,863 @@
+     1→     1→/**
+     2→     2→ * CompositionEngine: the single authoritative composer.
+     3→     3→ *
+     4→     4→ * The engine composes whole phrases, not isolated bars. It follows a strict
+     5→     5→ * hierarchy:
+     6→     6→ *   1. Build GroovePlan (kick skeleton, subdivision, accents)
+     7→     7→ *   2. Determine harmonic plan (chord tones, tension notes)
+     8→     8→ *   3. Compose BASS against groove (bass knows where kick is)
+     9→     9→ *   4. Compose LEAD against bass+harmony (lead leaves space for bass,
+    10→    10→ *      stays in tessitura)
+    11→    11→ *   5. Arrange parts (some roles OFF in BREAK / INTRO / OUTRO sections)
+    12→    12→ *
+    13→    13→ * Bass composition rules:
+    14→    14→ *   - Bass ALWAYS places a ROOT on step 0 (beat 1) — the LOCKED invariant
+    15→    15→ *     that keeps bass-kick alignment high.
+    16→    16→ *   - In LOCKED mode: bass hits every kick step with ROOT.
+    17→    17→ *   - In COMPLEMENTARY mode: bass hits the gaps between kicks with
+    18→    18→ *     FIFTH / OCTAVE.
+    19→    19→ *   - Bass register: octave 2 (MIDI 36-59).
+    20→    20→ *   - Last bar of a phrase: CADENCE walk (fifth → root).
+    21→    21→ *
+    22→    22→ * Lead composition rules:
+    23→    23→ *   - Lead MUST NOT overlap bass register (lead clamped to MIDI 60-84).
+    24→    24→ *   - Lead respects harmonic context (chord tones preferred).
+    25→    25→ *   - Lead max leap: grammar.maxLeap (default 7 semitones).
+    26→    26→ *   - Lead tessitura center: grammar.tessituraCenter.
+    27→    27→ *   - Lead uses motifs from memory, transformed purposefully.
+    28→    28→ *   - Lead has call/response structure: first half = call (small
+    29→    29→ *     transpositions of the phrase motif), second half = response
+    30→    30→ *     (callResponse transform).
+    31→    31→ */
+    32→    32→
+    33→    33→import {
+    34→    34→  ARRANGEMENT_ROLE_MAP,
+    35→    35→  type ArrangementPlan,
+    36→    36→  type ArrangementState,
+    37→    37→  type RoleActivation,
+    38→    38→  planArrangement,
+    39→    39→} from './arrangement-state.ts'
+    40→    40→import type { AdaptedCompositionIntent } from './composition-adaptation.ts'
+    41→    41→import { type GroovePlan, buildGroovePlan } from './groove-plan.ts'
+    42→    42→import type { LearnedMusicalContext } from './learned-context.ts'
+    43→    43→import { createEmptyLearnedContext } from './learned-context.ts'
+    44→    44→import { MotifMemory } from './motif-memory.ts'
+    45→    45→import { type Motif, type MotifNote, createMotif } from './motif-v2.ts'
+    46→    46→import type { MusicalContext } from './musical-context.ts'
+    47→    47→import { generateMotifV2 } from './phrase-planner.ts'
+    48→    48→import { Rng } from './rng.ts'
+    49→    49→import { degreeToMidi, getScale, scalePcs } from './scales.ts'
+    50→    50→import { type StyleGrammar, getStyleGrammar } from './style-grammar.ts'
+    51→    51→import {
+    52→    52→  callResponse,
+    53→    53→  invert as invertMotif,
+    54→    54→  retrograde as retrogradeMotif,
+    55→    55→  transpose as transposeMotif,
+    56→    56→} from './transformation.ts'
+    57→    57→
+    58→    58→export interface ComposedBar {
+    59→    59→  barIndex: number
+    60→    60→  arrangementState: ArrangementState
+    61→    61→  groove: GroovePlan
+    62→    62→  /** Step indices within the bar that have a kick onset. */
+    63→    63→  kickNotes: number[]
+    64→    64→  /** Bass notes for this bar. */
+    65→    65→  bassNotes: { midi: number; step: number; durationSteps: number; function: string }[]
+    66→    66→  /** Lead notes for this bar. */
+    67→    67→  leadNotes: { midi: number; step: number; durationSteps: number; velocity: number }[]
+    68→    68→  /** Step indices within the bar that have a hat onset. */
+    69→    69→  hatNotes: number[]
+    70→    70→  /** Active chord pitch classes for this bar. */
+    71→    71→  harmonicContext: number[]
+    72→    72→  /** Role activation for this bar (copied from arrangement slot). */
+    73→    73→  roles: RoleActivation
+    74→    74→  /** Timbre intent from learned context (PSY4 translates to synth params). */
+    75→    75→  timbreIntent?: {
+    76→    76→    brightness: number
+    77→    77→    harmonicity: number
+    78→    78→    noisiness: number
+    79→    79→    attack: number
+    80→    80→    subEnergy: number
+    81→    81→  }
+    82→    82→}
+    83→    83→
+    84→    84→export interface ComposedPhrase {
+    85→    85→  bars: ComposedBar[]
+    86→    86→  /** Indices (within the phrase) of the opening / peak / resolution bars. */
+    87→    87→  phraseArc: { opening: number; peak: number; resolution: number }
+    88→    88→  /** Motif ids used in this phrase (primary motif first). */
+    89→    89→  motifIds: string[]
+    90→    90→  /** If this phrase is a callback, the motif id it callbacks to. */
+    91→    91→  callbackTo?: string
+    92→    92→  seed: number
+    93→    93→}
+    94→    94→
+    95→    95→export interface ComposedSection {
+    96→    96→  bars: ComposedBar[]
+    97→    97→  phrases: ComposedPhrase[]
+    98→    98→  arrangement: ArrangementPlan
+    99→    99→  groove: GroovePlan
+   100→   100→  seed: number
+   101→   101→}
+   102→   102→
+   103→   103→export interface CompositionEngineOptions {
+   104→   104→  memory?: MotifMemory
+   105→   105→  seed: number
+   106→   106→  context: MusicalContext
+   107→   107→  /** Optional explicit grammar; defaults to context.sectionRole lookup. */
+   108→   108→  grammar?: StyleGrammar
+   109→   109→  /** Optional learned preference function (0..1). When provided, motif selection is biased. */
+   110→   110→  preferenceFor?: (motif: Motif) => number
+   111→   111→  /** Optional learned musical context from radio observation. Changes bass/melody/rhythm grammar. */
+   112→   112→  learnedContext?: LearnedMusicalContext
+   113→   113→}
+   114→   114→
+   115→   115→const BASS_OCTAVE = 2
+   116→   116→const LEAD_MIN_MIDI = 60
+   117→   117→const LEAD_MAX_MIDI = 84
+   118→   118→
+   119→   119→export class CompositionEngine {
+   120→   120→  private memory: MotifMemory
+   121→   121→  private seed: number
+   122→   122→  private context: MusicalContext
+   123→   123→  private grammar: StyleGrammar
+   124→   124→  private preferenceFor: ((motif: Motif) => number) | null
+   125→   125→  private learned: LearnedMusicalContext
+   126→   126→
+   127→   127→  constructor(opts: CompositionEngineOptions) {
+   128→   128→    this.memory = opts.memory ?? new MotifMemory()
+   129→   129→    this.seed = opts.seed
+   130→   130→    this.context = opts.context
+   131→   131→    this.grammar = opts.grammar ?? getStyleGrammar(opts.context.sectionRole || 'full-on')
+   132→   132→    this.preferenceFor = opts.preferenceFor ?? null
+   133→   133→    this.learned = opts.learnedContext ?? createEmptyLearnedContext()
+   134→   134→    this.seedMemory()
+   135→   135→  }
+   136→   136→
+   137→   137→  /** Compose a single phrase as ONE musical object. */
+   138→   138→  composePhrase(opts: {
+   139→   139→    bars: number
+   140→   140→    arrangementState: ArrangementState
+   141→   141→    groove: GroovePlan
+   142→   142→    harmonicContext: number[]
+   143→   143→    previousPhrase?: ComposedPhrase
+   144→   144→    /** If set, the phrase uses this motif (callback) instead of generating fresh. */
+   145→   145→    callbackMotif?: Motif
+   146→   146→    /** Optional adaptation intent — changes what is composed (not just filters). */
+   147→   147→    intent?: AdaptedCompositionIntent
+   148→   148→  }): ComposedPhrase {
+   149→   149→    const { bars, arrangementState, groove, harmonicContext } = opts
+   150→   150→    const intent = opts.intent
+   151→   151→    // Per-phrase rng, derived deterministically from the engine seed + state.
+   152→   152→    const rng = new Rng(
+   153→   153→      (this.seed * 7919 + bars * 31 + arrangementState.length * 17 + harmonicContext.length * 7) >>>
+   154→   154→        0
+   155→   155→    )
+   156→   156→    const roles = { ...ARRANGEMENT_ROLE_MAP[arrangementState] }
+   157→   157→
+   158→   158→    // Apply intent to roles (adaptation changes WHO plays)
+   159→   159→    if (intent) {
+   160→   160→      if (intent.bassPressure < 0.3) roles.bass = false
+   161→   161→      if (intent.leadPressure < 0.3) roles.lead = false
+   162→   162→      if (intent.groovePressure < 0.3) {
+   163→   163→        roles.kick = false
+   164→   164→        roles.hats = false
+   165→   165→      }
+   166→   166→      if (intent.texturePressure > 0.6) roles.hats = true
+   167→   167→    }
+   168→   168→
+   169→   169→    const phraseMotif = opts.callbackMotif ?? this.choosePhraseMotif(rng, opts.previousPhrase)
+   170→   170→    const callbackTo = opts.callbackMotif?.id
+   171→   171→
+   172→   172→    const half = Math.floor(bars / 2)
+   173→   173→    const composedBars: ComposedBar[] = []
+   174→   174→
+   175→   175→    for (let bar = 0; bar < bars; bar++) {
+   176→   176→      const isLast = bar === bars - 1
+   177→   177→      const isResponse = bar >= half
+   178→   178→      // Per-bar bass + lead rngs (independent streams).
+   179→   179→      const bassRng = new Rng((this.seed * 131 + bar * 53 + 11) >>> 0)
+   180→   180→      const leadRng = new Rng((this.seed * 191 + bar * 71 + 23) >>> 0)
+   181→   181→
+   182→   182→      // 1. Kick — from groove, modified by learned rhythm if available
+   183→   183→      let kickNotes: number[] = []
+   184→   184→      if (roles.kick) {
+   185→   185→        kickNotes = Array.from(new Set(groove.kickSteps)).sort((a, b) => a - b)
+   186→   186→        // Wire learned kick grammar: if confidence is high, generate original
+   187→   187→        // kick patterns from learned statistics (not copying, but same language)
+   188→   188→        const learnedKick = this.learned.rhythm.kickGrammar
+   189→   189→        const kickConf = this.learned.meta.confidence
+   190→   190→        if (kickConf > 0.3 && learnedKick.some((v: number) => v > 0.1)) {
+   191→   191→          // Generate original kick pattern from learned probabilities
+   192→   192→          const kickRng = new Rng((this.seed * 211 + bar * 43 + 7) >>> 0)
+   193→   193→          const generated: number[] = []
+   194→   194→          for (let step = 0; step < groove.stepsPerBar; step++) {
+   195→   195→            const prob = learnedKick[step % 16] ?? 0
+   196→   196→            // Blend: 60% learned probability, 40% style groove
+   197→   197→            const styleHas = groove.kickSteps.includes(step)
+   198→   198→            const blended = styleHas ? 0.8 : prob * 0.6
+   199→   199→            if (kickRng.next() < blended) {
+   200→   200→              generated.push(step)
+   201→   201→            }
+   202→   202→          }
+   203→   203→          // Always keep beat 1 (LOCKED invariant)
+   204→   204→          if (!generated.includes(0)) generated.unshift(0)
+   205→   205→          kickNotes = generated.sort((a, b) => a - b)
+   206→   206→        }
+   207→   207→      }
+   208→   208→
+   209→   209→      // 2. Hats — from groove, modified by learned hat grammar if available
+   210→   210→      let hatNotes: number[] = []
+   211→   211→      if (roles.hats) {
+   212→   212→        hatNotes = Array.from(new Set(groove.hatSteps)).sort((a, b) => a - b)
+   213→   213→        // Wire learned hat grammar
+   214→   214→        const learnedHats = this.learned.rhythm.hatGrammar
+   215→   215→        if (this.learned.meta.confidence > 0.3 && learnedHats.some((v: number) => v > 0.1)) {
+   216→   216→          const hatRng = new Rng((this.seed * 223 + bar * 47 + 13) >>> 0)
+   217→   217→          const generated: number[] = []
+   218→   218→          for (let step = 0; step < groove.stepsPerBar; step++) {
+   219→   219→            const prob = learnedHats[step % 16] ?? 0
+   220→   220→            const styleHas = groove.hatSteps.includes(step)
+   221→   221→            const blended = styleHas ? 0.7 : prob * 0.5
+   222→   222→            if (hatRng.next() < blended) {
+   223→   223→              generated.push(step)
+   224→   224→            }
+   225→   225→          }
+   226→   226→          hatNotes = generated.length > 0 ? generated.sort((a, b) => a - b) : hatNotes
+   227→   227→        }
+   228→   228→      }
+   229→   229→
+   230→   230→      // 3. Bass — only if roles.bass. Apply intent to reduce bass density.
+   231→   231→      let bassNotes = roles.bass
+   232→   232→        ? this.composeBass(bar, groove, harmonicContext, bassRng, isLast)
+   233→   233→        : []
+   234→   234→
+   235→   235→      // 4. Lead — only if roles.lead. Apply intent to reduce lead density.
+   236→   236→      let leadNotes = roles.lead
+   237→   237→        ? this.composeLead(bar, bars, phraseMotif, harmonicContext, leadRng, isResponse)
+   238→   238→        : []
+   239→   239→
+   240→   240→      // Apply adaptation intent to change DENSITY (not just on/off)
+   241→   241→      if (intent) {
+   242→   242→        // Reduce bass notes proportionally to bassPressure
+   243→   243→        if (intent.bassPressure < 0.6 && bassNotes.length > 1) {
+   244→   244→          const keepRatio = Math.max(0.3, intent.bassPressure)
+   245→   245→          const keepCount = Math.max(1, Math.floor(bassNotes.length * keepRatio))
+   246→   246→          bassNotes = bassNotes.slice(0, keepCount)
+   247→   247→        }
+   248→   248→        // Reduce lead notes proportionally to leadPressure
+   249→   249→        if (intent.leadPressure < 0.6 && leadNotes.length > 1) {
+   250→   250→          const keepRatio = Math.max(0.2, intent.leadPressure)
+   251→   251→          const keepCount = Math.max(1, Math.floor(leadNotes.length * keepRatio))
+   252→   252→          leadNotes = leadNotes.slice(0, keepCount)
+   253→   253→        }
+   254→   254→        // Register shift: shift lead notes
+   255→   255→        if (intent.registerShift !== 0 && leadNotes.length > 0) {
+   256→   256→          const shift = intent.registerShift * 12
+   257→   257→          leadNotes = leadNotes.map((n) => ({
+   258→   258→            ...n,
+   259→   259→            midi: Math.max(LEAD_MIN_MIDI, Math.min(LEAD_MAX_MIDI, n.midi + shift)),
+   260→   260→          }))
+   261→   261→        }
+   262→   262→        // Rest pressure: silence some bars entirely
+   263→   263→        if (intent.restPressure > 0.5 && bar % 4 === 2) {
+   264→   264→          leadNotes = []
+   265→   265→        }
+   266→   266→        // High texture: add hats if sparse
+   267→   267→        if (intent.texturePressure > 0.6 && hatNotes.length === 0 && roles.hats) {
+   268→   268→          hatNotes = [2, 6, 10, 14]
+   269→   269→        }
+   270→   270→      }
+   271→   271→
+   272→   272→      composedBars.push({
+   273→   273→        barIndex: bar,
+   274→   274→        arrangementState,
+   275→   275→        groove,
+   276→   276→        kickNotes,
+   277→   277→        bassNotes,
+   278→   278→        leadNotes,
+   279→   279→        hatNotes,
+   280→   280→        harmonicContext: harmonicContext.slice(),
+   281→   281→        roles: { ...roles },
+   282→   282→        timbreIntent:
+   283→   283→          this.learned.meta.confidence > 0.3
+   284→   284→            ? {
+   285→   285→                brightness: this.learned.timbre.brightness,
+   286→   286→                harmonicity: this.learned.timbre.harmonicity,
+   287→   287→                noisiness: this.learned.timbre.noisiness,
+   288→   288→                attack: this.learned.timbre.attack,
+   289→   289→                subEnergy: this.learned.timbre.subEnergy,
+   290→   290→              }
+   291→   291→            : undefined,
+   292→   292→      })
+   293→   293→    }
+   294→   294→
+   295→   295→    return {
+   296→   296→      bars: composedBars,
+   297→   297→      phraseArc: { opening: 0, peak: half, resolution: Math.max(0, bars - 1) },
+   298→   298→      motifIds: [phraseMotif.id],
+   299→   299→      callbackTo,
+   300→   300→      seed: this.seed,
+   301→   301→    }
+   302→   302→  }
+   303→   303→
+   304→   304→  /** Compose a full section (32-256 bars). */
+   305→   305→  composeSection(opts: { bars: number }): ComposedSection {
+   306→   306→    const groove = buildGroovePlan({
+   307→   307→      context: this.context,
+   308→   308→      seed: this.seed,
+   309→   309→      bars: opts.bars,
+   310→   310→      grammar: this.grammar,
+   311→   311→    })
+   312→   312→    const arrangement = planArrangement({
+   313→   313→      bars: opts.bars,
+   314→   314→      seed: this.seed,
+   315→   315→      context: this.context,
+   316→   316→    })
+   317→   317→
+   318→   318→    // Slice the arrangement into phrases at state boundaries so each phrase
+   319→   319→    // has a single ArrangementState. This keeps composePhrase's
+   320→   320→    // role-activation logic correct (an INTRO phrase has no kick; a GROOVE
+   321→   321→    // phrase has kick) while still respecting the arrangement's per-bar
+   322→   322→    // state changes.
+   323→   323→    const groups: { state: ArrangementState; start: number; length: number }[] = []
+   324→   324→    let curState: ArrangementState | null = null
+   325→   325→    let curStart = 0
+   326→   326→    for (let bar = 0; bar < opts.bars; bar++) {
+   327→   327→      const slot = arrangement.slots[bar]
+   328→   328→      const state: ArrangementState = slot?.state ?? 'GROOVE'
+   329→   329→      if (curState === null) {
+   330→   330→        curState = state
+   331→   331→        curStart = bar
+   332→   332→      } else if (state !== curState) {
+   333→   333→        groups.push({ state: curState, start: curStart, length: bar - curStart })
+   334→   334→        curState = state
+   335→   335→        curStart = bar
+   336→   336→      }
+   337→   337→    }
+   338→   338→    if (curState !== null) {
+   339→   339→      groups.push({
+   340→   340→        state: curState,
+   341→   341→        start: curStart,
+   342→   342→        length: opts.bars - curStart,
+   343→   343→      })
+   344→   344→    }
+   345→   345→    const totalPhrases = groups.length
+   346→   346→
+   347→   347→    const phrases: ComposedPhrase[] = []
+   348→   348→    const bars: ComposedBar[] = []
+   349→   349→    let prev: ComposedPhrase | undefined
+   350→   350→    let firstPhraseMotif: Motif | undefined
+   351→   351→
+   352→   352→    for (let phraseIdx = 0; phraseIdx < groups.length; phraseIdx++) {
+   353→   353→      const group = groups[phraseIdx] as { state: ArrangementState; start: number; length: number }
+   354→   354→      const isLastPhrase = phraseIdx === totalPhrases - 1
+   355→   355→      const harmonicContext = this.chooseHarmonicForPhrase(phraseIdx)
+   356→   356→      const callbackMotif = isLastPhrase && firstPhraseMotif ? firstPhraseMotif : undefined
+   357→   357→
+   358→   358→      const phrase = this.composePhrase({
+   359→   359→        bars: group.length,
+   360→   360→        arrangementState: group.state,
+   361→   361→        groove,
+   362→   362→        harmonicContext,
+   363→   363→        previousPhrase: prev,
+   364→   364→        callbackMotif,
+   365→   365→      })
+   366→   366→
+   367→   367→      // Re-index bars to absolute bar indices and sync per-bar roles from
+   368→   368→      // the arrangement (in case the arrangement's slot has slightly
+   369→   369→      // different roles than the state's default — e.g., due to jitter).
+   370→   370→      for (const b of phrase.bars) {
+   371→   371→        const absoluteBar = b.barIndex + group.start
+   372→   372→        const absSlot = arrangement.slots.find((s) => s.barIndex === absoluteBar)
+   373→   373→        const out: ComposedBar = { ...b, barIndex: absoluteBar }
+   374→   374→        if (absSlot) {
+   375→   375→          out.roles = { ...absSlot.roles }
+   376→   376→        }
+   377→   377→        bars.push(out)
+   378→   378→      }
+   379→   379→      phrases.push(phrase)
+   380→   380→
+   381→   381→      // Capture the first phrase's motif for the final callback.
+   382→   382→      if (phraseIdx === 0) {
+   383→   383→        const id = phrase.motifIds[0]
+   384→   384→        if (id) {
+   385→   385→          const entry = this.memory.retrieve(id)
+   386→   386→          if (entry) firstPhraseMotif = entry.motif
+   387→   387→        }
+   388→   388→      }
+   389→   389→      prev = phrase
+   390→   390→    }
+   391→   391→
+   392→   392→    return { bars, phrases, arrangement, groove, seed: this.seed }
+   393→   393→  }
+   394→   394→
+   395→   395→  /** Get all notes from a composed section as flat arrays per part. */
+   396→   396→  renderNotes(section: ComposedSection): {
+   397→   397→    kick: { step: number; bar: number }[]
+   398→   398→    bass: { midi: number; step: number; bar: number; function: string }[]
+   399→   399→    lead: { midi: number; step: number; bar: number; velocity: number }[]
+   400→   400→    hats: { step: number; bar: number }[]
+   401→   401→  } {
+   402→   402→    const kick: { step: number; bar: number }[] = []
+   403→   403→    const bass: { midi: number; step: number; bar: number; function: string }[] = []
+   404→   404→    const lead: { midi: number; step: number; bar: number; velocity: number }[] = []
+   405→   405→    const hats: { step: number; bar: number }[] = []
+   406→   406→    for (const bar of section.bars) {
+   407→   407→      for (const step of bar.kickNotes) kick.push({ step, bar: bar.barIndex })
+   408→   408→      for (const n of bar.bassNotes) {
+   409→   409→        bass.push({ midi: n.midi, step: n.step, bar: bar.barIndex, function: n.function })
+   410→   410→      }
+   411→   411→      for (const n of bar.leadNotes) {
+   412→   412→        lead.push({ midi: n.midi, step: n.step, bar: bar.barIndex, velocity: n.velocity })
+   413→   413→      }
+   414→   414→      for (const step of bar.hatNotes) hats.push({ step, bar: bar.barIndex })
+   415→   415→    }
+   416→   416→    return { kick, bass, lead, hats }
+   417→   417→  }
+   418→   418→
+   419→   419→  // ---------------- internal helpers ----------------
+   420→   420→
+   421→   421→  /** Seed memory with 2-3 motifs so the first phrase has material to draw on. */
+   422→   422→  private seedMemory(): void {
+   423→   423→    if (this.memory.size > 0) return
+   424→   424→    const baseMotif = generateMotifV2(
+   425→   425→      { ...this.context, octave: 4 },
+   426→   426→      (this.seed * 7 + 1) >>> 0,
+   427→   427→      'lead'
+   428→   428→    )
+   429→   429→    this.memory.ingest(baseMotif, 0, { salience: 0.7, role: 'lead' })
+   430→   430→    const altMotif = generateMotifV2(
+   431→   431→      { ...this.context, octave: 4 },
+   432→   432→      (this.seed * 13 + 31) >>> 0,
+   433→   433→      'lead'
+   434→   434→    )
+   435→   435→    this.memory.ingest(altMotif, 0, { salience: 0.6, role: 'lead' })
+   436→   436→  }
+   437→   437→
+   438→   438→  /**
+   439→   439→   * Choose the phrase motif. 30% of the time (deterministic via rng), pull
+   440→   440→   * a motif from memory referenced by the previous phrase — a cross-phrase
+   441→   441→   * callback. Otherwise generate a fresh motif. When a learned preference
+   442→   442→   * function is provided, candidates are scored and the highest-scoring
+   443→   443→   * motif is selected with 70% probability (30% exploration).
+   444→   444→   */
+   445→   445→  private choosePhraseMotif(rng: Rng, previousPhrase?: ComposedPhrase): Motif {
+   446→   446→    // 30% chance: callback to previous phrase motif
+   447→   447→    if (previousPhrase && rng.next() < 0.3) {
+   448→   448→      const prevId = previousPhrase.motifIds[0]
+   449→   449→      if (prevId) {
+   450→   450→        const entry = this.memory.retrieve(prevId)
+   451→   451→        if (entry) return entry.motif
+   452→   452→      }
+   453→   453→    }
+   454→   454→
+   455→   455→    // Generate 3 candidate motifs
+   456→   456→    const candidates: Motif[] = []
+   457→   457→    for (let i = 0; i < 3; i++) {
+   458→   458→      const freshSeed = (this.seed * 101 + rng.int(1, 1_000_000) + i * 7919) >>> 0
+   459→   459→      candidates.push(generateMotifV2({ ...this.context, octave: 4 }, freshSeed, 'lead'))
+   460→   460→    }
+   461→   461→
+   462→   462→    // If learning is wired, score candidates and prefer the best (70% exploit, 30% explore)
+   463→   463→    if (this.preferenceFor) {
+   464→   464→      const prefFn = this.preferenceFor
+   465→   465→      const scored = candidates.map((m) => ({ motif: m, score: prefFn ? prefFn(m) : 0.5 }))
+   466→   466→      scored.sort((a, b) => b.score - a.score)
+   467→   467→      if (rng.next() < 0.7) {
+   468→   468→        // Exploit: pick highest-scoring
+   469→   469→        const best = scored[0] as { motif: Motif; score: number }
+   470→   470→        this.memory.ingest(best.motif, 0, { salience: 0.6, role: 'lead' })
+   471→   471→        return best.motif
+   472→   472→      }
+   473→   473→      // Explore: pick a random candidate
+   474→   474→      const pick = candidates[rng.int(0, candidates.length - 1)] as Motif
+   475→   475→      this.memory.ingest(pick, 0, { salience: 0.6, role: 'lead' })
+   476→   476→      return pick
+   477→   477→    }
+   478→   478→
+   479→   479→    // No learning: pick first candidate (deterministic)
+   480→   480→    const motif = candidates[0] as Motif
+   481→   481→    this.memory.ingest(motif, 0, { salience: 0.6, role: 'lead' })
+   482→   482→    return motif
+   483→   483→  }
+   484→   484→
+   485→   485→  /**
+   486→   486→   * Choose chord pitch classes for a phrase. Rotates through tonic /
+   487→   487→   * subdominant / tonic / dominant across phrases so harmonic rhythm is
+   488→   488→   * non-zero across a section.
+   489→   489→   */
+   490→   490→  private chooseHarmonicForPhrase(phraseIndex: number): number[] {
+   491→   491→    const scale = getScale(this.context.scaleName)
+   492→   492→    if (!scale) return [this.context.tonic]
+   493→   493→    const pcs = scalePcs(this.context.tonic, scale)
+   494→   494→    if (pcs.length < 5) return [pcs[0] ?? this.context.tonic]
+   495→   495→
+   496→   496→    // Wire learned harmony: if pitch-class profile has data, use it to
+   497→   497→    // influence which chord tones are selected (not copying, but preferring
+   498→   498→    // pitch classes that were prominent in the source)
+   499→   499→    const pcProfile = this.learned.harmony.pitchClassProfile
+   500→   500→    const hasLearnedHarmony =
+   501→   501→      this.learned.meta.confidence > 0.3 && pcProfile.some((v: number) => v > 0.05)
+   502→   502→
+   503→   503→    const idx = ((phraseIndex % 4) + 4) % 4
+   504→   504→
+   505→   505→    // Base progression: tonic / subdominant / tonic / dominant
+   506→   506→    let baseChord: number[]
+   507→   507→    if (idx === 0) {
+   508→   508→      baseChord = [pcs[0] ?? 0, pcs[2] ?? 0, pcs[4] ?? 0]
+   509→   509→    } else if (idx === 1) {
+   510→   510→      baseChord = [pcs[3] ?? 0, pcs[5] ?? 0, pcs[7 % pcs.length] ?? 0]
+   511→   511→    } else if (idx === 2) {
+   512→   512→      baseChord = [pcs[0] ?? 0, pcs[2] ?? 0, pcs[4] ?? 0]
+   513→   513→    } else {
+   514→   514→      baseChord = [pcs[4] ?? 0, pcs[6 % pcs.length] ?? 0, pcs[8 % pcs.length] ?? 0]
+   515→   515→    }
+   516→   516→
+   517→   517→    if (hasLearnedHarmony) {
+   518→   518→      // Blend: keep the progression structure but weight chord tones by
+   519→   519→      // learned pitch-class profile. Replace one chord tone with a
+   520→   520→      // high-weight pc from the learned profile if it's in the scale.
+   521→   521→      const sortedPcs = pcProfile
+   522→   522→        .map((weight: number, pc: number) => ({ pc, weight }))
+   523→   523→        .filter(
+   524→   524→          (x: { pc: number; weight: number }) => pcs.includes(x.pc) && !baseChord.includes(x.pc)
+   525→   525→        )
+   526→   526→        .sort((a: { weight: number }, b: { weight: number }) => b.weight - a.weight)
+   527→   527→
+   528→   528→      if (sortedPcs.length > 0 && sortedPcs[0]) {
+   529→   529→        const top = sortedPcs[0] as { pc: number; weight: number }
+   530→   530→        // Replace the third chord tone with the learned-preferred pc
+   531→   531→        baseChord = [baseChord[0] ?? 0, baseChord[1] ?? 0, top.pc]
+   532→   532→      }
+   533→   533→    }
+   534→   534→
+   535→   535→    return baseChord
+   536→   536→  }
+   537→   537→
+   538→   538→  /**
+   539→   539→   * Compose the bass for one bar against the groove.
+   540→   540→   *
+   541→   541→   * LOCKED mode: bass hits every kick step with ROOT (so bass+kick are
+   542→   542→   * rhythmically locked).
+   543→   543→   * COMPLEMENTARY mode: bass hits the gaps between kicks with FIFTH/OCTAVE
+   544→   544→   * (so bass+kick interlock without colliding).
+   545→   545→   *
+   546→   546→   * Either way, beat 1 (step 0) ALWAYS gets a ROOT — the invariant that
+   547→   547→   * keeps bass-kick alignment high.
+   548→   548→   */
+   549→   549→  private composeBass(
+   550→   550→    bar: number,
+   551→   551→    groove: GroovePlan,
+   552→   552→    _harmonicContext: number[],
+   553→   553→    rng: Rng,
+   554→   554→    isLast: boolean
+   555→   555→  ): { midi: number; step: number; durationSteps: number; function: string }[] {
+   556→   556→    const scale = getScale(this.context.scaleName)
+   557→   557→    if (!scale) return []
+   558→   558→
+   559→   559→    const rootMidi = degreeToMidi(this.context.tonic, scale, 0, BASS_OCTAVE)
+   560→   560→    const fifthMidi = degreeToMidi(this.context.tonic, scale, 4, BASS_OCTAVE)
+   561→   561→    const octaveMidi = degreeToMidi(this.context.tonic, scale, 0, BASS_OCTAVE + 1)
+   562→   562→    const thirdMidi = degreeToMidi(this.context.tonic, scale, 2, BASS_OCTAVE)
+   563→   563→    const seventhMidi = degreeToMidi(this.context.tonic, scale, 6, BASS_OCTAVE)
+   564→   564→    const beat = Math.max(1, Math.round(groove.stepsPerBar / 4))
+   565→   565→    const tension = this.grammar.tensionPreference
+   566→   566→
+   567→   567→    // Learned bass grammar: degree preferences from radio observation
+   568→   568→    const bassDegPrefs = this.learned.bass.degreePreferences
+   569→   569→    const hasLearnedBass =
+   570→   570→      Object.keys(bassDegPrefs).length > 0 && this.learned.meta.confidence > 0.3
+   571→   571→
+   572→   572→    /** Choose a bass pitch using learned preferences or fallback to style */
+   573→   573→    const chooseBassPitch = (rng: Rng): { midi: number; fn: string } => {
+   574→   574→      if (hasLearnedBass) {
+   575→   575→        // Weighted selection from learned degree preferences
+   576→   576→        const degrees = Object.entries(bassDegPrefs)
+   577→   577→        const totalWeight = degrees.reduce((s, [, w]) => s + w, 0)
+   578→   578→        let r = rng.next() * totalWeight
+   579→   579→        for (const [degStr, weight] of degrees) {
+   580→   580→          r -= weight
+   581→   581→          if (r <= 0) {
+   582→   582→            const deg = Number.parseInt(degStr, 10)
+   583→   583→            const midi = degreeToMidi(this.context.tonic, scale, deg, BASS_OCTAVE)
+   584→   584→            const fns = ['ROOT', 'THIRD', 'FIFTH', 'SEVENTH', 'OCTAVE']
+   585→   585→            return { midi, fn: fns[deg] ?? 'PASSING' }
+   586→   586→          }
+   587→   587→        }
+   588→   588→      }
+   589→   589→      // Fallback: style-based selection
+   590→   590→      const useFifth = rng.next() < 0.5
+   591→   591→      return useFifth ? { midi: fifthMidi, fn: 'FIFTH' } : { midi: octaveMidi, fn: 'OCTAVE' }
+   592→   592→    }
+   593→   593→
+   594→   594→    const notes: { midi: number; step: number; durationSteps: number; function: string }[] = []
+   595→   595→
+   596→   596→    // Beat 1: ALWAYS ROOT (LOCKED invariant — bass-kick alignment).
+   597→   597→    notes.push({ midi: rootMidi, step: 0, durationSteps: 2, function: 'ROOT' })
+   598→   598→
+   599→   599→    if (groove.bassKickAlignment === 'LOCKED') {
+   600→   600→      for (const step of groove.kickSteps) {
+   601→   601→        if (step === 0) continue
+   602→   602→        if (rng.next() < 0.3 + tension * 0.2) {
+   603→   603→          const pitch = chooseBassPitch(rng)
+   604→   604→          const dur = rng.next() < 0.5 ? 1 : 2
+   605→   605→          notes.push({ midi: pitch.midi, step, durationSteps: dur, function: pitch.fn })
+   606→   606→        } else {
+   607→   607→          notes.push({ midi: rootMidi, step, durationSteps: 2, function: 'ROOT' })
+   608→   608→        }
+   609→   609→      }
+   610→   610→    } else {
+   611→   611→      const half = Math.max(1, Math.round(groove.stepsPerBar / 8))
+   612→   612→      const complementary = [half, beat + half, beat * 2 + half, beat * 3 + half]
+   613→   613→      for (const step of complementary) {
+   614→   614→        if (groove.kickSteps.includes(step) || step === 0) continue
+   615→   615→        const pitch = chooseBassPitch(rng)
+   616→   616→        notes.push({ midi: pitch.midi, step, durationSteps: 1, function: pitch.fn })
+   617→   617→      }
+   618→   618→    }
+   619→   619→
+   620→   620→    // Offbeat passing/approach tones — vary per bar
+   621→   621→    const offbeatVariation = (bar * 7 + this.seed * 13) % 4
+   622→   622→    const offbeatTargets =
+   623→   623→      offbeatVariation === 0
+   624→   624→        ? [beat * 2, beat * 3]
+   625→   625→        : offbeatVariation === 1
+   626→   626→          ? [beat + 1, beat * 3 + 1]
+   627→   627→          : offbeatVariation === 2
+   628→   628→            ? [beat * 2 + 1]
+   629→   629→            : [beat * 3, beat * 3 + 2]
+   630→   630→
+   631→   631→    for (const step of offbeatTargets) {
+   632→   632→      if (notes.some((n) => n.step === step)) continue
+   633→   633→      if (step >= groove.stepsPerBar) continue
+   634→   634→      if (rng.next() < 0.2 + groove.syncopationBudget * 0.3 + tension * 0.2) {
+   635→   635→        const useApproach = rng.next() < 0.3
+   636→   636→        if (useApproach) {
+   637→   637→          const approachMidi = rootMidi + (rng.next() < 0.5 ? -1 : 1)
+   638→   638→          notes.push({ midi: approachMidi, step, durationSteps: 1, function: 'APPROACH' })
+   639→   639→        } else {
+   640→   640→          const useThird = rng.next() < 0.5
+   641→   641→          notes.push({
+   642→   642→            midi: useThird ? thirdMidi : seventhMidi,
+   643→   643→            step,
+   644→   644→            durationSteps: 1,
+   645→   645→            function: useThird ? 'THIRD' : 'PASSING',
+   646→   646→          })
+   647→   647→        }
+   648→   648→      }
+   649→   649→    }
+   650→   650→
+   651→   651→    // Octave jump for energy on some bars
+   652→   652→    if (rng.next() < 0.15 + tension * 0.15) {
+   653→   653→      const jumpStep = beat * 2
+   654→   654→      if (!notes.some((n) => n.step === jumpStep)) {
+   655→   655→        notes.push({ midi: octaveMidi, step: jumpStep, durationSteps: 1, function: 'OCTAVE' })
+   656→   656→      }
+   657→   657→    }
+   658→   658→
+   659→   659→    // Cadence on the last bar
+   660→   660→    if (isLast) {
+   661→   661→      const lastStep = groove.stepsPerBar - 2
+   662→   662→      const filtered = notes.filter((n) => n.step < lastStep)
+   663→   663→      notes.length = 0
+   664→   664→      notes.push(...filtered)
+   665→   665→      notes.push({ midi: fifthMidi, step: lastStep, durationSteps: 1, function: 'CADENCE' })
+   666→   666→      notes.push({ midi: rootMidi, step: lastStep + 1, durationSteps: 2, function: 'CADENCE' })
+   667→   667→    }
+   668→   668→
+   669→   669→    // Clamp to octave 2 (MIDI 36-59)
+   670→   670→    for (const n of notes) {
+   671→   671→      while (n.midi < 36) n.midi += 12
+   672→   672→      while (n.midi > 59) n.midi -= 12
+   673→   673→    }
+   674→   674→
+   675→   675→    notes.sort((a, b) => a.step - b.step)
+   676→   676→    const deduped: typeof notes = []
+   677→   677→    for (const n of notes) {
+   678→   678→      if (!deduped.some((d) => d.step === n.step)) deduped.push(n)
+   679→   679→    }
+   680→   680→    return deduped
+   681→   681→  }
+   682→   682→
+   683→   683→  /**
+   684→   684→   * Compose the lead for one bar against the bass+harmony.
+   685→   685→   *
+   686→   686→   * Call/response structure:
+   687→   687→   *   - Bars in the first half (call): the phrase motif, with small
+   688→   688→   *     transpositions for variety.
+   689→   689→   *   - Bars in the second half (response): the callResponse transform of
+   690→   690→   *     the phrase motif (shifts to the fifth, resolves the last note to
+   691→   691→   *     the root).
+   692→   692→   *
+   693→   693→   * The rendered notes are clamped to tessitura (MIDI 60-84) and the max
+   694→   694→   * leap is enforced by clamping consecutive intervals to ±maxLeap.
+   695→   695→   */
+   696→   696→  private composeLead(
+   697→   697→    bar: number,
+   698→   698→    _bars: number,
+   699→   699→    phraseMotif: Motif,
+   700→   700→    harmonicContext: number[],
+   701→   701→    rng: Rng,
+   702→   702→    isResponse: boolean
+   703→   703→  ): { midi: number; step: number; durationSteps: number; velocity: number }[] {
+   704→   704→    const scale = getScale(this.context.scaleName)
+   705→   705→    if (!scale || phraseMotif.notes.length === 0) return []
+   706→   706→
+   707→   707→    let motif = phraseMotif
+   708→   708→    if (isResponse) {
+   709→   709→      motif = callResponse(phraseMotif, this.context.tonic, scale, (this.seed + bar * 17) >>> 0)
+   710→   710→    } else if (bar > 0) {
+   711→   711→      // More aggressive per-bar variation (prevents 90% repetition)
+   712→   712→      const variationChoice = (bar * 3 + this.seed) % 5
+   713→   713→      if (variationChoice === 0) {
+   714→   714→        // Transpose ±2 or ±3
+   715→   715→        const t = rng.pick([-3, -2, 2, 3])
+   716→   716→        motif = transposeMotif(phraseMotif, t, this.context.tonic, scale)
+   717→   717→      } else if (variationChoice === 1) {
+   718→   718→        // Invert (with 30% probability)
+   719→   719→        if (rng.next() < 0.3) {
+   720→   720→          motif = invertMotif(phraseMotif, this.context.tonic, scale)
+   721→   721→        } else {
+   722→   722→          const t = rng.pick([-2, 0, 2])
+   723→   723→          if (t !== 0) motif = transposeMotif(phraseMotif, t, this.context.tonic, scale)
+   724→   724→        }
+   725→   725→      } else if (variationChoice === 2) {
+   726→   726→        // Retrograde (with 20% probability)
+   727→   727→        if (rng.next() < 0.2) {
+   728→   728→          motif = retrogradeMotif(phraseMotif)
+   729→   729→        }
+   730→   730→      } else if (variationChoice === 3) {
+   731→   731→        // Fragment (first half only, with 25% probability)
+   732→   732→        if (rng.next() < 0.25) {
+   733→   733→          const halfNotes = phraseMotif.notes.slice(0, Math.ceil(phraseMotif.notes.length / 2))
+   734→   734→          if (halfNotes.length > 0) {
+   735→   735→            motif = { ...phraseMotif, notes: halfNotes }
+   736→   736→          }
+   737→   737→        }
+   738→   738→      }
+   739→   739→      // variationChoice === 4: no change (original motif)
+   740→   740→    }
+   741→   741→
+   742→   742→    // Render motif notes, snapping to tessitura (MIDI 60-84).
+   743→   743→    const notes = motif.notes.map((n) => {
+   744→   744→      let midi = n.midi
+   745→   745→      while (midi < LEAD_MIN_MIDI) midi += 12
+   746→   746→      while (midi > LEAD_MAX_MIDI) midi -= 12
+   747→   747→      return {
+   748→   748→        midi,
+   749→   749→        step: n.step,
+   750→   750→        durationSteps: n.durationSteps,
+   751→   751→        velocity: n.velocity,
+   752→   752→      }
+   753→   753→    })
+   754→   754→
+   755→   755→    // Enforce max leap: clamp consecutive intervals to ±maxLeap.
+   756→   756→    const maxLeap = this.grammar.maxLeap
+   757→   757→    for (let i = 1; i < notes.length; i++) {
+   758→   758→      const prev = notes[i - 1]
+   759→   759→      const cur = notes[i]
+   760→   760→      if (!prev || !cur) continue
+   761→   761→      const interval = cur.midi - prev.midi
+   762→   762→      if (Math.abs(interval) > maxLeap) {
+   763→   763→        const sign = Math.sign(interval)
+   764→   764→        cur.midi = prev.midi + sign * maxLeap
+   765→   765→      }
+   766→   766→    }
+   767→   767→
+   768→   768→    // Snap to chord tones with some probability — keeps HARMONY_IGNORED away
+   769→   769→    // while preserving the motif's overall shape.
+   770→   770→    const chordPcs = new Set(harmonicContext)
+   771→   771→    if (chordPcs.size > 0) {
+   772→   772→      for (const n of notes) {
+   773→   773→        const pc = ((n.midi % 12) + 12) % 12
+   774→   774→        if (!chordPcs.has(pc) && rng.next() < 0.5) {
+   775→   775→          for (let off = 1; off <= 2; off++) {
+   776→   776→            const upPc = (((n.midi + off) % 12) + 12) % 12
+   777→   777→            if (chordPcs.has(upPc)) {
+   778→   778→              n.midi += off
+   779→   779→              break
+   780→   780→            }
+   781→   781→            const downPc = (((n.midi - off) % 12) + 12) % 12
+   782→   782→            if (chordPcs.has(downPc)) {
+   783→   783→              n.midi -= off
+   784→   784→              break
+   785→   785→            }
+   786→   786→          }
+   787→   787→        }
+   788→   788→      }
+   789→   789→    }
+   790→   790→
+   791→   791→    return notes
+   792→   792→  }
+   793→   793→}
+   794→   794→
+   795→   795→// ---------------- pure transform helpers (involutions) ----------------
+   796→   796→
+   797→   797→/**
+   798→   798→ * Pure pitch inversion (no scale snapping). Mirrors each note around the
+   799→   799→ * first note's MIDI value. This is a TRUE involution: applying it twice
+   800→   800→ * returns the original motif exactly. Useful for property-based tests.
+   801→   801→ */
+   802→   802→export function invertPitchPure(motif: Motif): Motif {
+   803→   803→  if (motif.notes.length === 0) {
+   804→   804→    return createMotif([], {
+   805→   805→      id: `${motif.id}:pureInvert`,
+   806→   806→      rootPc: motif.rootPc,
+   807→   807→      scaleName: motif.scaleName,
+   808→   808→      steps: motif.steps,
+   809→   809→      role: motif.role,
+   810→   810→      sourceMotifId: motif.id,
+   811→   811→      transformHistory: [...motif.transformHistory, 'invertPitchPure'],
+   812→   812→    })
+   813→   813→  }
+   814→   814→  const first = motif.notes[0] as MotifNote
+   815→   815→  const notes = motif.notes.map((n) => {
+   816→   816→    if (n === first) return { ...n }
+   817→   817→    const offset = n.midi - first.midi
+   818→   818→    return { ...n, midi: first.midi - offset }
+   819→   819→  })
+   820→   820→  return createMotif(notes, {
+   821→   821→    id: `${motif.id}:pureInvert`,
+   822→   822→    rootPc: motif.rootPc,
+   823→   823→    scaleName: motif.scaleName,
+   824→   824→    steps: motif.steps,
+   825→   825→    role: motif.role,
+   826→   826→    sourceMotifId: motif.id,
+   827→   827→    transformHistory: [...motif.transformHistory, 'invertPitchPure'],
+   828→   828→  })
+   829→   829→}
+   830→   830→
+   831→   831→/**
+   832→   832→ * Retrograde that is a TRUE involution: reversing note content while
+   833→   833→ * preserving step positions. Wraps the existing transformation.retrograde
+   834→   834→ * so callers can verify the involution property via the composition module.
+   835→   835→ */
+   836→   836→export function retrogradePure(motif: Motif): Motif {
+   837→   837→  return retrogradeMotif(motif)
+   838→   838→}
+   839→   839→
+   840→   840→/** Convenience: how tightly the bass locks with the kick on beat 1. */
+   841→   841→export function measureBassKickAlignment(
+   842→   842→  bassNotes: { step: number; bar: number }[],
+   843→   843→  kickNotes: { step: number; bar: number }[],
+   844→   844→  bars: number
+   845→   845→): number {
+   846→   846→  if (bars === 0) return 0
+   847→   847→  let aligned = 0
+   848→   848→  for (let bar = 0; bar < bars; bar++) {
+   849→   849→    const bassOnBeat1 = bassNotes.some((n) => n.bar === bar && n.step === 0)
+   850→   850→    const kickOnBeat1 = kickNotes.some((n) => n.bar === bar && n.step === 0)
+   851→   851→    if (bassOnBeat1 && kickOnBeat1) aligned++
+   852→   852→  }
+   853→   853→  return aligned / bars
+   854→   854→}
+   855→   855→
+   856→   856→/** Convenience: clamp a MIDI note into a register range. */
+   857→   857→export function clampToRegister(midi: number, minMidi: number, maxMidi: number): number {
+   858→   858→  let m = midi
+   859→   859→  while (m < minMidi) m += 12
+   860→   860→  while (m > maxMidi) m -= 12
+   861→   861→  return m
+   862→   862→}
+   863→   863→
