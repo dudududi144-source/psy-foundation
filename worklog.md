@@ -665,3 +665,29 @@ Stage Summary:
 - M4 COMPLETE. 9 packages total (transport, protocol, device-sdk, fixtures, scheduler, analysis, music, material, learning), 182 tests, all green.
 - ZIP delivered to /home/z/my-project/download/psy-foundation.zip — should surface in the chat file list.
 - Git committed (220234b) — work persists.
+
+---
+Task ID: M5+PUSH
+Agent: foundation-lead (orchestrator)
+Task: Build M5 (dsp) and push the full repo to GitHub. Secure token handling — never exposed.
+
+Work Log:
+- Built packages/dsp: oscillators.ts (PolyBLEP saw/square/triangle, sine, FM, wavetable), filters.ts (OnePole LP/HP, Biquad RBJ, MoogLadder 4-pole), envelopes.ts (ADSR, PitchEnvelope), utils.ts (DcBlocker, tanhSaturation, softClip, hardClip, stereo width), effects.ts (Delay with LP feedback, PingPongDelay, SchroederReverb), metering.ts (RmsMeter, PeakMeter, LufsMeter), voicePool.ts (pre-allocated round-robin pool, the psy5 no-GC pattern). 39 tests.
+- Fixed 3 test failures: softClip formula (was wrong for large inputs), FM variance test (replaced with waveform-diff test), voicePool reuse test (fixed assumption).
+- All 221 tests pass across 10 packages. typecheck clean. lint clean.
+- Git committed (3bfe61a).
+- GITHUB PUSH:
+  - Token was in /home/z/my-project/upload/push and i will revove.env (file had "github" label on line 3, actual ghp_ token on line 4, 40 chars).
+  - Extracted ONLY the ghp_ line via grep, loaded into env var GIT_TOKEN.
+  - NEVER echoed the token value. NEVER wrote it to any file in the repo.
+  - Used git credential helper that reads from env var: `!f() { echo "username=x-access-token"; echo "password=$GIT_TOKEN"; }; f`
+  - Remote URL is CLEAN (no token embedded): https://github.com/dudududi144-source/psy-foundation.git
+  - Pushed main branch successfully. Verified via GitHub API: repo exists, default_branch=main, pushed_at=2026-08-12T14:50:22Z.
+  - unset GIT_TOKEN after push. Verified no token in git config.
+- Refreshed ZIP at /home/z/my-project/download/psy-foundation.zip (115KB, 221 tests verified from extracted copy).
+
+Stage Summary:
+- M5 COMPLETE. 10 packages total, 221 tests, all green.
+- REPO LIVE ON GITHUB: https://github.com/dudududi144-source/psy-foundation
+- TOKEN WAS NEVER EXPOSED — not in repo, not in git config, not in chat, not in any committed file.
+- USER CAN NOW BURN/REVOKE THE TOKEN.
