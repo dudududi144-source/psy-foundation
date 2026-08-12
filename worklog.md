@@ -451,3 +451,22 @@ Stage Summary:
 - The M1 sparse half-time limitation is FIXED and quantitatively verified.
 - Known new limitations (documented honestly): dense-bass onset confusion, tempo-jump averaging, double-time ambiguity. All are expected single-hypothesis estimator behaviors addressable in future iterations.
 - Next: refresh ZIP, commit, then M3 (music + material).
+
+---
+Task ID: M3-LEAD
+Agent: foundation-lead (orchestrator)
+Task: Build MILESTONE 3 of psy-foundation: music + material. Also set up ZIP download via web app.
+
+Work Log:
+- Set up ZIP delivery: copied psy-foundation.zip to /home/z/my-project/public/, added prominent green "Download ZIP" button at top of the status page. Verified: HTTP 200, application/zip, 81KB, download attribute works.
+- Built packages/music: scales.ts (18 scales/modes incl. phrygian-dominant from psy audit + degree/pc conversions + stableDegrees), chords.ts (18 chord types + voiceChord with smooth voice leading + chordTension scoring), motif.ts (call-&-response generator extracted from psy/index.html:200-281 + variation operators: transpose, invert, fragment, retrograde, vary), bass.ts (kb3/four-on-floor/offbeat/syncopated patterns + tension curves: flat/build/release/peak/valley), rhythm.ts (fourOnFloor/offbeatHats/psyKick/drivingHats/backbeat + swing/humanize/combine/invertRhythm/density). 43 tests, all pass.
+- Built packages/material: types.ts (typed payloads for 9 material kinds: Motif/Rhythm/BassPattern/DrumPattern/Fill/Phrase/FXGesture/Preset/Texture), material.ts (createMaterial builder + MaterialLibrary with query by type/role/style/bpm/rootPc/energy + markUsed + addReward + toJSON/fromJSON), factory.ts (makeMotifMaterial/makeBassPatternMaterial/makeRhythmMaterial/makeDrumPatternMaterial/makeFillMaterial/makePresetMaterial/makeFXGestureMaterial/makeTextureMaterial), seed.ts (createSeedLibrary: 18 starter materials across all types). 23 tests, all pass.
+- Fixed a spread-undefined bug in factory.ts (opts.steps undefined was overriding DEFAULTS.steps in generateMotif).
+- All 152 tests pass across 8 packages. typecheck clean. lint clean.
+
+Stage Summary:
+- M3 COMPLETE. 8 packages total (transport, protocol, device-sdk, fixtures, scheduler, analysis, music, material), 152 tests, all green.
+- The psy motif generator (the most valuable domain asset from the audit) is now in foundation, generalized and tested.
+- Seed material library provides 18 ready-to-use materials across all types.
+- ZIP is downloadable via the web app at /psy-foundation.zip.
+- Next: refresh ZIP, commit, update page, then M4 (learning).

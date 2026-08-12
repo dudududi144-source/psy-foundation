@@ -22,8 +22,8 @@ const PACKAGES = [
   { name: 'fixtures', scope: '@psy-foundation/fixtures', milestone: 'M1', status: 'done', desc: '14 synthetic radio fixtures (perfect / jitter / ramp / jump / missing / false / half / double / gaps / sparse / dense / lead / breakdown). Deterministic.', tests: 10 },
   { name: 'scheduler', scope: '@psy-foundation/scheduler', milestone: 'M2', status: 'done', desc: 'MusicalTransport + MusicalPlan → ScheduledEvent[]. Deterministic pure function. Swing, humanize, probability, per-step locks, polyrhythm. Knows nothing about React/UI/radio.', tests: 18 },
   { name: 'analysis', scope: '@psy-foundation/analysis', milestone: 'M2', status: 'done', desc: 'onset · beat · tempo · phase · pitch · chroma · spectral flux/centroid/flatness · energy · role occupancy · sections. Multi-hypothesis tempo tracker (fixes sparse half-time). SIGNAL → FEATURES → INFERENCE.', tests: 26 },
-  { name: 'music', scope: '@psy-foundation/music', milestone: 'M3', status: 'planned', desc: 'scales · chords · harmony · motif · variation · bass grammar · tension curves. STRUCTURED VARIATION, not random.', tests: 0 },
-  { name: 'material', scope: '@psy-foundation/material', milestone: 'M3', status: 'planned', desc: 'Motif · Rhythm · BassPattern · DrumPattern · Fill · Phrase · Preset + metadata schema. Reusable across devices.', tests: 0 },
+  { name: 'music', scope: '@psy-foundation/music', milestone: 'M3', status: 'done', desc: '18 scales/modes (incl. phrygian-dominant) · 18 chord types + voice leading · call-&-response motif generator (from psy) · variation operators (transpose/invert/fragment/retrograde) · bass grammar · tension curves · rhythm patterns + swing/humanize.', tests: 43 },
+  { name: 'material', scope: '@psy-foundation/material', milestone: 'M3', status: 'done', desc: '9 material kinds (Motif/Rhythm/BassPattern/DrumPattern/Fill/Phrase/FXGesture/Preset/Texture) + metadata schema + MaterialLibrary (query/usage/reward) + seed library of 18 materials.', tests: 23 },
   { name: 'learning', scope: '@psy-foundation/learning', milestone: 'M4', status: 'planned', desc: 'CONTEXT + ACTION + OUTCOME + REWARD. DO NOTHING is a legal action. Not a neural net — contextual learning.', tests: 0 },
   { name: 'dsp', scope: '@psy-foundation/dsp', milestone: 'M5', status: 'planned', desc: 'PolyBLEP · wavetable · FM · filters · envelopes · DC blocker · saturation · delay · reverb · voice lifecycle.', tests: 0 },
   { name: 'reference-lab', scope: 'app', milestone: 'M6', status: 'planned', desc: 'Browser research tool: feed stream → BPM, beat grid, phase, confidence, key, energy, features, sections.', tests: 0 },
@@ -81,11 +81,38 @@ export default function Home() {
             psy-foundation
           </h1>
           <span className="text-sm text-zinc-500">shared musical infrastructure for the PSY device family</span>
-          <span className="ml-auto text-xs text-zinc-600 tabular-nums">M0+M1+M2 · 86 tests</span>
+          <span className="ml-auto text-xs text-zinc-600 tabular-nums">M0+M1+M2+M3 · 152 tests</span>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 space-y-10">
+        {/* Download banner */}
+        <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base font-semibold text-emerald-200">Download the repository</span>
+                <span className="text-xs text-emerald-400/70 font-mono">psy-foundation.zip</span>
+              </div>
+              <p className="mt-1 text-xs text-emerald-300/80">
+                Complete monorepo — 8 packages, 152 tests, benchmarks, docs, CI, seed library. Ready to push to GitHub.
+              </p>
+            </div>
+            <a
+              href="/psy-foundation.zip"
+              download="psy-foundation.zip"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 shrink-0"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download ZIP
+            </a>
+          </div>
+        </section>
+
         {/* Identity / warning */}
         <section>
           <p className="text-sm text-zinc-400 max-w-3xl leading-relaxed">
@@ -99,9 +126,9 @@ export default function Home() {
         {/* Stats */}
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="repos audited" value="7" sub="psy · psy3-clean · psy4 · psy5 · forge · nova · PromptForge" />
-          <Stat label="packages" value="6" sub="transport · protocol · device-sdk · fixtures · scheduler · analysis" />
-          <Stat label="tests" value="86 / 86" sub="all green · bun test" />
-          <Stat label="sparse fix" value="150 bpm" sub="M1 limitation resolved in M2" />
+          <Stat label="packages" value="8" sub="transport · protocol · device-sdk · fixtures · scheduler · analysis · music · material" />
+          <Stat label="tests" value="152 / 152" sub="all green · bun test" />
+          <Stat label="seed library" value="18" sub="materials across 7 types" />
         </section>
 
         {/* Audit */}
