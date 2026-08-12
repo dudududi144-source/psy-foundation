@@ -1,0 +1,823 @@
+     1→import { describe, expect, test } from 'bun:test'
+     2→import {
+     3→  type AdaptationDivergence,
+     4→  type AdaptationReport,
+     5→  type AdaptedCompositionIntent,
+     6→  type ComposedSection,
+     7→  CompositionAdaptation,
+     8→  CompositionEngine,
+     9→  type MusicalContext,
+    10→  type OpportunityMap,
+    11→  RADIO_ABSENT,
+    12→  RADIO_SCENARIOS,
+    13→  type RadioMusicalContext,
+    14→  adaptationFitScore,
+    15→  adaptationReport,
+    16→  adaptationSweep,
+    17→  applyAdaptation,
+    18→  baseContextForStyle,
+    19→  bassCompetition,
+    20→  buildOpportunityMap,
+    21→  countOccupied,
+    22→  countOpen,
+    23→  createRadioContext,
+    24→  isDense,
+    25→  isRadioAbsent,
+    26→  measureDivergence,
+    27→  scenarioRadioSequence,
+    28→} from '../src/index.ts'
+    29→
+    30→// ----------------------------- helpers -----------------------------
+    31→
+    32→function fullOnContext(overrides: Partial<MusicalContext> = {}): MusicalContext {
+    33→  return baseContextForStyle('full-on', overrides)
+    34→}
+    35→
+    36→function adaptAt(
+    37→  adaptation: CompositionAdaptation,
+    38→  baseContext: MusicalContext,
+    39→  radio: RadioMusicalContext,
+    40→  phraseBar = 4
+    41→): AdaptedCompositionIntent {
+    42→  const opportunities = buildOpportunityMap(radio)
+    43→  return adaptation.adapt({
+    44→    baseContext,
+    45→    radio,
+    46→    opportunities,
+    47→    currentBar: 0,
+    48→    phraseBar,
+    49→  })
+    50→}
+    51→
+    52→function allPressuresIn01(intent: AdaptedCompositionIntent): boolean {
+    53→  const vals = [
+    54→    intent.groovePressure,
+    55→    intent.bassPressure,
+    56→    intent.leadPressure,
+    57→    intent.counterPressure,
+    58→    intent.texturePressure,
+    59→    intent.densityTarget,
+    60→    intent.tensionTarget,
+    61→    intent.noveltyTarget,
+    62→    intent.restPressure,
+    63→    intent.confidence,
+    64→  ]
+    65→  return vals.every((v) => v >= 0 && v <= 1 && !Number.isNaN(v))
+    66→}
+    67→
+    68→function composeBase(
+    69→  styleName: string,
+    70→  seed: number,
+    71→  bars: number
+    72→): { section: ComposedSection; baseContext: MusicalContext; engine: CompositionEngine } {
+    73→  const baseContext = baseContextForStyle(styleName)
+    74→  const engine = new CompositionEngine({ seed, context: baseContext })
+    75→  const section = engine.composeSection({ bars })
+    76→  return { section, baseContext, engine }
+    77→}
+    78→
+    79→// ====================== 1. RadioMusicalContext ======================
+    80→
+    81→describe('RadioMusicalContext', () => {
+    82→  test('createRadioContext fills defaults and clamps out-of-range values', () => {
+    83→    const ctx = createRadioContext({ bpm: 200, bassOccupancy: 1.5, confidence: -0.2 })
+    84→    expect(ctx.bpm).toBe(200)
+    85→    expect(ctx.bassOccupancy).toBe(1) // clamped
+    86→    expect(ctx.confidence).toBe(0) // clamped
+    87→    expect(ctx.available).toBe(true)
+    88→    expect(ctx.kickOccupancy).toBe(0) // default
+    89→    expect(ctx.scale).toBe('phrygian-dominant') // default
+    90→  })
+    91→
+    92→  test('RADIO_ABSENT sentinel has available=false and all confidence=0', () => {
+    93→    expect(RADIO_ABSENT.available).toBe(false)
+    94→    expect(RADIO_ABSENT.confidence).toBe(0)
+    95→    expect(RADIO_ABSENT.bpmConfidence).toBe(0)
+    96→    expect(RADIO_ABSENT.keyConfidence).toBe(0)
+    97→    expect(RADIO_ABSENT.energyConfidence).toBe(0)
+    98→    expect(RADIO_ABSENT.styleConfidence).toBe(0)
+    99→    expect(isRadioAbsent(RADIO_ABSENT)).toBe(true)
+   100→  })
+   101→
+   102→  test('isRadioAbsent returns true for unavailable contexts', () => {
+   103→    const absent = createRadioContext({ available: false })
+   104→    expect(isRadioAbsent(absent)).toBe(true)
+   105→    const present = createRadioContext({ available: true, confidence: 0.5 })
+   106→    expect(isRadioAbsent(present)).toBe(false)
+   107→  })
+   108→})
+   109→
+   110→// ====================== 2. OpportunityMap ======================
+   111→
+   112→describe('OpportunityMap', () => {
+   113→  test('SPARSE scenario → all primary roles OPEN', () => {
+   114→    const map = buildOpportunityMap(RADIO_SCENARIOS.SPARSE.context)
+   115→    expect(map.kick).toBe('OPEN')
+   116→    expect(map.bass).toBe('OPEN')
+   117→    expect(map.percussion).toBe('OPEN')
+   118→    expect(map.lead).toBe('OPEN')
+   119→    expect(map.harmony).toBe('OPEN')
+   120→    expect(map.counter).toBe('OPEN')
+   121→    expect(map.transition).toBe('OPEN')
+   122→  })
+   123→
+   124→  test('FULL_DENSE scenario → all primary roles OCCUPIED', () => {
+   125→    const map = buildOpportunityMap(RADIO_SCENARIOS.FULL_DENSE.context)
+   126→    expect(map.kick).toBe('OCCUPIED')
+   127→    expect(map.bass).toBe('OCCUPIED')
+   128→    expect(map.percussion).toBe('OCCUPIED')
+   129→    expect(map.lead).toBe('OCCUPIED')
+   130→    expect(map.harmony).toBe('OCCUPIED')
+   131→    expect(isDense(map)).toBe(true)
+   132→    expect(countOccupied(map)).toBeGreaterThanOrEqual(5)
+   133→  })
+   134→
+   135→  test('BASS_HEAVY scenario → bass OCCUPIED, others mixed', () => {
+   136→    const map = buildOpportunityMap(RADIO_SCENARIOS.BASS_HEAVY.context)
+   137→    expect(map.bass).toBe('OCCUPIED')
+   138→    // Counter and transition are always OPEN.
+   139→    expect(map.counter).toBe('OPEN')
+   140→    expect(map.transition).toBe('OPEN')
+   141→  })
+   142→
+   143→  test('RADIO_ABSENT → everything OPEN', () => {
+   144→    const map = buildOpportunityMap(RADIO_ABSENT)
+   145→    expect(countOpen(map)).toBe(8)
+   146→  })
+   147→
+   148→  test('texture is MEDIUM when radio.energy > 0.5, else OPEN', () => {
+   149→    const highEnergy = createRadioContext({ energy: 0.8, available: true, confidence: 0.7 })
+   150→    expect(buildOpportunityMap(highEnergy).texture).toBe('MEDIUM')
+   151→    const lowEnergy = createRadioContext({ energy: 0.3, available: true, confidence: 0.7 })
+   152→    expect(buildOpportunityMap(lowEnergy).texture).toBe('OPEN')
+   153→  })
+   154→})
+   155→
+   156→// ====================== 3. CompositionAdaptation.adapt shape ======================
+   157→
+   158→describe('CompositionAdaptation.adapt', () => {
+   159→  test('returns AdaptedCompositionIntent with all fields 0..1 and finite', () => {
+   160→    const adaptation = new CompositionAdaptation()
+   161→    const base = fullOnContext()
+   162→    for (const name of ['SPARSE', 'BASS_HEAVY', 'MELODY_HEAVY', 'FULL_DENSE', 'BREAKDOWN']) {
+   163→      const radio = RADIO_SCENARIOS[name]?.context
+   164→      if (!radio) continue
+   165→      const intent = adaptAt(adaptation, base, radio)
+   166→      expect(allPressuresIn01(intent)).toBe(true)
+   167→      expect(intent.registerShift).toBeGreaterThanOrEqual(-2)
+   168→      expect(intent.registerShift).toBeLessThanOrEqual(2)
+   169→      expect(['REUSE', 'VARY', 'NEW', 'NEUTRAL']).toContain(intent.motifPreference)
+   170→      expect(['STABLE', 'TENSION', 'NEUTRAL']).toContain(intent.harmonyPreference)
+   171→      expect(intent.reasons.length).toBeGreaterThan(0)
+   172→      expect(Number.isFinite(intent.confidence)).toBe(true)
+   173→    }
+   174→  })
+   175→})
+   176→
+   177→// ====================== 4. SPARSE scenario ======================
+   178→
+   179→describe('SPARSE scenario adaptation', () => {
+   180→  test('foundation adds groove + identity (groovePressure high, bassPressure high)', () => {
+   181→    const adaptation = new CompositionAdaptation()
+   182→    const base = fullOnContext()
+   183→    const intent = adaptAt(adaptation, base, RADIO_SCENARIOS.SPARSE.context)
+   184→    expect(intent.groovePressure).toBeGreaterThan(0.7)
+   185→    expect(intent.bassPressure).toBeGreaterThan(0.7)
+   186→    expect(intent.restPressure).toBeLessThan(0.3)
+   187→    expect(intent.reasons.some((r) => r.includes('sparse'))).toBe(true)
+   188→  })
+   189→})
+   190→
+   191→// ====================== 5. BASS_HEAVY scenario ======================
+   192→
+   193→describe('BASS_HEAVY scenario adaptation', () => {
+   194→  test('bassPressure reduced, counterPressure increased', () => {
+   195→    const adaptation = new CompositionAdaptation()
+   196→    const base = fullOnContext()
+   197→    const intent = adaptAt(adaptation, base, RADIO_SCENARIOS.BASS_HEAVY.context)
+   198→    expect(intent.bassPressure).toBeLessThan(0.5)
+   199→    // Counter pressure should be elevated (lead is moderate, but bass occupied
+   200→    // shifts the foundation upward).
+   201→    const neutral = adaptAt(adaptation, base, RADIO_ABSENT)
+   202→    expect(intent.counterPressure).toBeGreaterThanOrEqual(neutral.counterPressure)
+   203→    expect(intent.reasons.some((r) => r.includes('bass'))).toBe(true)
+   204→  })
+   205→})
+   206→
+   207→// ====================== 6. MELODY_HEAVY scenario ======================
+   208→
+   209→describe('MELODY_HEAVY scenario adaptation', () => {
+   210→  test('leadPressure reduced, counterPressure increased, restPressure moderate', () => {
+   211→    const adaptation = new CompositionAdaptation()
+   212→    const base = fullOnContext()
+   213→    const intent = adaptAt(adaptation, base, RADIO_SCENARIOS.MELODY_HEAVY.context)
+   214→    expect(intent.leadPressure).toBeLessThan(0.6)
+   215→    expect(intent.counterPressure).toBeGreaterThan(0.6)
+   216→    // restPressure is moderate (not maxing out, not zero).
+   217→    expect(intent.restPressure).toBeLessThan(0.7)
+   218→    expect(intent.reasons.some((r) => r.includes('lead'))).toBe(true)
+   219→  })
+   220→})
+   221→
+   222→// ====================== 7. DENSE scenario ======================
+   223→
+   224→describe('FULL_DENSE scenario adaptation', () => {
+   225→  test('restPressure high (intelligent abstention)', () => {
+   226→    const adaptation = new CompositionAdaptation()
+   227→    const base = fullOnContext()
+   228→    const intent = adaptAt(adaptation, base, RADIO_SCENARIOS.FULL_DENSE.context)
+   229→    expect(intent.restPressure).toBeGreaterThan(0.4)
+   230→    expect(intent.reasons.some((r) => r.includes('abstention') || r.includes('OCCUPIED'))).toBe(
+   231→      true
+   232→    )
+   233→  })
+   234→})
+   235→
+   236→// ====================== 8. BREAKDOWN scenario ======================
+   237→
+   238→describe('BREAKDOWN scenario adaptation', () => {
+   239→  test('kick/bass reduced, texture increased', () => {
+   240→    const adaptation = new CompositionAdaptation()
+   241→    const base = fullOnContext()
+   242→    const intent = adaptAt(adaptation, base, RADIO_SCENARIOS.BREAKDOWN.context)
+   243→    expect(intent.groovePressure).toBeLessThan(0.6)
+   244→    expect(intent.bassPressure).toBeLessThan(0.6)
+   245→    expect(intent.texturePressure).toBeGreaterThan(0.6)
+   246→    expect(intent.reasons.some((r) => r.includes('breakdown'))).toBe(true)
+   247→  })
+   248→})
+   249→
+   250→// ====================== 9. Low confidence → NEUTRAL ======================
+   251→
+   252→describe('Confidence handling', () => {
+   253→  test('low confidence (< 0.3) → NEUTRAL intent (preserves base)', () => {
+   254→    const adaptation = new CompositionAdaptation()
+   255→    const base = fullOnContext({ density: 0.55, tension: 0.4 })
+   256→    const lowConf = createRadioContext({
+   257→      confidence: 0.2,
+   258→      bassOccupancy: 0.9,
+   259→      energy: 0.9,
+   260→      available: true,
+   261→    })
+   262→    const intent = adaptAt(adaptation, base, lowConf)
+   263→    expect(intent.motifPreference).toBe('NEUTRAL')
+   264→    expect(intent.harmonyPreference).toBe('NEUTRAL')
+   265→    expect(intent.bassPressure).toBe(0.7) // base value
+   266→    expect(intent.densityTarget).toBeCloseTo(base.density, 5)
+   267→    expect(intent.tensionTarget).toBeCloseTo(base.tension, 5)
+   268→    expect(intent.reasons.some((r) => r.includes('insufficient evidence'))).toBe(true)
+   269→  })
+   270→
+   271→  test('high confidence (> 0.7) → strong adaptation', () => {
+   272→    const adaptation = new CompositionAdaptation()
+   273→    const base = fullOnContext({ density: 0.5, tension: 0.3 })
+   274→    const highConf = createRadioContext({
+   275→      confidence: 0.85,
+   276→      bassOccupancy: 0.9,
+   277→      energy: 0.8,
+   278→      density: 0.7,
+   279→      available: true,
+   280→    })
+   281→    const intent = adaptAt(adaptation, base, highConf)
+   282→    // Strong adaptation: bassPressure should be heavily reduced.
+   283→    expect(intent.bassPressure).toBeLessThan(0.4)
+   284→    // densityTarget = base × (1 − radio.density × 0.5) = 0.5 × (1 − 0.35) = 0.325
+   285→    expect(intent.densityTarget).toBeLessThan(base.density)
+   286→    // tensionTarget = base + radio.energy × 0.2 = 0.3 + 0.16 = 0.46
+   287→    expect(intent.tensionTarget).toBeGreaterThan(base.tension)
+   288→    expect(intent.confidence).toBeGreaterThan(0.7)
+   289→  })
+   290→
+   291→  test('mid confidence (0.3-0.7) → partial adaptation (blend 50%)', () => {
+   292→    const adaptation = new CompositionAdaptation()
+   293→    const base = fullOnContext({ density: 0.6 })
+   294→    const midConf = createRadioContext({
+   295→      confidence: 0.5,
+   296→      bassOccupancy: 0.9,
+   297→      density: 0.8,
+   298→      available: true,
+   299→    })
+   300→    const intent = adaptAt(adaptation, base, midConf)
+   301→    // Partial: bass pressure should be between strong and neutral.
+   302→    // Strong (blend=1) → 0.2; Neutral → 0.7. Partial (blend=0.5) → ~0.45.
+   303→    expect(intent.bassPressure).toBeGreaterThan(0.3)
+   304→    expect(intent.bassPressure).toBeLessThan(0.7)
+   305→  })
+   306→})
+   307→
+   308→// ====================== 11. Mid-phrase change ======================
+   309→
+   310→describe('Mid-phrase stability', () => {
+   311→  test('phraseBar < 4 → adaptation deferred (NEUTRAL)', () => {
+   312→    const adaptation = new CompositionAdaptation()
+   313→    const base = fullOnContext()
+   314→    const radio = RADIO_SCENARIOS.BASS_HEAVY.context
+   315→    const opportunities = buildOpportunityMap(radio)
+   316→    const intent = adaptation.adapt({
+   317→      baseContext: base,
+   318→      radio,
+   319→      opportunities,
+   320→      currentBar: 0,
+   321→      phraseBar: 2,
+   322→    })
+   323→    expect(intent.motifPreference).toBe('NEUTRAL')
+   324→    expect(intent.bassPressure).toBe(0.7) // base value
+   325→    expect(intent.reasons.some((r) => r.includes('deferring'))).toBe(true)
+   326→  })
+   327→
+   328→  test('phraseBar >= 4 → adaptation fires', () => {
+   329→    const adaptation = new CompositionAdaptation()
+   330→    const base = fullOnContext()
+   331→    const radio = RADIO_SCENARIOS.BASS_HEAVY.context
+   332→    const opportunities = buildOpportunityMap(radio)
+   333→    const intent = adaptation.adapt({
+   334→      baseContext: base,
+   335→      radio,
+   336→      opportunities,
+   337→      currentBar: 0,
+   338→      phraseBar: 5,
+   339→    })
+   340→    // Bass should be reduced (adaptation firing).
+   341→    expect(intent.bassPressure).toBeLessThan(0.7)
+   342→    expect(intent.reasons.some((r) => r.includes('deferring'))).toBe(false)
+   343→  })
+   344→})
+   345→
+   346→// ====================== 12. Radio loss → NEUTRAL ======================
+   347→
+   348→describe('Radio loss', () => {
+   349→  test('radio loss → composition continues, intent = NEUTRAL', () => {
+   350→    const adaptation = new CompositionAdaptation()
+   351→    const base = fullOnContext()
+   352→    const intent = adaptAt(adaptation, base, RADIO_ABSENT)
+   353→    expect(intent.motifPreference).toBe('NEUTRAL')
+   354→    expect(intent.harmonyPreference).toBe('NEUTRAL')
+   355→    expect(intent.bassPressure).toBe(0.7)
+   356→    expect(intent.reasons.some((r) => r.includes('radio absent'))).toBe(true)
+   357→  })
+   358→})
+   359→
+   360→// ====================== 13. Radio recovery → gradual adaptation ======================
+   361→
+   362→describe('Radio recovery', () => {
+   363→  test('radio recovery: gradual adaptation resumes (low conf → mid conf → high conf)', () => {
+   364→    const adaptation = new CompositionAdaptation()
+   365→    const base = fullOnContext()
+   366→    // Lost: RADIO_ABSENT.
+   367→    const lost = adaptAt(adaptation, base, RADIO_ABSENT)
+   368→    expect(lost.bassPressure).toBe(0.7)
+   369→    // Recovering: low confidence.
+   370→    const recovering = adaptAt(
+   371→      adaptation,
+   372→      base,
+   373→      createRadioContext({ confidence: 0.2, bassOccupancy: 0.9, available: true })
+   374→    )
+   375→    expect(recovering.bassPressure).toBe(0.7) // still NEUTRAL
+   376→    // Recovered: mid confidence.
+   377→    const midRecovery = adaptAt(
+   378→      adaptation,
+   379→      base,
+   380→      createRadioContext({ confidence: 0.5, bassOccupancy: 0.9, available: true })
+   381→    )
+   382→    expect(midRecovery.bassPressure).toBeLessThan(0.7)
+   383→    expect(midRecovery.bassPressure).toBeGreaterThan(0.3)
+   384→    // Fully recovered: high confidence.
+   385→    const recovered = adaptAt(adaptation, base, RADIO_SCENARIOS.BASS_HEAVY.context)
+   386→    expect(recovered.bassPressure).toBeLessThan(midRecovery.bassPressure)
+   387→  })
+   388→})
+   389→
+   390→// ====================== 14. Same song different radio: identity preserved ======================
+   391→
+   392→describe('Identity preservation across radios', () => {
+   393→  test('same seed/style + different radios: form divergence < 0.3, role divergence > 0.3', () => {
+   394→    const base = fullOnContext()
+   395→    const { section } = composeBase('full-on', 42, 32)
+   396→    const adaptation = new CompositionAdaptation()
+   397→
+   398→    // Two different radio contexts, same song.
+   399→    const intentA = adaptAt(adaptation, base, RADIO_SCENARIOS.BASS_HEAVY.context)
+   400→    const intentB = adaptAt(adaptation, base, RADIO_SCENARIOS.MELODY_HEAVY.context)
+   401→
+   402→    const adaptedA = applyAdaptation(section.bars, intentA)
+   403→    const adaptedB = applyAdaptation(section.bars, intentB)
+   404→
+   405→    const div = measureDivergence({ bars: adaptedA }, { bars: adaptedB })
+   406→    // Form preserved: same arrangement states across both adaptations.
+   407→    expect(div.formDivergence).toBeLessThan(0.3)
+   408→    // Roles diverge: different radios → different role activations.
+   409→    expect(div.roleDivergence).toBeGreaterThan(0.3)
+   410→  })
+   411→})
+   412→
+   413→// ====================== 15. Learning experiment: A (OFF) vs B (ON) ======================
+   414→
+   415→describe('Learning experiment', () => {
+   416→  test('Run B (adaptation ON) improves fit over Run A (adaptation OFF)', () => {
+   417→    const base = fullOnContext()
+   418→    const { section } = composeBase('full-on', 7, 32)
+   419→    const radio = RADIO_SCENARIOS.BASS_HEAVY.context
+   420→
+   421→    // Run A: adaptation OFF — apply a NEUTRAL intent (preserve base).
+   422→    const neutralIntent: AdaptedCompositionIntent = {
+   423→      groovePressure: 0.7,
+   424→      bassPressure: 0.7,
+   425→      leadPressure: 0.7,
+   426→      counterPressure: 0.5,
+   427→      texturePressure: 0.4,
+   428→      densityTarget: base.density,
+   429→      tensionTarget: base.tension,
+   430→      noveltyTarget: base.noveltyPressure,
+   431→      registerShift: 0,
+   432→      restPressure: 0.1,
+   433→      motifPreference: 'NEUTRAL',
+   434→      harmonyPreference: 'NEUTRAL',
+   435→      confidence: 0,
+   436→      reasons: ['adaptation OFF — neutral intent'],
+   437→    }
+   438→    const offBars = applyAdaptation(section.bars, neutralIntent)
+   439→    const offFit = adaptationFitScore({ bars: offBars }, radio)
+   440→
+   441→    // Run B: adaptation ON.
+   442→    const adaptation = new CompositionAdaptation()
+   443→    const onIntent = adaptAt(adaptation, base, radio)
+   444→    const onBars = applyAdaptation(section.bars, onIntent)
+   445→    const onFit = adaptationFitScore({ bars: onBars }, radio)
+   446→
+   447→    expect(onFit).toBeGreaterThan(offFit)
+   448→  })
+   449→})
+   450→
+   451→// ====================== 16. Negative learning ======================
+   452→
+   453→describe('Negative learning', () => {
+   454→  test('bass-heavy + competing bass → next time less bass competition', () => {
+   455→    const base = fullOnContext()
+   456→    const { section } = composeBase('full-on', 11, 32)
+   457→
+   458→    // Use a mid-confidence BASS_HEAVY radio so the first adaptation keeps
+   459→    // some bass notes (blend = 0.5 → bassPressure ~0.45, above the 0.4
+   460→    // silence threshold). This produces measurable bass competition that
+   461→    // the learning loop can then penalise.
+   462→    const radio = createRadioContext({
+   463→      bpm: 145,
+   464→      bpmConfidence: 0.8,
+   465→      key: 4,
+   466→      scale: 'phrygian-dominant',
+   467→      keyConfidence: 0.75,
+   468→      energy: 0.7,
+   469→      density: 0.6,
+   470→      energyConfidence: 0.7,
+   471→      kickOccupancy: 0.5,
+   472→      bassOccupancy: 0.85,
+   473→      percussionOccupancy: 0.4,
+   474→      leadOccupancy: 0.45,
+   475→      harmonicOccupancy: 0.3,
+   476→      syncopation: 0.3,
+   477→      style: 'full-on',
+   478→      styleConfidence: 0.7,
+   479→      sectionLikelihood: 'GROOVE',
+   480→      confidence: 0.5, // mid confidence → blend = 0.5
+   481→      available: true,
+   482→    })
+   483→
+   484→    // Run 1: no learning bias.
+   485→    const adaptation = new CompositionAdaptation()
+   486→    const intent1 = adaptAt(adaptation, base, radio)
+   487→    // Mid-confidence BASS_HEAVY → bassPressure ~0.45 (not silenced).
+   488→    expect(intent1.bassPressure).toBeGreaterThan(0.4)
+   489→    const adapted1 = applyAdaptation(section.bars, intent1)
+   490→    const competition1 = bassCompetition({ bars: adapted1 }, radio)
+   491→    expect(competition1).toBeGreaterThan(0)
+   492→
+   493→    // Negative outcome: foundation's bass competed with radio's bass.
+   494→    adaptation.reinforce('bass', false)
+   495→    expect(adaptation.biasFor('bass')).toBeLessThan(0)
+   496→
+   497→    // Run 2: with learned bias.
+   498→    const intent2 = adaptAt(adaptation, base, radio)
+   499→    const adapted2 = applyAdaptation(section.bars, intent2)
+   500→    const competition2 = bassCompetition({ bars: adapted2 }, radio)
+   501→
+   502→    expect(intent2.bassPressure).toBeLessThan(intent1.bassPressure)
+   503→    expect(competition2).toBeLessThanOrEqual(competition1)
+   504→  })
+   505→})
+   506→
+   507→// ====================== 17. Style + radio interaction ======================
+   508→
+   509→describe('Style + radio interaction', () => {
+   510→  test('FULL_ON + SPARSE ≠ DARK + SPARSE (style grammar preserved)', () => {
+   511→    const fullOnSparse = adaptationReport({
+   512→      scenario: RADIO_SCENARIOS.SPARSE,
+   513→      baseContext: baseContextForStyle('full-on'),
+   514→      seed: 42,
+   515→      bars: 16,
+   516→    })
+   517→    const darkSparse = adaptationReport({
+   518→      scenario: RADIO_SCENARIOS.SPARSE,
+   519→      baseContext: baseContextForStyle('dark'),
+   520→      seed: 42,
+   521→      bars: 16,
+   522→    })
+   523→    // The intents should differ because the base contexts differ
+   524→    // (different density / tension / novelty targets).
+   525→    expect(fullOnSparse.intent.densityTarget).not.toEqual(darkSparse.intent.densityTarget)
+   526→    expect(fullOnSparse.intent.tensionTarget).not.toEqual(darkSparse.intent.tensionTarget)
+   527→    // Both should be valid.
+   528→    expect(allPressuresIn01(fullOnSparse.intent)).toBe(true)
+   529→    expect(allPressuresIn01(darkSparse.intent)).toBe(true)
+   530→  })
+   531→
+   532→  test('adaptation sweep across all styles produces stable output', () => {
+   533→    const styles = ['full-on', 'progressive', 'dark', 'acid']
+   534→    for (const style of styles) {
+   535→      const reports = adaptationSweep({ styleName: style, seed: 100, bars: 16 })
+   536→      for (const r of reports) {
+   537→        expect(allPressuresIn01(r.intent)).toBe(true)
+   538→        expect(r.divergence.formDivergence).toBeLessThanOrEqual(1)
+   539→        expect(Number.isFinite(r.fitScore)).toBe(true)
+   540→      }
+   541→    }
+   542→  })
+   543→})
+   544→
+   545→// ====================== 18. 64-bar: stable coherent output ======================
+   546→
+   547→describe('64-bar adaptation', () => {
+   548→  test('each scenario produces stable coherent output (no NaN, finite pressures)', () => {
+   549→    for (const name of ['SPARSE', 'BASS_HEAVY', 'MELODY_HEAVY', 'FULL_DENSE', 'BREAKDOWN']) {
+   550→      const scenario = RADIO_SCENARIOS[name]
+   551→      if (!scenario) continue
+   552→      const report = adaptationReport({
+   553→        scenario,
+   554→        baseContext: fullOnContext(),
+   555→        seed: 42,
+   556→        bars: 64,
+   557→      })
+   558→      expect(report.bars).toBe(64)
+   559→      expect(allPressuresIn01(report.intent)).toBe(true)
+   560→      for (const key of Object.keys(report.divergence) as (keyof AdaptationDivergence)[]) {
+   561→        const v = report.divergence[key]
+   562→        expect(v).toBeGreaterThanOrEqual(0)
+   563→        expect(v).toBeLessThanOrEqual(1)
+   564→        expect(Number.isFinite(v)).toBe(true)
+   565→      }
+   566→      expect(Number.isFinite(report.fitScore)).toBe(true)
+   567→    }
+   568→  })
+   569→})
+   570→
+   571→// ====================== 19. 128-bar: 4 styles × 4 scenarios × 3 seeds ======================
+   572→
+   573→describe('128-bar stress test', () => {
+   574→  test('4 styles × 4 scenarios × 3 seeds: no collapse', () => {
+   575→    const styles = ['full-on', 'progressive', 'dark', 'acid']
+   576→    const scenarios = ['SPARSE', 'BASS_HEAVY', 'MELODY_HEAVY', 'FULL_DENSE']
+   577→    const seeds = [1, 42, 99]
+   578→    let count = 0
+   579→    for (const style of styles) {
+   580→      for (const scenarioName of scenarios) {
+   581→        for (const seed of seeds) {
+   582→          const scenario = RADIO_SCENARIOS[scenarioName]
+   583→          if (!scenario) continue
+   584→          const report = adaptationReport({
+   585→            scenario,
+   586→            baseContext: baseContextForStyle(style),
+   587→            seed,
+   588→            bars: 128,
+   589→          })
+   590→          expect(report.bars).toBe(128)
+   591→          expect(allPressuresIn01(report.intent)).toBe(true)
+   592→          // No collapse: form divergence should be tiny (we never change form).
+   593→          expect(report.divergence.formDivergence).toBeLessThan(0.3)
+   594→          // Fit score finite.
+   595→          expect(Number.isFinite(report.fitScore)).toBe(true)
+   596→          count++
+   597→        }
+   598→      }
+   599→    }
+   600→    expect(count).toBe(styles.length * scenarios.length * seeds.length)
+   601→  })
+   602→})
+   603→
+   604→// ====================== 20. Determinism ======================
+   605→
+   606→describe('Determinism', () => {
+   607→  test('same seed + same radio = same adaptation', () => {
+   608→    const base = fullOnContext()
+   609→    const { section } = composeBase('full-on', 42, 32)
+   610→    const adaptation1 = new CompositionAdaptation()
+   611→    const adaptation2 = new CompositionAdaptation()
+   612→    const radio = RADIO_SCENARIOS.MELODY_HEAVY.context
+   613→
+   614→    const intent1 = adaptAt(adaptation1, base, radio)
+   615→    const intent2 = adaptAt(adaptation2, base, radio)
+   616→    expect(intent1).toEqual(intent2)
+   617→
+   618→    const adapted1 = applyAdaptation(section.bars, intent1)
+   619→    const adapted2 = applyAdaptation(section.bars, intent2)
+   620→    expect(adapted1).toEqual(adapted2)
+   621→  })
+   622→
+   623→  test('adaptSection is deterministic for the same input', () => {
+   624→    const base = fullOnContext()
+   625→    const adaptation1 = new CompositionAdaptation()
+   626→    const adaptation2 = new CompositionAdaptation()
+   627→    const radioSeq = scenarioRadioSequence('BASS_HEAVY', 16)
+   628→    const intents1 = adaptation1.adaptSection({
+   629→      baseContext: base,
+   630→      radioSequence: radioSeq,
+   631→      bars: 16,
+   632→    })
+   633→    const intents2 = adaptation2.adaptSection({
+   634→      baseContext: base,
+   635→      radioSequence: radioSeq,
+   636→      bars: 16,
+   637→    })
+   638→    expect(intents1).toEqual(intents2)
+   639→  })
+   640→})
+   641→
+   642→// ====================== 21. Performance ======================
+   643→
+   644→describe('Performance', () => {
+   645→  test('adaptation < 10ms per bar', () => {
+   646→    const adaptation = new CompositionAdaptation()
+   647→    const base = fullOnContext()
+   648→    const radio = RADIO_SCENARIOS.FULL_DENSE.context
+   649→    const opportunities = buildOpportunityMap(radio)
+   650→    // Warm up.
+   651→    adaptation.adapt({ baseContext: base, radio, opportunities, currentBar: 0, phraseBar: 4 })
+   652→    const start = performance.now()
+   653→    const iterations = 100
+   654→    for (let i = 0; i < iterations; i++) {
+   655→      adaptation.adapt({
+   656→        baseContext: base,
+   657→        radio,
+   658→        opportunities,
+   659→        currentBar: i,
+   660→        phraseBar: 4,
+   661→      })
+   662→    }
+   663→    const elapsed = performance.now() - start
+   664→    const perBar = elapsed / iterations
+   665→    expect(perBar).toBeLessThan(10)
+   666→  })
+   667→
+   668→  test('64-bar adaptation (compose + adapt + apply) < 500ms', () => {
+   669→    const base = fullOnContext()
+   670→    const radio = RADIO_SCENARIOS.FULL_DENSE.context
+   671→    const start = performance.now()
+   672→    const { section } = composeBase('full-on', 42, 64)
+   673→    const adaptation = new CompositionAdaptation()
+   674→    const intent = adaptAt(adaptation, base, radio)
+   675→    applyAdaptation(section.bars, intent)
+   676→    const elapsed = performance.now() - start
+   677→    expect(elapsed).toBeLessThan(500)
+   678→  })
+   679→})
+   680→
+   681→// ====================== Additional: AdaptationReport shape ======================
+   682→
+   683→describe('adaptationReport', () => {
+   684→  test('returns a full AdaptationReport with whatChanged and whyItChanged', () => {
+   685→    const report: AdaptationReport = adaptationReport({
+   686→      scenario: RADIO_SCENARIOS.BASS_HEAVY,
+   687→      baseContext: fullOnContext(),
+   688→      seed: 42,
+   689→      bars: 32,
+   690→    })
+   691→    expect(report.scenario).toBe('BASS_HEAVY')
+   692→    expect(report.bars).toBe(32)
+   693→    expect(report.whatChanged.length).toBeGreaterThan(0)
+   694→    expect(report.whyItChanged.length).toBeGreaterThan(0)
+   695→    expect(report.opportunities).toBeDefined()
+   696→    expect(report.divergence).toBeDefined()
+   697→    expect(Number.isFinite(report.fitScore)).toBe(true)
+   698→    expect(Number.isFinite(report.bassCompetition)).toBe(true)
+   699→  })
+   700→
+   701→  test('measureDivergence on identical bars returns all-zero', () => {
+   702→    const { section } = composeBase('full-on', 1, 16)
+   703→    const div = measureDivergence({ bars: section.bars }, { bars: section.bars })
+   704→    expect(div.formDivergence).toBe(0)
+   705→    expect(div.harmonyDivergence).toBe(0)
+   706→    expect(div.grooveDivergence).toBe(0)
+   707→    expect(div.motifDivergence).toBe(0)
+   708→    expect(div.roleDivergence).toBe(0)
+   709→    expect(div.densityDivergence).toBe(0)
+   710→  })
+   711→
+   712→  test('adaptSection returns one intent per bar with mid-phrase stability', () => {
+   713→    const adaptation = new CompositionAdaptation()
+   714→    const base = fullOnContext()
+   715→    const radioSeq = scenarioRadioSequence('BASS_HEAVY', 16)
+   716→    const intents = adaptation.adaptSection({
+   717→      baseContext: base,
+   718→      radioSequence: radioSeq,
+   719→      bars: 16,
+   720→    })
+   721→    expect(intents.length).toBe(16)
+   722→    // Bars 0-3 (phraseBar < 4) should be NEUTRAL — preserve base.
+   723→    expect(intents[0]?.motifPreference).toBe('NEUTRAL')
+   724→    expect(intents[3]?.motifPreference).toBe('NEUTRAL')
+   725→    expect(intents[0]?.bassPressure).toBe(0.7) // base value
+   726→    // Bars 4-7 (phraseBar >= 4) should adapt — bassPressure should drop
+   727→    // below the base 0.7 because BASS_HEAVY radio has high bass occupancy.
+   728→    expect(intents[4]?.bassPressure).toBeLessThan(0.7)
+   729→    expect(intents[4]?.reasons.some((r) => r.includes('bass'))).toBe(true)
+   730→    // Bar 8 starts a new phrase (phraseBar = 0) → NEUTRAL again.
+   731→    expect(intents[8]?.motifPreference).toBe('NEUTRAL')
+   732→    expect(intents[8]?.bassPressure).toBe(0.7)
+   733→  })
+   734→})
+   735→
+   736→// ====================== Additional: OpportunityMap utilities ======================
+   737→
+   738→describe('OpportunityMap utilities', () => {
+   739→  test('countOccupied and countOpen are consistent', () => {
+   740→    const map: OpportunityMap = buildOpportunityMap(RADIO_SCENARIOS.FULL_DENSE.context)
+   741→    const occupied = countOccupied(map)
+   742→    const open = countOpen(map)
+   743→    expect(occupied + open).toBeLessThanOrEqual(8)
+   744→    expect(occupied).toBeGreaterThan(0)
+   745→  })
+   746→
+   747→  test('isDense only true when all primary roles OCCUPIED', () => {
+   748→    expect(isDense(buildOpportunityMap(RADIO_SCENARIOS.FULL_DENSE.context))).toBe(true)
+   749→    expect(isDense(buildOpportunityMap(RADIO_SCENARIOS.SPARSE.context))).toBe(false)
+   750→    expect(isDense(buildOpportunityMap(RADIO_SCENARIOS.BASS_HEAVY.context))).toBe(false)
+   751→  })
+   752→})
+   753→
+   754→// ====================== Additional: applyAdaptation ======================
+   755→
+   756→describe('applyAdaptation', () => {
+   757→  test('low bassPressure silences bass role; high texturePressure adds hats', () => {
+   758→    const { section } = composeBase('full-on', 5, 16)
+   759→    const intent: AdaptedCompositionIntent = {
+   760→      groovePressure: 0.7,
+   761→      bassPressure: 0.2, // below 0.4 → silence
+   762→      leadPressure: 0.7,
+   763→      counterPressure: 0.5,
+   764→      texturePressure: 0.8, // above 0.6 → add hats where empty
+   765→      densityTarget: 0.5,
+   766→      tensionTarget: 0.4,
+   767→      noveltyTarget: 0.5,
+   768→      registerShift: 0,
+   769→      restPressure: 0.1,
+   770→      motifPreference: 'NEUTRAL',
+   771→      harmonyPreference: 'NEUTRAL',
+   772→      confidence: 0.7,
+   773→      reasons: [],
+   774→    }
+   775→    const adapted = applyAdaptation(section.bars, intent)
+   776→    for (const bar of adapted) {
+   777→      expect(bar.bassNotes.length).toBe(0)
+   778→      expect(bar.roles.bass).toBe(false)
+   779→    }
+   780→  })
+   781→
+   782→  test('high restPressure silences lead/bass in some bars', () => {
+   783→    const { section } = composeBase('full-on', 5, 16)
+   784→    const intent: AdaptedCompositionIntent = {
+   785→      groovePressure: 0.7,
+   786→      bassPressure: 0.7,
+   787→      leadPressure: 0.7,
+   788→      counterPressure: 0.5,
+   789→      texturePressure: 0.4,
+   790→      densityTarget: 0.5,
+   791→      tensionTarget: 0.4,
+   792→      noveltyTarget: 0.5,
+   793→      registerShift: 0,
+   794→      restPressure: 0.7, // high
+   795→      motifPreference: 'NEUTRAL',
+   796→      harmonyPreference: 'NEUTRAL',
+   797→      confidence: 0.7,
+   798→      reasons: [],
+   799→    }
+   800→    const adapted = applyAdaptation(section.bars, intent)
+   801→    const leadSilencedCount = adapted.filter((b) => b.roles.lead === false).length
+   802→    expect(leadSilencedCount).toBeGreaterThan(0)
+   803→  })
+   804→
+   805→  test('form (arrangement state) is preserved across all adaptations', () => {
+   806→    const { section } = composeBase('full-on', 5, 32)
+   807→    const adaptation = new CompositionAdaptation()
+   808→    for (const name of ['SPARSE', 'BASS_HEAVY', 'MELODY_HEAVY', 'FULL_DENSE', 'BREAKDOWN']) {
+   809→      const scenario = RADIO_SCENARIOS[name]
+   810→      if (!scenario) continue
+   811→      const intent = adaptAt(adaptation, fullOnContext(), scenario.context)
+   812→      const adapted = applyAdaptation(section.bars, intent)
+   813→      for (let i = 0; i < adapted.length; i++) {
+   814→        const orig = section.bars[i]
+   815→        const adp = adapted[i]
+   816→        if (!orig || !adp) continue
+   817→        expect(adp.arrangementState).toBe(orig.arrangementState)
+   818→        expect(adp.harmonicContext).toEqual(orig.harmonicContext)
+   819→      }
+   820→    }
+   821→  })
+   822→})
+   823→

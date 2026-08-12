@@ -1,0 +1,710 @@
+     1→     1→import { describe, expect, test } from 'bun:test'
+     2→     2→import { generateBassBehavior } from '../src/bass-behavior.ts'
+     3→     3→import {
+     4→     4→  ARRANGEMENT_ROLE_MAP,
+     5→     5→  type ArrangementState,
+     6→     6→  type ComposedPhrase,
+     7→     7→  type ComposedSection,
+     8→     8→  CompositionEngine,
+     9→     9→  type GroovePlan,
+    10→    10→  type MusicalContext,
+    11→    11→  STYLE_GRAMMARS,
+    12→    12→  applyStyleToContext,
+    13→    13→  buildGroovePlan,
+    14→    14→  createMusicalContext,
+    15→    15→  detectMusicalFailures,
+    16→    16→  getStyleGrammar,
+    17→    17→  invertPitchPure,
+    18→    18→  isAccentStep,
+    19→    19→  isKickStep,
+    20→    20→  measureBassKickAlignment,
+    21→    21→  planArrangement,
+    22→    22→  retrogradePure,
+    23→    23→  runSimulation,
+    24→    24→  runSimulationSuite,
+    25→    25→} from '../src/index.ts'
+    26→    26→import { createMotif } from '../src/motif-v2.ts'
+    27→    27→import { generateMotifV2 } from '../src/phrase-planner.ts'
+    28→    28→
+    29→    29→// ----------------------------- helpers -----------------------------
+    30→    30→
+    31→    31→function phrygianContext(overrides: Partial<MusicalContext> = {}): MusicalContext {
+    32→    32→  return createMusicalContext({
+    33→    33→    tonic: 4,
+    34→    34→    scaleName: 'phrygian-dominant',
+    35→    35→    octave: 4,
+    36→    36→    bpm: 145,
+    37→    37→    beatsPerBar: 4,
+    38→    38→    density: 0.5,
+    39→    39→    energy: 0.55,
+    40→    40→    tension: 0.4,
+    41→    41→    sectionRole: 'full-on',
+    42→    42→    repetitionPressure: 0.4,
+    43→    43→    noveltyPressure: 0.6,
+    44→    44→    ...overrides,
+    45→    45→  })
+    46→    46→}
+    47→    47→
+    48→    48→function makeTestMotif(midis: number[], rootPc = 4): ReturnType<typeof createMotif> {
+    49→    49→  const notes = midis.map((m, i) => ({
+    50→    50→    step: i * 2,
+    51→    51→    midi: m,
+    52→    52→    velocity: 0.7,
+    53→    53→    durationSteps: 2,
+    54→    54→    accent: i === 0,
+    55→    55→  }))
+    56→    56→  return createMotif(notes, {
+    57→    57→    id: `test-${midis.join('-')}`,
+    58→    58→    rootPc,
+    59→    59→    scaleName: 'phrygian-dominant',
+    60→    60→    steps: 16,
+    61→    61→    role: 'lead',
+    62→    62→  })
+    63→    63→}
+    64→    64→
+    65→    65→// ====================== 1. GroovePlan ======================
+    66→    66→
+    67→    67→describe('GroovePlan', () => {
+    68→    68→  test('kick skeleton exists, bass alignment defined, accent grid correct', () => {
+    69→    69→    const ctx = phrygianContext()
+    70→    70→    const groove = buildGroovePlan({ context: ctx, seed: 42, bars: 64 })
+    71→    71→    expect(groove.kickSteps.length).toBeGreaterThan(0)
+    72→    72→    expect(groove.bassKickAlignment).toMatch(/^(LOCKED|COMPLEMENTARY|INDEPENDENT)$/)
+    73→    73→    // Accent grid: beats 1-4 of a 16-step bar = [0, 4, 8, 12].
+    74→    74→    expect(groove.accentSteps).toEqual([0, 4, 8, 12])
+    75→    75→    expect(groove.subdivision).toBe(4)
+    76→    76→    expect(groove.stepsPerBar).toBe(16)
+    77→    77→    // isKickStep / isAccentStep helpers agree with the arrays.
+    78→    78→    for (const step of groove.kickSteps) {
+    79→    79→      expect(isKickStep(groove, step)).toBe(true)
+    80→    80→    }
+    81→    81→    for (const step of groove.accentSteps) {
+    82→    82→      expect(isAccentStep(groove, step)).toBe(true)
+    83→    83→    }
+    84→    84→    expect(isKickStep(groove, 1)).toBe(false)
+    85→    85→  })
+    86→    86→
+    87→    87→  test('four-on-floor style produces kicks on every quarter', () => {
+    88→    88→    const ctx = phrygianContext({ sectionRole: 'full-on' })
+    89→    89→    const groove = buildGroovePlan({ context: ctx, seed: 1, bars: 32 })
+    90→    90→    // full-on uses FOUR_ON_FLOOR → kicks at [0, 4, 8, 12].
+    91→    91→    expect(groove.kickSteps).toEqual([0, 4, 8, 12])
+    92→    92→  })
+    93→    93→
+    94→    94→  test('dark style produces psy kick (sparser)', () => {
+    95→    95→    const ctx = phrygianContext({ sectionRole: 'dark' })
+    96→    96→    const groove = buildGroovePlan({ context: ctx, seed: 1, bars: 32 })
+    97→    97→    // dark uses PSY_KICK → kicks at [0, 8].
+    98→    98→    expect(groove.kickSteps).toEqual([0, 8])
+    99→    99→  })
+   100→   100→
+   101→   101→  test('fill bars land at phrase boundaries', () => {
+   102→   102→    const ctx = phrygianContext()
+   103→   103→    const groove = buildGroovePlan({ context: ctx, seed: 7, bars: 32 })
+   104→   104→    // Default phrase length is 8, so fills at bars 7, 15, 23, 31.
+   105→   105→    expect(groove.fillBars).toContain(7)
+   106→   106→    expect(groove.fillBars).toContain(15)
+   107→   107→    expect(groove.fillBars.length).toBeGreaterThan(0)
+   108→   108→  })
+   109→   109→})
+   110→   110→
+   111→   111→// ====================== 2. ArrangementState ======================
+   112→   112→
+   113→   113→describe('ArrangementState', () => {
+   114→   114→  test('INTRO has kick=OFF, DROP has kick=ON, BREAK has kick=OFF', () => {
+   115→   115→    expect(ARRANGEMENT_ROLE_MAP.INTRO.kick).toBe(false)
+   116→   116→    expect(ARRANGEMENT_ROLE_MAP.DROP.kick).toBe(true)
+   117→   117→    expect(ARRANGEMENT_ROLE_MAP.BREAK.kick).toBe(false)
+   118→   118→  })
+   119→   119→
+   120→   120→  test('PEAK has every role active', () => {
+   121→   121→    const r = ARRANGEMENT_ROLE_MAP.PEAK
+   122→   122→    expect(r.kick && r.bass && r.lead && r.hats && r.percussion).toBe(true)
+   123→   123→  })
+   124→   124→
+   125→   125→  test('OUTRO has only texture', () => {
+   126→   126→    const r = ARRANGEMENT_ROLE_MAP.OUTRO
+   127→   127→    expect(r.texture).toBe(true)
+   128→   128→    expect(r.kick || r.bass || r.lead || r.hats || r.percussion).toBe(false)
+   129→   129→  })
+   130→   130→
+   131→   131→  test('planArrangement walks through all states in narrative order', () => {
+   132→   132→    const ctx = phrygianContext()
+   133→   133→    const plan = planArrangement({ bars: 64, seed: 1, context: ctx })
+   134→   134→    expect(plan.bars).toBe(64)
+   135→   135→    expect(plan.slots.length).toBe(64)
+   136→   136→    // First non-INTRO state should be GROOVE; last should be OUTRO.
+   137→   137→    const firstState = plan.slots[0]?.state
+   138→   138→    const lastState = plan.slots[plan.slots.length - 1]?.state
+   139→   139→    expect(firstState).toBe('INTRO')
+   140→   140→    expect(lastState).toBe('OUTRO')
+   141→   141→    // Every state should appear at least once.
+   142→   142→    const allStates = new Set(plan.slots.map((s) => s.state))
+   143→   143→    for (const state of Object.keys(ARRANGEMENT_ROLE_MAP) as ArrangementState[]) {
+   144→   144→      expect(allStates.has(state)).toBe(true)
+   145→   145→    }
+   146→   146→  })
+   147→   147→})
+   148→   148→
+   149→   149→// ====================== 3. CompositionEngine.composePhrase ======================
+   150→   150→
+   151→   151→describe('CompositionEngine.composePhrase', () => {
+   152→   152→  test('produces 8-bar phrase with all parts coordinated', () => {
+   153→   153→    const ctx = phrygianContext()
+   154→   154→    const engine = new CompositionEngine({ seed: 42, context: ctx })
+   155→   155→    const groove = buildGroovePlan({ context: ctx, seed: 42, bars: 8 })
+   156→   156→    const phrase = engine.composePhrase({
+   157→   157→      bars: 8,
+   158→   158→      arrangementState: 'BUILD',
+   159→   159→      groove,
+   160→   160→      harmonicContext: [4, 8, 11], // E major triad
+   161→   161→    })
+   162→   162→    expect(phrase.bars.length).toBe(8)
+   163→   163→    // BUILD state activates every role.
+   164→   164→    for (const bar of phrase.bars) {
+   165→   165→      expect(bar.kickNotes.length).toBeGreaterThan(0)
+   166→   166→      expect(bar.bassNotes.length).toBeGreaterThan(0)
+   167→   167→      expect(bar.leadNotes.length).toBeGreaterThan(0)
+   168→   168→      expect(bar.hatNotes.length).toBeGreaterThan(0)
+   169→   169→    }
+   170→   170→    // Phrase arc is well-formed.
+   171→   171→    expect(phrase.phraseArc.opening).toBe(0)
+   172→   172→    expect(phrase.phraseArc.resolution).toBe(7)
+   173→   173→    expect(phrase.motifIds.length).toBeGreaterThan(0)
+   174→   174→  })
+   175→   175→
+   176→   176→  test('bass aligns with kick on beat 1 (LOCKED)', () => {
+   177→   177→    const ctx = phrygianContext({ sectionRole: 'full-on' })
+   178→   178→    const engine = new CompositionEngine({ seed: 99, context: ctx })
+   179→   179→    const groove = buildGroovePlan({ context: ctx, seed: 99, bars: 8 })
+   180→   180→    expect(groove.bassKickAlignment).toBe('LOCKED')
+   181→   181→    const phrase = engine.composePhrase({
+   182→   182→      bars: 8,
+   183→   183→      arrangementState: 'GROOVE',
+   184→   184→      groove,
+   185→   185→      harmonicContext: [4, 8, 11],
+   186→   186→    })
+   187→   187→    for (const bar of phrase.bars) {
+   188→   188→      // Bass has a note on step 0 (beat 1).
+   189→   189→      const bassOnBeat1 = bar.bassNotes.some((b) => b.step === 0)
+   190→   190→      expect(bassOnBeat1).toBe(true)
+   191→   191→      // Kick includes step 0.
+   192→   192→      expect(bar.kickNotes.includes(0)).toBe(true)
+   193→   193→    }
+   194→   194→  })
+   195→   195→
+   196→   196→  test('lead stays above bass register (no overlap)', () => {
+   197→   197→    const ctx = phrygianContext()
+   198→   198→    const engine = new CompositionEngine({ seed: 13, context: ctx })
+   199→   199→    const groove = buildGroovePlan({ context: ctx, seed: 13, bars: 8 })
+   200→   200→    const phrase = engine.composePhrase({
+   201→   201→      bars: 8,
+   202→   202→      arrangementState: 'BUILD',
+   203→   203→      groove,
+   204→   204→      harmonicContext: [4, 8, 11],
+   205→   205→    })
+   206→   206→    for (const bar of phrase.bars) {
+   207→   207→      const bassMax = bar.bassNotes.length > 0 ? Math.max(...bar.bassNotes.map((b) => b.midi)) : 0
+   208→   208→      const leadMin = bar.leadNotes.length > 0 ? Math.min(...bar.leadNotes.map((l) => l.midi)) : 128
+   209→   209→      expect(leadMin).toBeGreaterThanOrEqual(60)
+   210→   210→      expect(bassMax).toBeLessThanOrEqual(59)
+   211→   211→      expect(leadMin).toBeGreaterThan(bassMax)
+   212→   212→    }
+   213→   213→  })
+   214→   214→
+   215→   215→  test('lead max leap enforced', () => {
+   216→   216→    const ctx = phrygianContext({ sectionRole: 'full-on' })
+   217→   217→    const engine = new CompositionEngine({ seed: 21, context: ctx })
+   218→   218→    const grammar = getStyleGrammar('full-on')
+   219→   219→    const groove = buildGroovePlan({ context: ctx, seed: 21, bars: 8 })
+   220→   220→    const phrase = engine.composePhrase({
+   221→   221→      bars: 8,
+   222→   222→      arrangementState: 'BUILD',
+   223→   223→      groove,
+   224→   224→      harmonicContext: [4, 8, 11],
+   225→   225→    })
+   226→   226→    for (const bar of phrase.bars) {
+   227→   227→      const sorted = bar.leadNotes.slice().sort((a, b) => a.step - b.step)
+   228→   228→      for (let i = 1; i < sorted.length; i++) {
+   229→   229→        const prev = sorted[i - 1]
+   230→   230→        const cur = sorted[i]
+   231→   231→        if (!prev || !cur) continue
+   232→   232→        const leap = Math.abs(cur.midi - prev.midi)
+   233→   233→        expect(leap).toBeLessThanOrEqual(grammar.maxLeap)
+   234→   234→      }
+   235→   235→    }
+   236→   236→  })
+   237→   237→
+   238→   238→  test('lead motif recurrence exists (not random walk)', () => {
+   239→   239→    const ctx = phrygianContext()
+   240→   240→    const engine = new CompositionEngine({ seed: 55, context: ctx })
+   241→   241→    const groove = buildGroovePlan({ context: ctx, seed: 55, bars: 8 })
+   242→   242→    const phrase = engine.composePhrase({
+   243→   243→      bars: 8,
+   244→   244→      arrangementState: 'DEVELOPMENT',
+   245→   245→      groove,
+   246→   246→      harmonicContext: [4, 8, 11],
+   247→   247→    })
+   248→   248→    // Collect each bar's pitch sequence (sorted MIDI list as string).
+   249→   249→    const sequences = phrase.bars.map((bar) =>
+   250→   250→      bar.leadNotes
+   251→   251→        .slice()
+   252→   252→        .sort((a, b) => a.step - b.step)
+   253→   253→        .map((n) => n.midi)
+   254→   254→        .join(',')
+   255→   255→    )
+   256→   256→    // At least two bars should share a sequence (within-phrase recurrence).
+   257→   257→    const unique = new Set(sequences.filter((s) => s !== ''))
+   258→   258→    expect(unique.size).toBeLessThan(sequences.filter((s) => s !== '').length)
+   259→   259→    // Every bar uses the same primary motif id.
+   260→   260→    expect(phrase.motifIds.length).toBe(1)
+   261→   261→  })
+   262→   262→})
+   263→   263→
+   264→   264→// ====================== 4. Arrangement creates intentional silence ======================
+   265→   265→
+   266→   266→describe('Arrangement silence', () => {
+   267→   267→  test('some bars have lead OFF (intentional silence)', () => {
+   268→   268→    const ctx = phrygianContext()
+   269→   269→    const engine = new CompositionEngine({ seed: 7, context: ctx })
+   270→   270→    const section = engine.composeSection({ bars: 64 })
+   271→   271→    const leadOffBars = section.bars.filter((b) => b.leadNotes.length === 0)
+   272→   272→    expect(leadOffBars.length).toBeGreaterThan(0)
+   273→   273→    // Specifically: INTRO and OUTRO bars should have lead OFF.
+   274→   274→    const introBars = section.bars.filter((b) => b.arrangementState === 'INTRO')
+   275→   275→    for (const bar of introBars) {
+   276→   276→      expect(bar.leadNotes.length).toBe(0)
+   277→   277→    }
+   278→   278→    const breakBars = section.bars.filter((b) => b.arrangementState === 'BREAK')
+   279→   279→    expect(breakBars.length).toBeGreaterThan(0)
+   280→   280→  })
+   281→   281→})
+   282→   282→
+   283→   283→// ====================== 5. Style differentiation ======================
+   284→   284→
+   285→   285→describe('Style differentiation', () => {
+   286→   286→  test('full-on vs progressive vs dark vs acid produce different groove/harmony/melody', () => {
+   287→   287→    const styles = ['full-on', 'progressive', 'dark', 'acid']
+   288→   288→    const grooves = new Map<string, GroovePlan>()
+   289→   289→    const scales = new Map<string, string>()
+   290→   290→    const tessituras = new Map<string, number>()
+   291→   291→    for (const style of styles) {
+   292→   292→      const grammar = getStyleGrammar(style)
+   293→   293→      const ctx = applyStyleToContext(phrygianContext({ sectionRole: style }), grammar)
+   294→   294→      const groove = buildGroovePlan({ context: ctx, seed: 1, bars: 32, grammar })
+   295→   295→      grooves.set(style, groove)
+   296→   296→      scales.set(style, ctx.scaleName)
+   297→   297→      tessituras.set(style, grammar.tessituraCenter)
+   298→   298→    }
+   299→   299→    // Different kick patterns.
+   300→   300→    const kickSigs = new Set(Array.from(grooves.values()).map((g) => g.kickSteps.join(',')))
+   301→   301→    expect(kickSigs.size).toBeGreaterThan(1)
+   302→   302→    // Different scales.
+   303→   303→    const scaleSet = new Set(scales.values())
+   304→   304→    expect(scaleSet.size).toBeGreaterThan(1)
+   305→   305→    // Different tessituras.
+   306→   306→    const tessSet = new Set(tessituras.values())
+   307→   307→    expect(tessSet.size).toBeGreaterThan(1)
+   308→   308→    // Specific checks: dark uses PSY_KICK (sparser), full-on uses FOUR_ON_FLOOR.
+   309→   309→    expect(grooves.get('dark')?.kickSteps).toEqual([0, 8])
+   310→   310→    expect(grooves.get('full-on')?.kickSteps).toEqual([0, 4, 8, 12])
+   311→   311→    // acid uses BROKEN kick.
+   312→   312→    expect(grooves.get('acid')?.kickSteps).not.toEqual([0, 4, 8, 12])
+   313→   313→  })
+   314→   314→})
+   315→   315→
+   316→   316→// ====================== 6. Simulations ======================
+   317→   317→
+   318→   318→describe('64-bar simulation', () => {
+   319→   319→  test('kick continuity >0.8, bass-kick alignment >0.7, no LEAD_REGISTER_ESCAPE', () => {
+   320→   320→    const ctx = phrygianContext()
+   321→   321→    const result = runSimulation({ bars: 64, seed: 42, context: ctx })
+   322→   322→    expect(result.bars).toBe(64)
+   323→   323→    expect(result.kickContinuity).toBeGreaterThan(0.8)
+   324→   324→    expect(result.bassKickAlignment).toBeGreaterThan(0.7)
+   325→   325→    const escapeFailures = result.failures.filter((f) => f.type === 'LEAD_REGISTER_ESCAPE')
+   326→   326→    expect(escapeFailures.length).toBe(0)
+   327→   327→    // No NaN in any numeric metric.
+   328→   328→    expect(Number.isFinite(result.kickContinuity)).toBe(true)
+   329→   329→    expect(Number.isFinite(result.registerCenter)).toBe(true)
+   330→   330→    expect(Number.isFinite(result.leapDistribution)).toBe(true)
+   331→   331→  })
+   332→   332→})
+   333→   333→
+   334→   334→describe('128-bar simulation', () => {
+   335→   335→  test('section differentiation >0.3, callbacks exist, no end-loop-collapse', () => {
+   336→   336→    const ctx = phrygianContext()
+   337→   337→    const result = runSimulation({ bars: 128, seed: 99, context: ctx })
+   338→   338→    expect(result.bars).toBe(128)
+   339→   339→    expect(result.sectionDifferentiation).toBeGreaterThan(0.3)
+   340→   340→    // Check for callbacks: re-run engine and inspect phrases for shared motif ids.
+   341→   341→    const engine = new CompositionEngine({ seed: 99, context: ctx })
+   342→   342→    const section = engine.composeSection({ bars: 128 })
+   343→   343→    const motifIds = section.phrases
+   344→   344→      .map((p) => p.motifIds[0])
+   345→   345→      .filter((id) => id !== undefined) as string[]
+   346→   346→    const uniqueIds = new Set(motifIds)
+   347→   347→    // At least one phrase callbacks to an earlier one (motifId repeats).
+   348→   348→    expect(uniqueIds.size).toBeLessThan(motifIds.length)
+   349→   349→    // Last phrase callbacks to the first.
+   350→   350→    expect(section.phrases[section.phrases.length - 1]?.callbackTo).toBeDefined()
+   351→   351→    // No end-loop-collapse: the last 8 lead-bearing bars have at least 2
+   352→   352→    // distinct pitch sequences (i.e., the section doesn't end with the same
+   353→   353→    // bar repeating). We skip bars where lead is intentionally OFF (e.g.,
+   354→   354→    // OUTRO texture-only bars) since those are silent by design.
+   355→   355→    const leadBearingBars = section.bars.filter((b) => b.leadNotes.length > 0)
+   356→   356→    const last8 = leadBearingBars.slice(-8)
+   357→   357→    expect(last8.length).toBeGreaterThan(0)
+   358→   358→    const lastSeqs = new Set(
+   359→   359→      last8.map((bar) =>
+   360→   360→        bar.leadNotes
+   361→   361→          .slice()
+   362→   362→          .sort((a, b) => a.step - b.step)
+   363→   363→          .map((n) => n.midi)
+   364→   364→          .join(',')
+   365→   365→      )
+   366→   366→    )
+   367→   367→    expect(lastSeqs.size).toBeGreaterThan(1)
+   368→   368→  })
+   369→   369→})
+   370→   370→
+   371→   371→describe('256-bar simulation', () => {
+   372→   372→  test('stable, no NaN, no infinite loops', () => {
+   373→   373→    const ctx = phrygianContext()
+   374→   374→    const result = runSimulation({ bars: 256, seed: 314, context: ctx })
+   375→   375→    expect(result.bars).toBe(256)
+   376→   376→    // All numeric metrics are finite.
+   377→   377→    const numericKeys: (keyof typeof result)[] = [
+   378→   378→      'kickContinuity',
+   379→   379→      'bassKickAlignment',
+   380→   380→      'onsetDensity',
+   381→   381→      'syncopation',
+   382→   382→      'subdivisionStability',
+   383→   383→      'phraseEndFills',
+   384→   384→      'chordToneRatio',
+   385→   385→      'nonChordResolution',
+   386→   386→      'harmonicRhythm',
+   387→   387→      'illegalMoves',
+   388→   388→      'tonalCenterStability',
+   389→   389→      'registerCenter',
+   390→   390→      'registerExcursion',
+   391→   391→      'leapDistribution',
+   392→   392→      'repetitionRatio',
+   393→   393→      'motifRecurrence',
+   394→   394→      'phraseContour',
+   395→   395→      'cadenceQuality',
+   396→   396→      'noteDensity',
+   397→   397→      'intentionalRests',
+   398→   398→      'densityArc',
+   399→   399→      'dropBreakContrast',
+   400→   400→      'sectionDifferentiation',
+   401→   401→      'kickBassAlignment',
+   402→   402→      'bassHarmonyAlignment',
+   403→   403→      'leadHarmonyAlignment',
+   404→   404→      'leadBassSpacing',
+   405→   405→      'drumBassRelationship',
+   406→   406→      'failureCount',
+   407→   407→    ]
+   408→   408→    for (const key of numericKeys) {
+   409→   409→      const v = result[key] as number
+   410→   410→      expect(Number.isFinite(v)).toBe(true)
+   411→   411→    }
+   412→   412→    // The simulation suite runs without error.
+   413→   413→    const suite = runSimulationSuite()
+   414→   414→    expect(suite.results64.length).toBeGreaterThan(0)
+   415→   415→    expect(suite.results128.length).toBeGreaterThan(0)
+   416→   416→    expect(suite.results256.length).toBeGreaterThan(0)
+   417→   417→    expect(suite.styles.length).toBe(4)
+   418→   418→  })
+   419→   419→})
+   420→   420→
+   421→   421→// ====================== 7. Failure detector ======================
+   422→   422→
+   423→   423→describe('Enhanced failure detector', () => {
+   424→   424→  test('detects KICK_MISSING in a section where kick is absent in DROP', () => {
+   425→   425→    const ctx = phrygianContext()
+   426→   426→    const engine = new CompositionEngine({ seed: 1, context: ctx })
+   427→   427→    const section = engine.composeSection({ bars: 32 })
+   428→   428→    // Sabotage: remove all kicks from DROP bars.
+   429→   429→    const sabotagedKick = section.bars
+   430→   430→      .filter((b) => b.arrangementState !== 'DROP')
+   431→   431→      .flatMap((b) => b.kickNotes.map((step) => ({ step, bar: b.barIndex })))
+   432→   432→    const notes = engine.renderNotes(section)
+   433→   433→    const report = detectMusicalFailures({
+   434→   434→      kickNotes: sabotagedKick,
+   435→   435→      bassNotes: notes.bass,
+   436→   436→      leadNotes: notes.lead,
+   437→   437→      hatNotes: notes.hats,
+   438→   438→      arrangement: section.arrangement,
+   439→   439→      groove: section.groove,
+   440→   440→      bars: 32,
+   441→   441→      stepsPerBar: 16,
+   442→   442→    })
+   443→   443→    const kickMissing = report.failures.find((f) => f.type === 'KICK_MISSING')
+   444→   444→    expect(kickMissing).toBeDefined()
+   445→   445→    expect(kickMissing?.level).toBe('FAIL')
+   446→   446→  })
+   447→   447→
+   448→   448→  test('detects BASS_UNCOUPLED when bass skips beat 1', () => {
+   449→   449→    const ctx = phrygianContext()
+   450→   450→    const engine = new CompositionEngine({ seed: 1, context: ctx })
+   451→   451→    const section = engine.composeSection({ bars: 32 })
+   452→   452→    const notes = engine.renderNotes(section)
+   453→   453→    // Sabotage: remove bass notes on step 0 from most bars.
+   454→   454→    const sabotagedBass = notes.bass
+   455→   455→      .filter((b) => b.step !== 0)
+   456→   456→      .map((b) => ({ midi: b.midi, step: b.step, bar: b.bar, function: b.function }))
+   457→   457→    const report = detectMusicalFailures({
+   458→   458→      kickNotes: notes.kick,
+   459→   459→      bassNotes: sabotagedBass,
+   460→   460→      leadNotes: notes.lead,
+   461→   461→      hatNotes: notes.hats,
+   462→   462→      arrangement: section.arrangement,
+   463→   463→      groove: section.groove,
+   464→   464→      bars: 32,
+   465→   465→      stepsPerBar: 16,
+   466→   466→    })
+   467→   467→    const uncoupled = report.failures.find((f) => f.type === 'BASS_UNCOUPLED')
+   468→   468→    expect(uncoupled).toBeDefined()
+   469→   469→    expect(uncoupled?.level).toBe('FAIL')
+   470→   470→  })
+   471→   471→
+   472→   472→  test('detects LEAD_REGISTER_ESCAPE when lead goes above MIDI 84', () => {
+   473→   473→    const ctx = phrygianContext()
+   474→   474→    const engine = new CompositionEngine({ seed: 1, context: ctx })
+   475→   475→    const section = engine.composeSection({ bars: 32 })
+   476→   476→    const notes = engine.renderNotes(section)
+   477→   477→    // Sabotage: bump every lead note to MIDI 96.
+   478→   478→    const sabotagedLead = notes.lead.map((l) => ({ ...l, midi: 96 }))
+   479→   479→    const report = detectMusicalFailures({
+   480→   480→      kickNotes: notes.kick,
+   481→   481→      bassNotes: notes.bass,
+   482→   482→      leadNotes: sabotagedLead,
+   483→   483→      hatNotes: notes.hats,
+   484→   484→      arrangement: section.arrangement,
+   485→   485→      groove: section.groove,
+   486→   486→      bars: 32,
+   487→   487→      stepsPerBar: 16,
+   488→   488→    })
+   489→   489→    const escapeFailure = report.failures.find((f) => f.type === 'LEAD_REGISTER_ESCAPE')
+   490→   490→    expect(escapeFailure).toBeDefined()
+   491→   491→    expect(escapeFailure?.level).toBe('WARNING')
+   492→   492→  })
+   493→   493→
+   494→   494→  test('clean composition produces no FAIL-level failures', () => {
+   495→   495→    const ctx = phrygianContext()
+   496→   496→    const result = runSimulation({ bars: 64, seed: 42, context: ctx })
+   497→   497→    const failLevel = result.failures.filter((f) => f.level === 'FAIL')
+   498→   498→    expect(failLevel.length).toBe(0)
+   499→   499→  })
+   500→   500→})
+   501→   501→
+   502→   502→// ====================== 8. Determinism ======================
+   503→   503→
+   504→   504→describe('Determinism', () => {
+   505→   505→  test('same seed produces identical output', () => {
+   506→   506→    const ctx = phrygianContext()
+   507→   507→    const engine1 = new CompositionEngine({ seed: 42, context: ctx })
+   508→   508→    const engine2 = new CompositionEngine({ seed: 42, context: ctx })
+   509→   509→    const s1 = engine1.composeSection({ bars: 32 })
+   510→   510→    const s2 = engine2.composeSection({ bars: 32 })
+   511→   511→    expect(s1.bars.length).toBe(s2.bars.length)
+   512→   512→    for (let i = 0; i < s1.bars.length; i++) {
+   513→   513→      const b1 = s1.bars[i]
+   514→   514→      const b2 = s2.bars[i]
+   515→   515→      expect(b1?.kickNotes).toEqual(b2?.kickNotes)
+   516→   516→      expect(b1?.bassNotes.map((n) => n.midi)).toEqual(b2?.bassNotes.map((n) => n.midi))
+   517→   517→      expect(b1?.leadNotes.map((n) => n.midi)).toEqual(b2?.leadNotes.map((n) => n.midi))
+   518→   518→    }
+   519→   519→  })
+   520→   520→
+   521→   521→  test('different seeds produce different output', () => {
+   522→   522→    const ctx = phrygianContext()
+   523→   523→    const engine1 = new CompositionEngine({ seed: 1, context: ctx })
+   524→   524→    const engine2 = new CompositionEngine({ seed: 2, context: ctx })
+   525→   525→    const s1 = engine1.composeSection({ bars: 32 })
+   526→   526→    const s2 = engine2.composeSection({ bars: 32 })
+   527→   527→    const seq1 = s1.bars.map((b) => b.leadNotes.map((n) => n.midi).join(',')).join('|')
+   528→   528→    const seq2 = s2.bars.map((b) => b.leadNotes.map((n) => n.midi).join(',')).join('|')
+   529→   529→    expect(seq1).not.toBe(seq2)
+   530→   530→  })
+   531→   531→})
+   532→   532→
+   533→   533→// ====================== 9. Transform involutions ======================
+   534→   534→
+   535→   535→describe('Transform involutions', () => {
+   536→   536→  test('invertPitchPure twice returns the original motif (pitch identity)', () => {
+   537→   537→    const motif = makeTestMotif([64, 67, 71, 72, 69, 65])
+   538→   538→    const inverted = invertPitchPure(motif)
+   539→   539→    const doubleInverted = invertPitchPure(inverted)
+   540→   540→    // Pitch content (MIDI values) should match the original.
+   541→   541→    expect(doubleInverted.notes.map((n) => n.midi)).toEqual(motif.notes.map((n) => n.midi))
+   542→   542→    // Step positions preserved.
+   543→   543→    expect(doubleInverted.notes.map((n) => n.step)).toEqual(motif.notes.map((n) => n.step))
+   544→   544→  })
+   545→   545→
+   546→   546→  test('retrogradePure twice returns the original motif', () => {
+   547→   547→    const motif = makeTestMotif([64, 67, 71, 72, 69, 65])
+   548→   548→    const retro = retrogradePure(motif)
+   549→   549→    const doubleRetro = retrogradePure(retro)
+   550→   550→    expect(doubleRetro.notes.map((n) => n.midi)).toEqual(motif.notes.map((n) => n.midi))
+   551→   551→    expect(doubleRetro.notes.map((n) => n.step)).toEqual(motif.notes.map((n) => n.step))
+   552→   552→  })
+   553→   553→
+   554→   554→  test('retrogradePure is an involution on engine-generated motifs', () => {
+   555→   555→    const ctx = phrygianContext()
+   556→   556→    const motif = generateMotifV2(ctx, 123, 'lead')
+   557→   557→    const retro = retrogradePure(motif)
+   558→   558→    const doubleRetro = retrogradePure(retro)
+   559→   559→    expect(doubleRetro.notes.map((n) => n.midi)).toEqual(motif.notes.map((n) => n.midi))
+   560→   560→  })
+   561→   561→})
+   562→   562→
+   563→   563→// ====================== 10. A/B comparison ======================
+   564→   564→
+   565→   565→describe('A/B comparison: new architecture vs old', () => {
+   566→   566→  // Comprehensive kick-bass alignment: fraction of kick steps that have a
+   567→   567→  // co-occurring bass note. The old bass-behavior generates notes from a
+   568→   568→  // fixed K-B-B-B grammar ([0, 8, 12, 15]) that doesn't know the kick
+   569→   569→  // pattern; the new CompositionEngine reads the groove and aligns the
+   570→   570→  // bass to the kick (LOCKED) or to the gaps (COMPLEMENTARY — still hits
+   571→   571→  // step 0, which is always a kick step).
+   572→   572→  function kickBassCooccurrence(
+   573→   573→    kick: { step: number; bar: number }[],
+   574→   574→    bass: { step: number; bar: number }[],
+   575→   575→    bars: number
+   576→   576→  ): number {
+   577→   577→    let total = 0
+   578→   578→    let hit = 0
+   579→   579→    for (let bar = 0; bar < bars; bar++) {
+   580→   580→      const kickSteps = new Set(kick.filter((k) => k.bar === bar).map((k) => k.step))
+   581→   581→      const bassSteps = new Set(bass.filter((b) => b.bar === bar).map((b) => b.step))
+   582→   582→      if (kickSteps.size === 0) continue
+   583→   583→      for (const ks of kickSteps) {
+   584→   584→        total++
+   585→   585→        if (bassSteps.has(ks)) hit++
+   586→   586→      }
+   587→   587→    }
+   588→   588→    return total > 0 ? hit / total : 0
+   589→   589→  }
+   590→   590→
+   591→   591→  test('new CompositionEngine has higher kick-bass alignment than old bass-behavior', () => {
+   592→   592→    // Use a custom grammar: BROKEN kick ([0, 3, 6, 10]) with LOCKED bass.
+   593→   593→    // The old K-B-B-B bass ([0, 8, 12, 15]) only co-occurs with the kick on
+   594→   594→    // step 0, so old alignment = 1/4 = 0.25.
+   595→   595→    // The new LOCKED bass hits every kick step (ROOT on 0, 3, 6, 10), so
+   596→   596→    // new alignment = 4/4 = 1.0 — a 4x improvement.
+   597→   597→    const ctx = phrygianContext({ sectionRole: 'acid' })
+   598→   598→    const baseGrammar = getStyleGrammar('acid')
+   599→   599→    const grammar = { ...baseGrammar, bassAlignment: 'LOCKED' as const }
+   600→   600→    const groove = buildGroovePlan({ context: ctx, seed: 1, bars: 32, grammar })
+   601→   601→    expect(groove.kickSteps).toEqual([0, 3, 6, 10])
+   602→   602→    expect(groove.bassKickAlignment).toBe('LOCKED')
+   603→   603→
+   604→   604→    // --- OLD architecture: bass generated independently of kick ---
+   605→   605→    const oldBassBehavior = generateBassBehavior({
+   606→   606→      context: ctx,
+   607→   607→      harmonicContext: [4, 8, 11],
+   608→   608→      seed: 1,
+   609→   609→      bars: 32,
+   610→   610→      stepsPerBar: 16,
+   611→   611→    })
+   612→   612→    const oldBassNotes = oldBassBehavior.notes.map((n) => ({
+   613→   613→      midi: n.midi,
+   614→   614→      step: n.step % 16,
+   615→   615→      bar: Math.floor(n.step / 16),
+   616→   616→      function: n.function,
+   617→   617→    }))
+   618→   618→    const oldKickNotes: { step: number; bar: number }[] = []
+   619→   619→    for (let bar = 0; bar < 32; bar++) {
+   620→   620→      for (const step of groove.kickSteps) {
+   621→   621→        oldKickNotes.push({ step, bar })
+   622→   622→      }
+   623→   623→    }
+   624→   624→    const oldAlignment = kickBassCooccurrence(oldKickNotes, oldBassNotes, 32)
+   625→   625→
+   626→   626→    // --- NEW architecture: bass composed against the groove ---
+   627→   627→    const engine = new CompositionEngine({ seed: 1, context: ctx, grammar })
+   628→   628→    const section = engine.composeSection({ bars: 32 })
+   629→   629→    const notes = engine.renderNotes(section)
+   630→   630→    const newAlignment = kickBassCooccurrence(
+   631→   631→      notes.kick,
+   632→   632→      notes.bass.map((b) => ({ step: b.step, bar: b.bar })),
+   633→   633→      32
+   634→   634→    )
+   635→   635→
+   636→   636→    // The new architecture should produce strictly higher kick-bass alignment
+   637→   637→    // than the old independent-bass grammar.
+   638→   638→    expect(newAlignment).toBeGreaterThan(oldAlignment)
+   639→   639→    // Sanity: new alignment should be at least 2x the old.
+   640→   640→    expect(newAlignment / Math.max(oldAlignment, 0.01)).toBeGreaterThan(2)
+   641→   641→  })
+   642→   642→
+   643→   643→  test('measureBassKickAlignment utility reports the expected ratio', () => {
+   644→   644→    const bass = [
+   645→   645→      { step: 0, bar: 0 },
+   646→   646→      { step: 0, bar: 1 },
+   647→   647→      { step: 4, bar: 2 }, // bar 2 has no beat-1 bass
+   648→   648→    ]
+   649→   649→    const kick = [
+   650→   650→      { step: 0, bar: 0 },
+   651→   651→      { step: 0, bar: 1 },
+   652→   652→      { step: 0, bar: 2 },
+   653→   653→      { step: 0, bar: 3 }, // bar 3 has no bass
+   654→   654→    ]
+   655→   655→    // 2 bars (0, 1) out of 4 have both bass+kick on beat 1.
+   656→   656→    const alignment = measureBassKickAlignment(bass, kick, 4)
+   657→   657→    expect(alignment).toBeCloseTo(0.5, 5)
+   658→   658→  })
+   659→   659→})
+   660→   660→
+   661→   661→// ====================== 11. ComposedSection sanity ======================
+   662→   662→
+   663→   663→describe('ComposedSection sanity', () => {
+   664→   664→  test('32-bar section has phrases, arrangement, and groove', () => {
+   665→   665→    const ctx = phrygianContext()
+   666→   666→    const engine = new CompositionEngine({ seed: 1, context: ctx })
+   667→   667→    const section: ComposedSection = engine.composeSection({ bars: 32 })
+   668→   668→    expect(section.bars.length).toBe(32)
+   669→   669→    expect(section.phrases.length).toBeGreaterThan(0)
+   670→   670→    expect(section.arrangement.bars).toBe(32)
+   671→   671→    expect(section.groove.kickSteps.length).toBeGreaterThan(0)
+   672→   672→    // Each phrase should have 8 bars.
+   673→   673→    for (const phrase of section.phrases) {
+   674→   674→      expect(phrase.bars.length).toBeLessThanOrEqual(8)
+   675→   675→      expect(phrase.bars.length).toBeGreaterThan(0)
+   676→   676→    }
+   677→   677→  })
+   678→   678→
+   679→   679→  test('renderNotes produces flat arrays per part', () => {
+   680→   680→    const ctx = phrygianContext()
+   681→   681→    const engine = new CompositionEngine({ seed: 1, context: ctx })
+   682→   682→    const section = engine.composeSection({ bars: 32 })
+   683→   683→    const notes = engine.renderNotes(section)
+   684→   684→    expect(notes.kick.length).toBeGreaterThan(0)
+   685→   685→    expect(notes.bass.length).toBeGreaterThan(0)
+   686→   686→    expect(notes.lead.length).toBeGreaterThan(0)
+   687→   687→    expect(notes.hats.length).toBeGreaterThan(0)
+   688→   688→    // Every note has a valid bar index.
+   689→   689→    for (const k of notes.kick) expect(k.bar).toBeGreaterThanOrEqual(0)
+   690→   690→    for (const b of notes.bass) expect(b.bar).toBeGreaterThanOrEqual(0)
+   691→   691→    for (const l of notes.lead) expect(l.bar).toBeGreaterThanOrEqual(0)
+   692→   692→    for (const h of notes.hats) expect(h.bar).toBeGreaterThanOrEqual(0)
+   693→   693→  })
+   694→   694→
+   695→   695→  test('STYLE_GRAMMARS has all four styles', () => {
+   696→   696→    expect(Object.keys(STYLE_GRAMMARS).sort()).toEqual(['acid', 'dark', 'full-on', 'progressive'])
+   697→   697→  })
+   698→   698→
+   699→   699→  test('phrase callbackTo is set on the last phrase', () => {
+   700→   700→    const ctx = phrygianContext()
+   701→   701→    const engine = new CompositionEngine({ seed: 5, context: ctx })
+   702→   702→    const section = engine.composeSection({ bars: 32 })
+   703→   703→    const lastPhrase: ComposedPhrase | undefined = section.phrases[section.phrases.length - 1]
+   704→   704→    expect(lastPhrase?.callbackTo).toBeDefined()
+   705→   705→    // The callback target should be the first phrase's motif.
+   706→   706→    const firstPhrase = section.phrases[0]
+   707→   707→    expect(firstPhrase?.motifIds[0]).toBe(lastPhrase?.callbackTo)
+   708→   708→  })
+   709→   709→})
+   710→   710→
