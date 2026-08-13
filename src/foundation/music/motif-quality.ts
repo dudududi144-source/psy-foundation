@@ -15,9 +15,9 @@
  * motifs that fail.
  */
 
-import { type Motif, motifIdentity } from './motif-v2'
-import type { MusicalContext } from './musical-context'
-import { type Scale, getScale, isInScale, scalePcs, stableDegrees } from './scales'
+import { type Motif, motifIdentity } from './motif-v2.ts'
+import type { MusicalContext } from './musical-context.ts'
+import { type Scale, getScale, isInScale, scalePcs, stableDegrees } from './scales.ts'
 
 export interface MotifQualityAxes {
   harmonicFit: number

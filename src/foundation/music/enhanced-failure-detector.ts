@@ -14,8 +14,8 @@
  * on beat 1".
  */
 
-import type { ArrangementPlan, ArrangementState } from './arrangement-state'
-import type { GroovePlan } from './groove-plan'
+import type { ArrangementPlan, ArrangementState } from './arrangement-state.ts'
+import type { GroovePlan } from './groove-plan.ts'
 
 export type MusicalFailureType =
   | 'KICK_MISSING'

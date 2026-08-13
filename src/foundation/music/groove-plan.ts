@@ -13,9 +13,9 @@
  * the kick pattern, syncopation budget, and swing that fit the style.
  */
 
-import type { MusicalContext } from './musical-context'
-import { Rng } from './rng'
-import { type KickPatternKind, type StyleGrammar, getStyleGrammar } from './style-grammar'
+import type { MusicalContext } from './musical-context.ts'
+import { Rng } from './rng.ts'
+import { type KickPatternKind, type StyleGrammar, getStyleGrammar } from './style-grammar.ts'
 
 export type HatStyle = 'OFFBEAT' | 'DRIVING' | 'SPARSE' | 'NONE'
 export type BassKickAlignment = 'LOCKED' | 'COMPLEMENTARY' | 'INDEPENDENT'
@@ -43,6 +43,19 @@ export interface GroovePlan {
   density: number
   /** Steps per bar (16 by default for a 16th-note grid). */
   stepsPerBar: number
+  // ── F20 SHARED POCKET ──
+  /** Pulse in steps (typically 4 = quarter note in a 16-step bar). */
+  pulse: number
+  /** Per-step accent strength 0..1 (length = stepsPerBar). The pocket grid. */
+  accent: number[]
+  /** Per-step microtiming offset in step fractions (length = stepsPerBar). */
+  microtiming: number[]
+  /** Steps where the bass should accent (length = stepsPerBar, 0..1 per step). */
+  bassAccentMap: number[]
+  /** Steps where ghost notes are welcome (length = stepsPerBar, 0..1 per step). */
+  ghostMap: number[]
+  /** Kick onset map (length = stepsPerBar, 0..1 per step). Same info as kickSteps but in pocket form. */
+  kickMap: number[]
 }
 
 export interface BuildGrooveOptions {
@@ -175,6 +188,54 @@ export function buildGroovePlan(opts: BuildGrooveOptions): GroovePlan {
   const syncopationBudget = clamp01(grammar.syncopationBudget + rng.range(-0.02, 0.02))
   const swing = clamp01(grammar.swing)
 
+  // ── F20 SHARED POCKET FIELDS ──
+  // Beat step interval (quarter note in a 16-step bar = 4).
+  const beat = Math.max(1, Math.round(stepsPerBar / 4))
+  // Per-step accent grid: strong beats get 1.0, offbeats get syncopation-scaled value.
+  const accent: number[] = new Array(stepsPerBar).fill(0)
+  for (const s of accents) accent[s] = 1.0
+  // Offbeat accents scaled by syncopation budget.
+  const half = Math.max(1, Math.round(stepsPerBar / 8))
+  for (let s = half; s < stepsPerBar; s += half) {
+    if (accent[s] === 0) accent[s] = 0.3 + syncopationBudget * 0.4
+  }
+
+  // Microtiming: swing shifts odd 8th notes late. Represented as step fractions.
+  const microtiming: number[] = new Array(stepsPerBar).fill(0)
+  if (swing > 0) {
+    for (let s = 0; s < stepsPerBar; s++) {
+      // Odd 8th positions (s % (half*2) === half) get a late microtiming.
+      if (s % (half * 2) === half) microtiming[s] = swing * 0.15
+    }
+  }
+
+  // Kick onset map (pocket form of kickSteps).
+  const kickMap: number[] = new Array(stepsPerBar).fill(0)
+  for (const s of kickSteps) kickMap[s] = 1.0
+
+  // Bass accent map: bass accents fall on kick steps in LOCKED mode, on
+  // complementary offbeats otherwise.
+  const bassAccentMap: number[] = new Array(stepsPerBar).fill(0)
+  if (bassKickAlignment === 'LOCKED') {
+    for (const s of kickSteps) bassAccentMap[s] = 1.0
+  } else {
+    const complementary = [half, beat + half, beat * 2 + half, beat * 3 + half]
+    for (const s of complementary) {
+      if (s < stepsPerBar) bassAccentMap[s] = 0.8
+    }
+  }
+
+  // Ghost-note map: ghost notes sit on weak subdivisions, scaled by syncopation.
+  const ghostMap: number[] = new Array(stepsPerBar).fill(0)
+  for (let s = 0; s < stepsPerBar; s++) {
+    if (accent[s] === 0 && kickMap[s] === 0) {
+      ghostMap[s] = syncopationBudget * 0.3
+    }
+  }
+
+  // Pulse: quarter note in steps.
+  const pulse = beat
+
   return {
     subdivision: grammar.subdivision,
     kickSteps,
@@ -187,6 +248,13 @@ export function buildGroovePlan(opts: BuildGrooveOptions): GroovePlan {
     fillBars,
     density,
     stepsPerBar,
+    // F20 shared pocket.
+    pulse,
+    accent,
+    microtiming,
+    bassAccentMap,
+    ghostMap,
+    kickMap,
   }
 }
 

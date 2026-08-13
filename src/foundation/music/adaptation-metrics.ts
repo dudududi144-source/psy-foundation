@@ -29,14 +29,14 @@ import {
   adaptationFitScore,
   applyAdaptation,
   bassCompetition,
-} from './composition-adaptation'
-import type { ComposedBar } from './composition-engine'
-import { CompositionEngine } from './composition-engine'
-import type { MusicalContext } from './musical-context'
-import { type OpportunityMap, buildOpportunityMap } from './opportunity-map'
-import type { RadioScenario } from './radio-scenarios'
-import { RADIO_SCENARIOS } from './radio-scenarios'
-import { applyStyleToContext, getStyleGrammar } from './style-grammar'
+} from './composition-adaptation.ts'
+import type { ComposedBar } from './composition-engine.ts'
+import { CompositionEngine } from './composition-engine.ts'
+import type { MusicalContext } from './musical-context.ts'
+import { type OpportunityMap, buildOpportunityMap } from './opportunity-map.ts'
+import type { RadioScenario } from './radio-scenarios.ts'
+import { RADIO_SCENARIOS } from './radio-scenarios.ts'
+import { applyStyleToContext, getStyleGrammar } from './style-grammar.ts'
 
 export interface AdaptationDivergence {
   /** 0..1 — how much the arrangement form (states, phrase structure) changed. */

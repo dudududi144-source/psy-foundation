@@ -3,8 +3,8 @@
  * curves for shaping dynamics, density, and register over a track's duration.
  */
 
-import { Rng } from './rng'
-import { type Scale, degreeToMidi } from './scales'
+import { Rng } from './rng.ts'
+import { type Scale, degreeToMidi } from './scales.ts'
 
 export interface BassNote {
   step: number

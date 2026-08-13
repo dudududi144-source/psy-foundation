@@ -7,8 +7,8 @@
  * applied to 1-3 semitone intervals between consecutive notes.
  */
 
-import { Rng } from './rng'
-import { type Scale, degreeToMidi, isInScale, nearestDegree, stableDegrees } from './scales'
+import { Rng } from './rng.ts'
+import { type Scale, degreeToMidi, isInScale, nearestDegree, stableDegrees } from './scales.ts'
 
 export interface MotifNote {
   step: number

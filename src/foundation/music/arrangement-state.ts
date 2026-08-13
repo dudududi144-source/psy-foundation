@@ -14,8 +14,8 @@
  * OUTRO get the least.
  */
 
-import type { MusicalContext } from './musical-context'
-import { Rng } from './rng'
+import type { MusicalContext } from './musical-context.ts'
+import { Rng } from './rng.ts'
 
 export type ArrangementState =
   | 'INTRO'

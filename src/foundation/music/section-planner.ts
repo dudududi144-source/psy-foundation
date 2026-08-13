@@ -8,10 +8,10 @@
  * seed.
  */
 
-import { MotifMemory } from './motif-memory'
-import type { MusicalContext } from './musical-context'
-import { type PhrasePlan, planPhrase, renderPhraseNotes } from './phrase-planner'
-import { Rng } from './rng'
+import { MotifMemory } from './motif-memory.ts'
+import type { MusicalContext } from './musical-context.ts'
+import { type PhrasePlan, planPhrase, renderPhraseNotes } from './phrase-planner.ts'
+import { Rng } from './rng.ts'
 
 export type SectionRole =
   | 'ESTABLISH'

@@ -10,8 +10,8 @@
  * (invert, retrograde, contourMutation, intervalSubstitution, callResponse).
  */
 
-import { type Motif, type MotifNote, createMotif } from './motif-v2'
-import { Rng } from './rng'
+import { type Motif, type MotifNote, createMotif } from './motif-v2.ts'
+import { Rng } from './rng.ts'
 import {
   type Scale,
   degreeToMidi,
@@ -20,7 +20,7 @@ import {
   nearestDegree,
   scalePcs,
   stableDegrees,
-} from './scales'
+} from './scales.ts'
 
 /** Snap a MIDI note to the nearest in-scale note (within +/- 6 semitones). */
 function snapToScale(midi: number, rootPc: number, scale: Scale): number {

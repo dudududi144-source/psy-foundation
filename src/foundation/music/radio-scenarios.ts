@@ -15,8 +15,8 @@
  * response can be asserted on without flakiness.
  */
 
-import type { RadioMusicalContext } from './radio-context'
-import { RADIO_ABSENT, createRadioContext } from './radio-context'
+import type { RadioMusicalContext } from './radio-context.ts'
+import { RADIO_ABSENT, createRadioContext } from './radio-context.ts'
 
 export interface RadioScenario {
   name: string

@@ -12,9 +12,9 @@
  * follows the arc.
  */
 
-import type { MusicalContext } from './musical-context'
-import { Rng } from './rng'
-import { getScale, scalePcs, stableDegrees } from './scales'
+import type { MusicalContext } from './musical-context.ts'
+import { Rng } from './rng.ts'
+import { getScale, scalePcs, stableDegrees } from './scales.ts'
 
 export type PhraseArcStage = 'START' | 'DEVELOPMENT' | 'DESTINATION' | 'CADENCE'
 

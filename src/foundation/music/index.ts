@@ -14,7 +14,7 @@ export {
   scaleNotes,
   scalePcs,
   stableDegrees,
-} from './scales'
+} from './scales.ts'
 
 // Chords
 export {
@@ -26,10 +26,10 @@ export {
   getChordType,
   listChordTypes,
   voiceChord,
-} from './chords'
+} from './chords.ts'
 
 // RNG
-export { Rng } from './rng'
+export { Rng } from './rng.ts'
 
 // Motif
 export {
@@ -43,7 +43,7 @@ export {
   retrograde,
   transpose,
   vary,
-} from './motif'
+} from './motif.ts'
 
 // Bass
 export {
@@ -55,7 +55,7 @@ export {
   sampleTension,
   tensionToDensity,
   tensionToOctave,
-} from './bass'
+} from './bass.ts'
 
 // Rhythm
 export {
@@ -72,14 +72,14 @@ export {
   psyKick,
   rhythm,
   swing,
-} from './rhythm'
+} from './rhythm.ts'
 
 // MusicalContext (v2 substrate)
 export {
   type MusicalContext,
   createMusicalContext,
   hasChord,
-} from './musical-context'
+} from './musical-context.ts'
 
 // Structural Motif (v2)
 export {
@@ -89,14 +89,14 @@ export {
   createMotif,
   motifIdentity,
   motifSimilarity,
-} from './motif-v2'
+} from './motif-v2.ts'
 
 // MotifMemory
 export {
   type IngestOptions,
   type MotifMemoryEntry,
   MotifMemory,
-} from './motif-memory'
+} from './motif-memory.ts'
 
 // Transformations
 export {
@@ -112,7 +112,7 @@ export {
   rhythmicStretch,
   shiftRegister,
   transpose as transposeMotifV2,
-} from './transformation'
+} from './transformation.ts'
 
 // PhrasePlanner
 export {
@@ -127,7 +127,7 @@ export {
   planPhrase,
   renderPhraseNotes,
   renderSectionNotes as renderPhraseSectionNotes,
-} from './phrase-planner'
+} from './phrase-planner.ts'
 
 // SectionPlanner
 export {
@@ -137,7 +137,7 @@ export {
   type SectionSlot,
   planSection,
   renderSectionNotes,
-} from './section-planner'
+} from './section-planner.ts'
 
 // Diversity metrics
 export {
@@ -147,7 +147,7 @@ export {
   MUSICALITY_BOUNDS,
   healthReport,
   measureMusicality,
-} from './diversity'
+} from './diversity.ts'
 
 // CandidateScorer
 export {
@@ -156,7 +156,7 @@ export {
   type CandidateScorerOptions,
   CandidateScorer,
   contextScalePcs,
-} from './candidate-scorer'
+} from './candidate-scorer.ts'
 
 // HarmonicClassifier (P4 coherence)
 export {
@@ -165,7 +165,7 @@ export {
   type NoteHarmonicFunction,
   HarmonicClassifier,
   pitchClassMembership,
-} from './harmonic-classifier'
+} from './harmonic-classifier.ts'
 
 // RhythmicIdentity (P4 coherence)
 export {
@@ -176,7 +176,7 @@ export {
   analyzeRhythm,
   rhythmSimilarity,
   transformRhythm,
-} from './rhythmic-identity'
+} from './rhythmic-identity.ts'
 
 // BassBehavior (P4 coherence)
 // Note: bass-behavior.ts exports its own BassNote type (with `function` field),
@@ -191,7 +191,7 @@ export {
   bassPitchClasses,
   evaluateBassQuality,
   generateBassBehavior,
-} from './bass-behavior'
+} from './bass-behavior.ts'
 
 // PhraseArc (P4 coherence)
 export {
@@ -203,7 +203,7 @@ export {
   arcStablePcs,
   buildPhraseArc,
   evaluatePhraseArc,
-} from './phrase-arc'
+} from './phrase-arc.ts'
 
 // MotifQualityGate (P4 coherence)
 export {
@@ -211,7 +211,7 @@ export {
   type MotifQualityGateOptions,
   type MotifQualityScore,
   MotifQualityGate,
-} from './motif-quality'
+} from './motif-quality.ts'
 
 // RepetitionPolicy (P4 coherence)
 export {
@@ -220,7 +220,7 @@ export {
   type RepetitionPolicyOptions,
   type RepetitionType,
   RepetitionPolicy,
-} from './repetition-policy'
+} from './repetition-policy.ts'
 
 // Coherence metrics (P4 coherence)
 export {
@@ -237,7 +237,7 @@ export {
   measurePhraseCoherence,
   measureRhythmicCoherence,
   measureStructuralCoherence,
-} from './coherence'
+} from './coherence.ts'
 
 // FailureDetector (P4 coherence)
 export {
@@ -246,7 +246,7 @@ export {
   type MusicalFailure,
   type MusicalFailureReport,
   MusicalFailureDetector,
-} from './failure-detector'
+} from './failure-detector.ts'
 
 // StyleGrammar (P5 composition engine)
 export {
@@ -259,7 +259,7 @@ export {
   applyStyleToContext,
   getStyleGrammar,
   listStyleNames,
-} from './style-grammar'
+} from './style-grammar.ts'
 
 // GroovePlan (P5 composition engine)
 export {
@@ -274,7 +274,7 @@ export {
   isFillBar,
   isKickStep,
   kickStepsForPattern,
-} from './groove-plan'
+} from './groove-plan.ts'
 
 // ArrangementState (P5 composition engine)
 export {
@@ -287,7 +287,7 @@ export {
   planArrangement,
   rolesForState,
   slotAtBar,
-} from './arrangement-state'
+} from './arrangement-state.ts'
 
 // CompositionEngine (P5 composition engine)
 export {
@@ -300,7 +300,7 @@ export {
   invertPitchPure,
   measureBassKickAlignment,
   retrogradePure,
-} from './composition-engine'
+} from './composition-engine.ts'
 
 // EnhancedFailureDetector (P5 composition engine)
 export {
@@ -311,7 +311,7 @@ export {
   type MusicalFailureType,
   detectMusicalFailures,
   failuresAtLevel,
-} from './enhanced-failure-detector'
+} from './enhanced-failure-detector.ts'
 
 // SimulationHarness (P5 composition engine)
 export {
@@ -321,7 +321,7 @@ export {
   compareAlignment,
   runSimulation,
   runSimulationSuite,
-} from './simulation-harness'
+} from './simulation-harness.ts'
 
 // RadioMusicalContext (P5.5 radio adaptation)
 export {
@@ -329,7 +329,7 @@ export {
   RADIO_ABSENT,
   createRadioContext,
   isRadioAbsent,
-} from './radio-context'
+} from './radio-context.ts'
 
 // OpportunityMap (P5.5 radio adaptation)
 export {
@@ -339,7 +339,7 @@ export {
   countOccupied,
   countOpen,
   isDense,
-} from './opportunity-map'
+} from './opportunity-map.ts'
 
 // CompositionAdaptation (P5.5 radio adaptation)
 export {
@@ -350,7 +350,7 @@ export {
   adaptationFitScore,
   applyAdaptation,
   bassCompetition,
-} from './composition-adaptation'
+} from './composition-adaptation.ts'
 
 // RadioScenarios (P5.5 radio adaptation)
 export {
@@ -359,7 +359,7 @@ export {
   RADIO_SCENARIOS,
   getRadioScenario,
   scenarioRadioSequence,
-} from './radio-scenarios'
+} from './radio-scenarios.ts'
 
 // AdaptationMetrics (P5.5 radio adaptation)
 export {
@@ -369,4 +369,195 @@ export {
   adaptationSweep,
   baseContextForStyle,
   measureDivergence,
-} from './adaptation-metrics'
+} from './adaptation-metrics.ts'
+
+// Contract version
+export { FOUNDATION_CONTRACT_VERSION } from './contract-version.ts'
+export type {
+  LearnedMusicalContext,
+  PhraseState,
+  TempoLearning,
+  HarmonyLearning,
+  RhythmLearning,
+  BassLearning,
+  MelodyLearning,
+  ArrangementLearning,
+  TimbreProfile,
+  LearningMeta,
+  FoundationCompositionInput,
+  FoundationCompositionOutput,
+} from './learned-context.ts'
+export { createEmptyLearnedContext, createEmptyPhraseState } from './learned-context.ts'
+export { MusicalLearningKernel } from './learning-kernel.ts'
+export type { MusicalObservation, PhraseEvaluation, RewardSignal } from './learning-kernel.ts'
+export type {
+  InteractionGrammar,
+  KickBassInteraction,
+  BassTransition,
+  HarmonyLeadInteraction,
+  EnergyDensityInteraction,
+  TensionRegisterInteraction,
+} from './interaction-grammar.ts'
+export { createEmptyInteractionGrammar, updateInteractionGrammar } from './interaction-grammar.ts'
+export type { DevelopmentOperator, DevelopmentDecision } from './phrase-development.ts'
+export { chooseDevelopment, applyDevelopment } from './phrase-development.ts'
+
+// F20: PhraseMaterial (real musical material + transformations)
+export {
+  type MaterialTransformContext,
+  type PhraseMaterial,
+  answerMaterial,
+  applyOperatorToMaterial,
+  breakMaterial,
+  continueMaterial,
+  contrastMaterial,
+  developMaterial,
+  emptyPhraseMaterial,
+  intensifyMaterial,
+  isMaterialRelated,
+  materialSimilarity,
+  motifToPhraseMaterial,
+  reduceMaterial,
+  resolveMaterial,
+  transitionMaterial,
+  variateMaterial,
+} from './phrase-material.ts'
+
+// F20: RhythmicSpaceMap
+export {
+  type BuildSpaceMapOptions,
+  type RhythmicSpaceCell,
+  type RhythmicSpaceMap,
+  buildRhythmicSpaceMap,
+  cellAt,
+  meanPreferredLead,
+  stepsByLeadPreference,
+  stepsByResponsePreference,
+} from './rhythmic-space-map.ts'
+export {
+  countOccupied as countSpaceOccupied,
+  countOpen as countSpaceOpen,
+} from './rhythmic-space-map.ts'
+
+// F20: HarmonicPlan
+export {
+  type CadenceTarget,
+  type CadenceTargetFunction,
+  type HarmonicChord,
+  type HarmonicFunction,
+  type HarmonicPlan,
+  buildHarmonicPlan,
+  cadenceMidi,
+  chordAtBar,
+  isAnticipationBar,
+  nextChordAfterBar,
+} from './harmonic-plan.ts'
+
+// F20: Voice plans
+export {
+  type BassPlan,
+  type BassPlanNote,
+  type KickPlan,
+  type LeadPlan,
+  type LeadPlanNote,
+  type LeadRole,
+  bassOnsetsOf,
+  emptyBassPlan,
+  emptyKickPlan,
+  emptyLeadPlan,
+  kickOnsetsOf,
+} from './voice-plans.ts'
+export type { BassFunction as VoiceBassFunction } from './voice-plans.ts'
+
+// F20: Interaction-grammar consumer (causal bridge)
+export {
+  bassOnsetProbability,
+  bassTransitionProbability,
+  densityForEnergy,
+  leadIntervalScore,
+  leadResponseBoost,
+  pickNextBassDegree,
+  registerForTension,
+} from './interaction-grammar-consumer.ts'
+
+// F21: PhraseMaterial shapes + PhraseArc
+export {
+  type AccentShape,
+  type ContourShape,
+  type DevelopmentHistoryEntry,
+  type PhraseArc as PhraseMaterialArc,
+  type PhraseArcStage as PhraseMaterialArcStage,
+  arcStageAt,
+  buildPhraseArc as buildPhraseMaterialArc,
+} from './phrase-material.ts'
+
+// F21: LearnedIdentity
+export {
+  type BassVocabulary,
+  type LearnedIdentity,
+  type LeadContourVocabulary,
+  createIdentityA,
+  createIdentityB,
+  createNeutralIdentity,
+} from './learned-identity.ts'
+
+// F21: Bass vocabulary (generation-behavior modes)
+export {
+  type BassVocabularyContext,
+  acidBass,
+  generateBassByVocabulary,
+  melodicBass,
+  rollingBass,
+  sparseBass,
+  syncopatedBass,
+  tensionBass,
+} from './bass-vocabulary.ts'
+
+// F21: Tension dimensions
+export {
+  type TensionDimensions,
+  applyDensityTension,
+  applyHarmonicTension,
+  applyMelodicTension,
+  applyRegisterTension,
+  applyRhythmicTension,
+  applySpectralTension,
+  deriveTensionDimensions,
+  shouldSurprise,
+} from './tension-dimensions.ts'
+
+// F21: SoundDNA → SynthRecipe
+export {
+  type EnvelopeConfig,
+  type FilterConfig,
+  type FilterTopology,
+  type LfoConfig,
+  type LfoTarget,
+  type OscillatorLayer,
+  type OscillatorType,
+  type SaturationConfig,
+  type SaturationType,
+  type SoundDNA,
+  type StereoConfig,
+  type SynthRecipe,
+  isMateriallyDifferentArchitecture,
+  recipeDivergence,
+  renderSynthRecipe,
+  timbreToSoundDNA,
+} from './sound-dna.ts'
+
+// F22: RawScore Serializer (EXPERIMENTAL — Vertical Proof Freeze)
+// Read-only serializer that extracts REQUIRED musical fields from the existing
+// ComposedSection. Does NOT modify CompositionEngine. Does NOT add fields.
+// Does NOT delete DEAD fields. Only serializes what the Freeze Instruction
+// specifies for the PSY4 Vertical Proof.
+export {
+  type RawArrangement,
+  type RawBar,
+  type RawGroove,
+  type RawPhrase,
+  type RawPhraseMaterial,
+  type RawScore,
+  serializeRawScore,
+  serializeRawScoreJSON,
+} from './raw-score-serializer.ts'

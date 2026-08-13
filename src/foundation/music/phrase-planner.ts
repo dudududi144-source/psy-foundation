@@ -11,12 +11,12 @@
  * turn a plan into actual MIDI events.
  */
 
-import type { MotifMemory } from './motif-memory'
-import { type Motif, type MotifNote, createMotif } from './motif-v2'
-import { generateMotif as generateLegacyMotif } from './motif'
-import type { MusicalContext } from './musical-context'
-import { Rng } from './rng'
-import { type Scale, degreeToMidi, getScale, stableDegrees } from './scales'
+import type { MotifMemory } from './motif-memory.ts'
+import { type Motif, type MotifNote, createMotif } from './motif-v2.ts'
+import { generateMotif as generateLegacyMotif } from './motif.ts'
+import type { MusicalContext } from './musical-context.ts'
+import { Rng } from './rng.ts'
+import { type Scale, degreeToMidi, getScale, stableDegrees } from './scales.ts'
 import {
   callResponse,
   contourMutation,
@@ -26,7 +26,7 @@ import {
   rhythmicDisplacement,
   shiftRegister,
   transpose,
-} from './transformation'
+} from './transformation.ts'
 
 export type PhraseRole =
   | 'INTRO'

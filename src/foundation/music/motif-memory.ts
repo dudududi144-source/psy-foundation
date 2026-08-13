@@ -6,7 +6,7 @@
  * memory to decide what to repeat, what to transform, and what to avoid.
  */
 
-import { type Motif, motifSimilarity } from './motif-v2'
+import { type Motif, motifSimilarity } from './motif-v2.ts'
 
 export interface MotifMemoryEntry {
   motif: Motif

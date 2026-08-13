@@ -9,11 +9,11 @@
  * reason for the choice.
  */
 
-import type { MotifMemory } from './motif-memory'
-import { type Motif, motifSimilarity } from './motif-v2'
-import type { MusicalContext } from './musical-context'
-import type { PhraseSlot } from './phrase-planner'
-import { type Scale, getScale, isInScale, scalePcs } from './scales'
+import type { MotifMemory } from './motif-memory.ts'
+import { type Motif, motifSimilarity } from './motif-v2.ts'
+import type { MusicalContext } from './musical-context.ts'
+import type { PhraseSlot } from './phrase-planner.ts'
+import { type Scale, getScale, isInScale, scalePcs } from './scales.ts'
 
 export interface CandidateScoreBreakdown {
   /** 0..1 — scale compatibility. */

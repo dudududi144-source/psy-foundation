@@ -12,8 +12,8 @@
  * high (the soundscape is already busy) and OPEN otherwise.
  */
 
-import type { RadioMusicalContext } from './radio-context'
-import { isRadioAbsent } from './radio-context'
+import type { RadioMusicalContext } from './radio-context.ts'
+import { isRadioAbsent } from './radio-context.ts'
 
 export type RoleStatus = 'OCCUPIED' | 'OPEN' | 'MEDIUM'
 

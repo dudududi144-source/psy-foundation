@@ -10,12 +10,12 @@
  * categories into an overall score.
  */
 
-import { HarmonicClassifier } from './harmonic-classifier'
-import { type Motif, motifSimilarity } from './motif-v2'
-import type { MusicalContext } from './musical-context'
-import type { PhrasePlan } from './phrase-planner'
-import { type Scale, getScale, scalePcs, stableDegrees } from './scales'
-import type { SectionPlan } from './section-planner'
+import { HarmonicClassifier } from './harmonic-classifier.ts'
+import { type Motif, motifSimilarity } from './motif-v2.ts'
+import type { MusicalContext } from './musical-context.ts'
+import type { PhrasePlan } from './phrase-planner.ts'
+import { type Scale, getScale, scalePcs, stableDegrees } from './scales.ts'
+import type { SectionPlan } from './section-planner.ts'
 
 // ---------------- interfaces ----------------
 

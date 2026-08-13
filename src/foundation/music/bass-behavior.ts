@@ -12,9 +12,9 @@
  *   - last bar: CADENCE — root → fifth → root to land the phrase
  */
 
-import type { MusicalContext } from './musical-context'
-import { Rng } from './rng'
-import { degreeToMidi, getScale, scalePcs, stableDegrees } from './scales'
+import type { MusicalContext } from './musical-context.ts'
+import { Rng } from './rng.ts'
+import { degreeToMidi, getScale, scalePcs, stableDegrees } from './scales.ts'
 
 export type BassFunction =
   | 'ROOT'

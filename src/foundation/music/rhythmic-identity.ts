@@ -11,7 +11,7 @@
  * hashes to the same string.
  */
 
-import { Rng } from './rng'
+import { Rng } from './rng.ts'
 
 export interface RhythmicIdentity {
   /** Primary subdivision: 1=quarter, 2=eighth, 4=sixteenth, 3=triplet. */

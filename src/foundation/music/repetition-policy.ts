@@ -12,9 +12,9 @@
  * sequence of decisions is healthy.
  */
 
-import type { MotifMemory } from './motif-memory'
-import { Rng } from './rng'
-import type { SectionPlan, SectionRole } from './section-planner'
+import type { MotifMemory } from './motif-memory.ts'
+import { Rng } from './rng.ts'
+import type { SectionPlan, SectionRole } from './section-planner.ts'
 
 export type RepetitionType =
   | 'EXACT_REPEAT'

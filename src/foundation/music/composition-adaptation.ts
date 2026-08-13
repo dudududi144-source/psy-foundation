@@ -47,11 +47,11 @@
  *       outcome gets reduced pressure on the next call.
  */
 
-import type { ComposedBar } from './composition-engine'
-import type { MusicalContext } from './musical-context'
-import { type OpportunityMap, buildOpportunityMap, isDense } from './opportunity-map'
-import type { RadioMusicalContext } from './radio-context'
-import { isRadioAbsent } from './radio-context'
+import type { ComposedBar } from './composition-engine.ts'
+import type { MusicalContext } from './musical-context.ts'
+import { type OpportunityMap, buildOpportunityMap, isDense } from './opportunity-map.ts'
+import type { RadioMusicalContext } from './radio-context.ts'
+import { isRadioAbsent } from './radio-context.ts'
 
 export interface AdaptedCompositionIntent {
   // ----- Pressures (0..1 — how much to emphasise each role) -----

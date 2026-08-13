@@ -17,7 +17,7 @@
  * them.
  */
 
-import type { MusicalContext } from './musical-context'
+import type { MusicalContext } from './musical-context.ts'
 
 export type KickPatternKind = 'FOUR_ON_FLOOR' | 'PSY_KICK' | 'BROKEN' | 'SPARSE'
 export type BassAlignment = 'LOCKED' | 'COMPLEMENTARY'

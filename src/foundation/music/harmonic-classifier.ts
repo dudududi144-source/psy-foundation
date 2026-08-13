@@ -15,7 +15,7 @@
  * answers "does this note belong, and how?" against a static tonal frame.
  */
 
-import { type Scale, getScale, scalePcs, stableDegrees } from './scales'
+import { type Scale, getScale, scalePcs, stableDegrees } from './scales.ts'
 
 export type NoteHarmonicFunction =
   | 'CHORD_TONE'

@@ -13,14 +13,14 @@
  * be diffed against a baseline or asserted on in tests.
  */
 
-import type { ArrangementPlan, ArrangementState } from './arrangement-state'
-import { CompositionEngine } from './composition-engine'
-import { type EnhancedMusicalFailure, detectMusicalFailures } from './enhanced-failure-detector'
-import type { GroovePlan } from './groove-plan'
-import { HarmonicClassifier } from './harmonic-classifier'
-import type { MusicalContext } from './musical-context'
-import { getScale, scalePcs } from './scales'
-import { STYLE_GRAMMARS, applyStyleToContext, getStyleGrammar } from './style-grammar'
+import type { ArrangementPlan, ArrangementState } from './arrangement-state.ts'
+import { CompositionEngine } from './composition-engine.ts'
+import { type EnhancedMusicalFailure, detectMusicalFailures } from './enhanced-failure-detector.ts'
+import type { GroovePlan } from './groove-plan.ts'
+import { HarmonicClassifier } from './harmonic-classifier.ts'
+import type { MusicalContext } from './musical-context.ts'
+import { getScale, scalePcs } from './scales.ts'
+import { STYLE_GRAMMARS, applyStyleToContext, getStyleGrammar } from './style-grammar.ts'
 
 export interface MusicalFailure {
   type: string

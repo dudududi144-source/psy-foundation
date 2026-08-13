@@ -8,9 +8,9 @@
  * in the substrate.
  */
 
-import type { BassNote } from './bass-behavior'
-import type { CoherenceReport } from './coherence'
-import type { MusicalityMetrics } from './diversity'
+import type { BassNote } from './bass-behavior.ts'
+import type { CoherenceReport } from './coherence.ts'
+import type { MusicalityMetrics } from './diversity.ts'
 
 export type FailureLevel = 'OK' | 'WARNING' | 'FAIL'
 

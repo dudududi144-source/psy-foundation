@@ -4,7 +4,7 @@
  * offsets (in steps, fractional).
  */
 
-import { Rng } from './rng'
+import { Rng } from './rng.ts'
 
 export interface RhythmPattern {
   hits: boolean[]
