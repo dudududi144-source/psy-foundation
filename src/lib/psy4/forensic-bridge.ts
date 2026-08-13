@@ -233,24 +233,31 @@ export async function renderFoundationSection(
   const leadVoices = [new LeadVoice(rng), new LeadVoice(rng), new LeadVoice(rng), new LeadVoice(rng)]
   const hatVoices = [new HatVoice(rng), new HatVoice(rng), new HatVoice(rng), new HatVoice(rng)]
 
-  // Sample voices (optional)
+  // Sample voices (optional) — load via fs for Node/Bun compatibility
   let kickSample: SampleVoice | null = null
   let hatSample: SampleVoice | null = null
   if (options.useSamples) {
     try {
-      const kickResponse = await fetch('file:///home/z/my-project/public/samples/real/909_BD_02.wav')
-      const kickBuffer = await kickResponse.arrayBuffer()
-      const kickData = decodeWav(kickBuffer)
+      const fs = await import('fs/promises')
+      const path = await import('path')
+
+      const samplesDir = path.join(process.cwd(), 'public', 'samples', 'real')
+
+      // Load a 909 kick
+      const kickPath = path.join(samplesDir, '909_BD_02.wav')
+      const kickBuffer = await fs.readFile(kickPath)
+      const kickData = decodeWav(kickBuffer.buffer.slice(kickBuffer.byteOffset, kickBuffer.byteOffset + kickBuffer.byteLength))
       kickSample = new SampleVoice()
       kickSample.setData(kickData.data, kickData.sampleRate)
 
-      const hatResponse = await fetch('file:///home/z/my-project/public/samples/real/md_hat_Hats_0000.wav')
-      const hatBuffer = await hatResponse.arrayBuffer()
-      const hatData = decodeWav(hatBuffer)
+      // Load a Machinedrum hat
+      const hatPath = path.join(samplesDir, 'md_hat_Hats_0008.wav')
+      const hatBuffer = await fs.readFile(hatPath)
+      const hatData = decodeWav(hatBuffer.buffer.slice(hatBuffer.byteOffset, hatBuffer.byteOffset + hatBuffer.byteLength))
       hatSample = new SampleVoice()
       hatSample.setData(hatData.data, hatData.sampleRate)
-    } catch {
-      // Samples not available — fall back to synth
+    } catch (e) {
+      console.warn('Samples not available, falling back to synth:', (e as Error).message)
     }
   }
 
