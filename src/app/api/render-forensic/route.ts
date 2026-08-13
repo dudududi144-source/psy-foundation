@@ -32,7 +32,13 @@ export async function GET(req: NextRequest) {
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
 
-  const result = await renderFoundationSection(section, { useSamples, bpm: 145 })
+  let result
+  try {
+    result = await renderFoundationSection(section, { useSamples, bpm: 145 })
+  } catch (e) {
+    console.error('Render failed, retrying without samples:', (e as Error).message)
+    result = await renderFoundationSection(section, { useSamples: false, bpm: 145 })
+  }
 
   const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
 

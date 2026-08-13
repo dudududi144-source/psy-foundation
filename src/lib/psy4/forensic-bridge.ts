@@ -176,25 +176,45 @@ function decodeWav(buffer: ArrayBuffer): { data: Float32Array; sampleRate: numbe
   const view = new DataView(buffer)
   // RIFF header
   if (view.getUint32(0, false) !== 0x52494646) throw new Error('Not WAV')
+
+  // Find the 'data' chunk — it may not be at offset 44
+  let dataOffset = 44
+  let dataSize = 0
+  let offset = 12 // after RIFF header
+  while (offset < buffer.byteLength - 8) {
+    const chunkId = view.getUint32(offset, false)
+    const chunkSize = view.getUint32(offset + 4, true)
+    if (chunkId === 0x64617461) { // 'data'
+      dataOffset = offset + 8
+      dataSize = chunkSize
+      break
+    }
+    offset += 8 + chunkSize + (chunkSize % 2) // chunks are padded to even
+  }
+  if (dataSize === 0) throw new Error('No data chunk found')
+
   const sampleRate = view.getUint32(24, true)
   const numChannels = view.getUint16(22, true)
   const bitsPerSample = view.getUint16(34, true)
-  const dataOffset = 44 // standard WAV header
-  const dataSize = view.getUint32(40, true)
-  const samples = dataSize / (bitsPerSample / 8) / numChannels
+  const bytesPerSample = bitsPerSample / 8
+  const samples = Math.floor(dataSize / (bytesPerSample * numChannels))
   const output = new Float32Array(samples)
+
   for (let i = 0; i < samples; i++) {
     let sum = 0
     for (let ch = 0; ch < numChannels; ch++) {
-      const offset = dataOffset + (i * numChannels + ch) * (bitsPerSample / 8)
+      const sampleOffset = dataOffset + (i * numChannels + ch) * bytesPerSample
+      if (sampleOffset + bytesPerSample > buffer.byteLength) break
       if (bitsPerSample === 16) {
-        sum += (view.getInt16(offset, true) ?? 0) / 32768
+        sum += view.getInt16(sampleOffset, true) / 32768
       } else if (bitsPerSample === 24) {
-        const b0 = view.getUint8(offset) ?? 0
-        const b1 = view.getUint8(offset + 1) ?? 0
-        const b2 = view.getUint8(offset + 2) ?? 0
-        const val = (b2 << 16) | (b1 << 8) | b0
-        sum += ((val << 8) >> 8) / 8388608
+        const b0 = view.getUint8(sampleOffset) ?? 0
+        const b1 = view.getUint8(sampleOffset + 1) ?? 0
+        const b2 = view.getUint8(sampleOffset + 2) ?? 0
+        let val = (b2 << 16) | (b1 << 8) | b0
+        // Sign extend from 24-bit
+        if (val & 0x800000) val |= 0xff000000
+        sum += val / 8388608
       }
     }
     output[i] = sum / numChannels
