@@ -18,19 +18,20 @@ import { Rng } from './prng';
 // ─── Fast tanh via lookup table ────────────────────────────────────────────
 
 const TANH_TABLE_SIZE = 2048;
+const TANH_RANGE = 3; // cover -3..3 (tanh(3) ≈ 0.995, close enough to 1)
 const tanhTable = new Float32Array(TANH_TABLE_SIZE + 1);
 for (let i = 0; i <= TANH_TABLE_SIZE; i++) {
-  const x = (i / TANH_TABLE_SIZE) * 2 - 1; // -1..1
+  const x = (i / TANH_TABLE_SIZE) * 2 * TANH_RANGE - TANH_RANGE; // -3..3
   tanhTable[i] = Math.tanh(x);
 }
 
 export function fastTanh(x: number): number {
-  if (x >= 1) return 1;
-  if (x <= -1) return -1;
-  const idx = (x + 1) * 0.5 * TANH_TABLE_SIZE;
+  if (x >= TANH_RANGE) return 1;
+  if (x <= -TANH_RANGE) return -1;
+  const idx = (x + TANH_RANGE) / (2 * TANH_RANGE) * TANH_TABLE_SIZE;
   const i0 = idx | 0;
   const f = idx - i0;
-  return tanhTable[i0] * (1 - f) + tanhTable[i0 + 1] * f;
+  return tanhTable[i0]! * (1 - f) + tanhTable[i0 + 1]! * f;
 }
 
 // ─── polyBLEP ──────────────────────────────────────────────────────────────
