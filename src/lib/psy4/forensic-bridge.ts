@@ -131,8 +131,8 @@ export async function renderFoundationSection(
   const drumR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 0.9 })
   const bassL = new BusProcessor({ hpFreq: 90, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
   const bassR = new BusProcessor({ hpFreq: 90, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
-  const musicL = new BusProcessor({ hpFreq: 150, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 1.0 })
-  const musicR = new BusProcessor({ hpFreq: 150, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 1.0 })
+  const musicL = new BusProcessor({ hpFreq: 200, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 1.0 })
+  const musicR = new BusProcessor({ hpFreq: 200, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 1.0 })
 
   const masterL = new MasterChain()
   const masterR = new MasterChain()
