@@ -149,6 +149,7 @@ export async function renderFoundationSection(
   for (const bar of renderBars) {
     const barStart = (barRemap.get(bar.barIndex) ?? 0) * samplesPerBar
     const accent = rawScore.groove.accent
+    const barIdx = barRemap.get(bar.barIndex) ?? 0
 
     // Four-on-the-floor kick
     for (const step of [0, 4, 8, 12]) {
@@ -156,32 +157,73 @@ export async function renderFoundationSection(
       events.push({ pos: barStart + step * samplesPerStep, type: 'kick', vel: 0.8 + a * 0.2, dur: samplesPerStep })
     }
 
-    // Rolling 16th bass
+    // Rolling 16th bass — with variation per bar
     const rootMidi = bar.bassNotes[0]?.midi ?? 40
     const fifthMidi = bar.bassNotes[2]?.midi ?? rootMidi
+    const thirdMidi = bar.bassNotes[4]?.midi ?? rootMidi
+    // Alternate bass patterns per bar for variation
+    const pattern = barIdx % 4
     for (let step = 0; step < 16; step++) {
       const a = accent[step % accent.length] ?? 0.5
-      const midi = step % 4 === 0 ? rootMidi : step % 8 === 4 ? fifthMidi : rootMidi
-      events.push({ pos: barStart + step * samplesPerStep, type: 'bass', midi, vel: 0.4 + a * 0.3, dur: Math.floor(samplesPerStep * 0.85) })
+      let midi = rootMidi
+      if (pattern === 0) {
+        // Pattern A: root-fifth-root-fifth
+        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : rootMidi
+      } else if (pattern === 1) {
+        // Pattern B: root-root-fifth-root
+        midi = (step % 4 === 2) ? fifthMidi : rootMidi
+      } else if (pattern === 2) {
+        // Pattern C: root-third-fifth-third
+        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 1) ? thirdMidi : (step % 4 === 2) ? fifthMidi : thirdMidi
+      } else {
+        // Pattern D: root-fifth-root-octave
+        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : (step % 4 === 3) ? rootMidi + 12 : rootMidi
+      }
+      const vel = step % 4 === 0 ? 0.6 + a * 0.2 : 0.35 + a * 0.2
+      events.push({ pos: barStart + step * samplesPerStep, type: 'bass', midi, vel, dur: Math.floor(samplesPerStep * 0.85) })
     }
 
-    // Lead
-    for (const n of bar.leadNotes) {
-      events.push({ pos: barStart + n.step * samplesPerStep, type: 'lead', midi: n.midi, vel: n.velocity, dur: n.durationSteps * samplesPerStep })
+    // Lead — use Foundation's lead notes + add fills on empty steps
+    if (bar.leadNotes.length > 0) {
+      for (const n of bar.leadNotes) {
+        events.push({ pos: barStart + n.step * samplesPerStep, type: 'lead', midi: n.midi, vel: n.velocity, dur: n.durationSteps * samplesPerStep })
+      }
+      // Add lead fills on steps where there's no lead
+      const leadSteps = new Set(bar.leadNotes.map(n => n.step))
+      const fillSteps = [3, 7, 11, 15]
+      for (const fs of fillSteps) {
+        if (!leadSteps.has(fs)) {
+          // Echo the last lead note a third higher
+          const lastLead = bar.leadNotes[bar.leadNotes.length - 1]
+          if (lastLead) {
+            events.push({ pos: barStart + fs * samplesPerStep, type: 'lead', midi: lastLead.midi + 4, vel: 0.4, dur: samplesPerStep })
+          }
+        }
+      }
+    } else if (barIdx >= 2) {
+      // No lead from Foundation — generate a simple motif
+      const motifNotes = [64, 67, 71, 67] // E4 G4 B4 G4
+      for (let i = 0; i < motifNotes.length; i++) {
+        const step = i * 2
+        events.push({ pos: barStart + step * samplesPerStep, type: 'lead', midi: motifNotes[i]!, vel: 0.5, dur: samplesPerStep })
+      }
     }
 
-    // Hats on offbeats
+    // Hats on offbeats — velocity variation
     for (const step of [2, 6, 10, 14]) {
-      events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel: 0.5, dur: samplesPerStep })
+      const isStrong = step % 8 === 6
+      events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel: isStrong ? 0.6 : 0.4, dur: samplesPerStep })
     }
 
     // Claps on 2 & 4
-    events.push({ pos: barStart + 4 * samplesPerStep, type: 'clap', vel: 0.4, dur: samplesPerStep })
-    events.push({ pos: barStart + 12 * samplesPerStep, type: 'clap', vel: 0.4, dur: samplesPerStep })
+    events.push({ pos: barStart + 4 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
+    events.push({ pos: barStart + 12 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
 
-    // Ghost perc
-    events.push({ pos: barStart + 7 * samplesPerStep, type: 'perc', vel: 0.2, dur: samplesPerStep })
-    events.push({ pos: barStart + 15 * samplesPerStep, type: 'perc', vel: 0.2, dur: samplesPerStep })
+    // Ghost perc — variation per bar
+    const percSteps = pattern === 0 ? [7, 15] : pattern === 1 ? [5, 13] : pattern === 2 ? [3, 11] : [7, 11, 15]
+    for (const ps of percSteps) {
+      events.push({ pos: barStart + ps * samplesPerStep, type: 'perc', vel: 0.2, dur: samplesPerStep })
+    }
   }
 
   events.sort((a, b) => a.pos - b.pos)
