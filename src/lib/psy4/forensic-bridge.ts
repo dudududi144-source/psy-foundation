@@ -282,10 +282,11 @@ export async function renderFoundationSection(
   }
 
   // Bus processors (separate L/R for stereo)
+  // Psytrance mix: 90Hz hard split — kick owns 30-90Hz, bass owns 90-250Hz
   const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.4, drive: 1.4, gain: 0.85 })
   const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.4, drive: 1.4, gain: 0.85 })
-  const bassBusL = new BusProcessor({ hpFreq: 40, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.12, compMakeup: 1.2, drive: 1.2, gain: 1.0 })
-  const bassBusR = new BusProcessor({ hpFreq: 40, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.12, compMakeup: 1.2, drive: 1.2, gain: 1.0 })
+  const bassBusL = new BusProcessor({ hpFreq: 90, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.12, compMakeup: 1.2, drive: 1.2, gain: 1.0 })
+  const bassBusR = new BusProcessor({ hpFreq: 90, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.12, compMakeup: 1.2, drive: 1.2, gain: 1.0 })
   const musicBusL = new BusProcessor({ hpFreq: 80, compThr: 0.45, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.1, drive: 1.15, gain: 1.0 })
   const musicBusR = new BusProcessor({ hpFreq: 80, compThr: 0.45, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.1, drive: 1.15, gain: 1.0 })
 
@@ -302,9 +303,10 @@ export async function renderFoundationSection(
   // Sidechain state
   let duckEnv = 1.0
 
-  // Lead params
-  const leadParams: LeadParams = { cutoff: 2000, detune: 10, resonance: 3, lfoRate: 0.8, lfoDepth: 0.3 }
-  const bassParams: BassParams = { cutoffStart: 800, cutoffEnd: 200, resonance: 3 }
+  // Lead params — higher cutoff for brightness, more resonance for acid character
+  const leadParams: LeadParams = { cutoff: 3500, detune: 12, resonance: 5, lfoRate: 0.8, lfoDepth: 0.3 }
+  // Bass params — lower cutoff for darker, tighter bass (avoids mud)
+  const bassParams: BassParams = { cutoffStart: 500, cutoffEnd: 150, resonance: 3 }
 
   // Event collection
   let eventCount = 0
@@ -363,7 +365,7 @@ export async function renderFoundationSection(
           kickSample.trigger(ev.velocity)
         } else {
           const v = kickVoices[kickIdx % kickVoices.length]!
-          v.trigger(i / SR, ev.velocity, 50, 0.15, SR)
+          v.trigger(i / SR, ev.velocity, 48, 0.12, SR)
           kickIdx++
         }
       } else if (ev.type === 'bass' && ev.midi !== undefined) {
@@ -438,11 +440,11 @@ export async function renderFoundationSection(
     musicL += leadSignal
     musicR += haasBuffer[(i + 1) % haasDelay] ?? 0
 
-    // Hats
+    // Hats — higher gain for high-end presence
     if (hatSample && hatSample.active) {
       const [s] = hatSample.render()
-      drumL += s * 0.5
-      drumR += s * 0.5
+      drumL += s * 0.8
+      drumR += s * 0.8
     } else {
       for (const v of hatVoices) {
         if (v.active) {
@@ -461,8 +463,8 @@ export async function renderFoundationSection(
     musicL = musicBusL.process(musicL, SR)
     musicR = musicBusR.process(musicR, SR)
 
-    // Reverb sends (stereo return)
-    const reverbIn = musicL * 0.35 + drumL * 0.05
+    // Reverb sends (stereo return) — more reverb on music bus for high-end air
+    const reverbIn = musicL * 0.45 + drumL * 0.08
     const [revL, revR] = reverb.process(reverbIn, SR)
 
     // Delay sends (stereo return)
