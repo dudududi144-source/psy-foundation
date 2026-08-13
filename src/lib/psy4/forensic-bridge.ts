@@ -256,6 +256,8 @@ export async function renderFoundationSection(
   // Sample voices (optional) — load via fs for Node/Bun compatibility
   let kickSample: SampleVoice | null = null
   let hatSample: SampleVoice | null = null
+  let clapSample: SampleVoice | null = null
+  let percSample: SampleVoice | null = null
   if (options.useSamples) {
     try {
       const fs = await import('fs/promises')
@@ -276,6 +278,26 @@ export async function renderFoundationSection(
       const hatData = decodeWav(hatBuffer.buffer.slice(hatBuffer.byteOffset, hatBuffer.byteOffset + hatBuffer.byteLength))
       hatSample = new SampleVoice()
       hatSample.setData(hatData.data, hatData.sampleRate)
+
+      // Load a Machinedrum clap for rhythmic variation
+      const clapFiles = (await fs.readdir(samplesDir)).filter((f: string) => f.includes('md_clap'))
+      if (clapFiles.length > 0) {
+        const clapPath = path.join(samplesDir, clapFiles[0]!)
+        const clapBuffer = await fs.readFile(clapPath)
+        const clapData = decodeWav(clapBuffer.buffer.slice(clapBuffer.byteOffset, clapBuffer.byteOffset + clapBuffer.byteLength))
+        clapSample = new SampleVoice()
+        clapSample.setData(clapData.data, clapData.sampleRate)
+      }
+
+      // Load a Machinedrum perc for ghost notes
+      const percFiles = (await fs.readdir(samplesDir)).filter((f: string) => f.includes('md_perc'))
+      if (percFiles.length > 0) {
+        const percPath = path.join(samplesDir, percFiles[0]!)
+        const percBuffer = await fs.readFile(percPath)
+        const percData = decodeWav(percBuffer.buffer.slice(percBuffer.byteOffset, percBuffer.byteOffset + percBuffer.byteLength))
+        percSample = new SampleVoice()
+        percSample.setData(percData.data, percData.sampleRate)
+      }
     } catch (e) {
       console.warn('Samples not available, falling back to synth:', (e as Error).message)
     }
@@ -314,7 +336,7 @@ export async function renderFoundationSection(
   // Schedule all events
   interface ScheduledEvent {
     samplePos: number
-    type: 'kick' | 'bass' | 'lead' | 'hat'
+    type: 'kick' | 'bass' | 'lead' | 'hat' | 'clap' | 'perc'
     midi?: number
     velocity: number
     durationSteps: number
@@ -324,26 +346,40 @@ export async function renderFoundationSection(
 
   for (const bar of rawScore.bars) {
     const barStart = bar.barIndex * samplesPerBar
-    // Accent grid: downbeats get full velocity, offbeats get less
+    // Skip INTRO bars — start from GROOVE for immediate musical impact
+    if (bar.arrangementState === 'INTRO' && rawScore.bars.length <= 4) continue
     const accentGrid = rawScore.groove.accent
     for (const step of bar.kickNotes) {
       const accent = accentGrid[step % accentGrid.length] ?? 0.5
-      const velocity = 0.7 + accent * 0.3 // 0.7-1.0 based on accent
+      const velocity = 0.7 + accent * 0.3
       events.push({ samplePos: barStart + step * samplesPerStep, type: 'kick', velocity, durationSteps: 1, durationSamples: samplesPerStep })
     }
     for (const note of bar.bassNotes) {
       const accent = accentGrid[note.step % accentGrid.length] ?? 0.5
-      const velocity = 0.5 + accent * 0.3 // 0.5-0.8 based on accent
+      const velocity = 0.5 + accent * 0.3
       events.push({ samplePos: barStart + note.step * samplesPerStep, type: 'bass', midi: note.midi, velocity, durationSteps: note.durationSteps, durationSamples: note.durationSteps * samplesPerStep })
     }
     for (const note of bar.leadNotes) {
       events.push({ samplePos: barStart + note.step * samplesPerStep, type: 'lead', midi: note.midi, velocity: note.velocity, durationSteps: note.durationSteps, durationSamples: note.durationSteps * samplesPerStep })
     }
     for (const step of bar.hatNotes) {
-      // Alternate offbeat hats: louder on offbeats, ghost on downbeats
       const isOffbeat = step % 4 === 2
       const velocity = isOffbeat ? 0.6 : 0.35
       events.push({ samplePos: barStart + step * samplesPerStep, type: 'hat', velocity, durationSteps: 1, durationSamples: samplesPerStep })
+    }
+    // Add claps on beats 2 and 4 (steps 4 and 12) for rhythmic variation
+    if (bar.roles.kick && bar.roles.bass) {
+      events.push({ samplePos: barStart + 4 * samplesPerStep, type: 'clap', velocity: 0.5, durationSteps: 1, durationSamples: samplesPerStep })
+      events.push({ samplePos: barStart + 12 * samplesPerStep, type: 'clap', velocity: 0.5, durationSteps: 1, durationSamples: samplesPerStep })
+    }
+    // Add ghost perc on offbeats for rhythmic interest
+    if (bar.roles.hats && bar.roles.kick) {
+      const ghostSteps = [6, 14]
+      for (const gs of ghostSteps) {
+        if (!bar.hatNotes.includes(gs)) {
+          events.push({ samplePos: barStart + gs * samplesPerStep, type: 'perc', velocity: 0.2, durationSteps: 1, durationSamples: samplesPerStep })
+        }
+      }
     }
   }
 
@@ -399,6 +435,10 @@ export async function renderFoundationSection(
           v.trigger(i / SR, false, ev.velocity, SR)
           hatIdx++
         }
+      } else if (ev.type === 'clap') {
+        if (clapSample) clapSample.trigger(ev.velocity)
+      } else if (ev.type === 'perc') {
+        if (percSample) percSample.trigger(ev.velocity)
       }
       eventIdx++
     }
@@ -462,6 +502,20 @@ export async function renderFoundationSection(
           drumR += s * 0.5
         }
       }
+    }
+
+    // Clap — on beats 2 and 4
+    if (clapSample && clapSample.active) {
+      const [s] = clapSample.render()
+      drumL += s * 0.4
+      drumR += s * 0.4
+    }
+
+    // Ghost perc — low velocity offbeat
+    if (percSample && percSample.active) {
+      const [s] = percSample.render()
+      drumL += s * 0.2
+      drumR += s * 0.2
     }
 
     // Process buses
