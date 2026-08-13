@@ -1,0 +1,907 @@
+     1→/**
+     2→ * PhraseMaterial — the real musical material of a phrase, and the
+     3→ * transformations that turn P(n) into P(n+1).
+     4→ *
+     5→ * F20 requirement: phrase development must transform ACTUAL musical material
+     6→ * (pitch contour, interval sequence, rhythm pattern), not just parameter
+     7→ * deltas. Each operator below produces a new PhraseMaterial that is
+     8→ * recognizably derived from the source — motifId lineage is preserved so the
+     9→ * transformation chain is auditable, and `materialSimilarity` lets callers
+    10→ * prove the transformed phrase is still related to the original.
+    11→ *
+    12→ * The 10 operators (CONTINUE / DEVELOP / ANSWER / CONTRAST / VARIATE /
+    13→ * INTENSIFY / REDUCE / BREAK / RESOLVE / TRANSITION) are dispatched by
+    14→ * `applyOperatorToMaterial`. At minimum DEVELOP / VARIATE / ANSWER / RESOLVE
+    15→ * transform real note material (intervals, contour, rhythm, register) rather
+    16→ * than parameters.
+    17→ */
+    18→
+    19→import type { Motif } from './motif-v2.ts'
+    20→import type { DevelopmentOperator } from './phrase-development.ts'
+    21→import { type Scale, degreeToMidi, getScale, isInScale, scalePcs } from './scales.ts'
+    22→
+    23→/**
+    24→ * A phrase's musical material. This is NOT a parameter bag — every field is a
+    25→ * direct rendering of the notes that will (or did) play.
+    26→ *
+    27→ * F21 enrichment: added shape fields (rhythmicCell, intervalCell, contour,
+    28→ * accentShape, densityShape, registerShape, harmonicTargetShape,
+    29→ * cadenceTarget, phraseArc, developmentHistory) so the material carries
+    30→ * intentional internal structure, not just a flat note list. The phrase has
+    31→ * a trajectory (OPEN → ESTABLISH → DEVELOP → FOCAL → RELEASE → CADENCE).
+    32→ */
+    33→export interface PhraseMaterial {
+    34→  /** Lineage id. Preserved across transformations so P(n+1) can be traced to P(n). */
+    35→  motifId: string
+    36→  /** Absolute MIDI per note onset. */
+    37→  pitchContour: number[]
+    38→  /** Signed semitone delta between consecutive pitches (length = notes - 1). */
+    39→  intervalSequence: number[]
+    40→  /** Step index (within a bar, 0..stepsPerBar-1) of each onset. */
+    41→  rhythmPattern: number[]
+    42→  /** Alias for rhythmPattern — the step positions of onsets. */
+    43→  onsetPositions: number[]
+    44→  /** Velocity 0..1 per onset. */
+    45→  accentPattern: number[]
+    46→  /** Duration in steps per onset. */
+    47→  noteDurations: number[]
+    48→  /** Mean MIDI of the material (register center). */
+    49→  registerProfile: number
+    50→  /** Pitch classes this material emphasizes (for harmonic targeting). */
+    51→  harmonicTargets: number[]
+    52→  /** Steps per bar the material was rendered against. */
+    53→  stepsPerBar: number
+    54→  /** Stack of operator names applied to derive this material from the seed. */
+    55→  transformHistory: string[]
+    56→  // ── F21 SHAPE FIELDS (intentional internal structure) ──
+    57→  /** Repeating rhythmic cell (step offsets) that underpins the phrase. */
+    58→  rhythmicCell: number[]
+    59→  /** Repeating interval cell (semitone deltas) that shapes melodic motion. */
+    60→  intervalCell: number[]
+    61→  /** Contour shape label: 'ascending' | 'descending' | 'arch' | 'valley' | 'flat' | 'wave'. */
+    62→  contour: ContourShape
+    63→  /** Accent shape: how accents distribute across the phrase (per-note 0..1). */
+    64→  accentShape: AccentShape
+    65→  /** Density shape: target note density per bar of the phrase (0..1 per bar). */
+    66→  densityShape: number[]
+    67→  /** Register shape: target register center per bar of the phrase (MIDI per bar). */
+    68→  registerShape: number[]
+    69→  /** Harmonic target shape: ordered chord-tone pcs the phrase should target. */
+    70→  harmonicTargetShape: number[]
+    71→  /** Cadence target pitch class (where the phrase resolves). */
+    72→  cadenceTarget: number | null
+    73→  /** The phrase's internal trajectory. */
+    74→  phraseArc: PhraseArc
+    75→  /** Full lineage of development operators applied (across phrases). */
+    76→  developmentHistory: DevelopmentHistoryEntry[]
+    77→}
+    78→
+    79→/** Contour shape labels for phrase-level melodic design. */
+    80→export type ContourShape = 'ascending' | 'descending' | 'arch' | 'valley' | 'flat' | 'wave'
+    81→
+    82→/** Accent shape: how accents distribute across the phrase. */
+    83→export interface AccentShape {
+    84→  /** Per-note accent weights 0..1. */
+    85→  weights: number[]
+    86→  /** Where the accent climax falls (0..1 fraction of phrase length). */
+    87→  climaxPosition: number
+    88→}
+    89→
+    90→/**
+    91→ * Phrase arc — the internal trajectory of a phrase. Not every phrase uses the
+    92→ * exact same arc, but every phrase has intentional internal structure.
+    93→ *
+    94→ *   OPEN → ESTABLISH → DEVELOP → FOCAL/CLIMAX → RELEASE → CADENCE
+    95→ */
+    96→export interface PhraseArc {
+    97→  /** Ordered stages of the phrase. */
+    98→  stages: PhraseArcStage[]
+    99→  /** Bar index (within the phrase) of the focal/climax point. */
+   100→  focalBar: number
+   101→  /** Bar index of the cadence. */
+   102→  cadenceBar: number
+   103→  /** Overall tension trajectory: 0..1 per stage. */
+   104→  tensionTrajectory: number[]
+   105→}
+   106→
+   107→export interface PhraseArcStage {
+   108→  /** Stage label. */
+   109→  stage: 'OPEN' | 'ESTABLISH' | 'DEVELOP' | 'FOCAL' | 'RELEASE' | 'CADENCE'
+   110→  /** Bar range [start, end) within the phrase. */
+   111→  barRange: [number, number]
+   112→  /** Target density 0..1 for this stage. */
+   113→  density: number
+   114→  /** Target register center MIDI for this stage. */
+   115→  register: number
+   116→  /** Target tension 0..1 for this stage. */
+   117→  tension: number
+   118→}
+   119→
+   120→/** A development history entry — one per operator applied across phrases. */
+   121→export interface DevelopmentHistoryEntry {
+   122→  /** The operator name. */
+   123→  operator: string
+   124→  /** Phrase index when applied. */
+   125→  phraseIndex: number
+   126→  /** Similarity to the source material (0..1). */
+   127→  similarity: number
+   128→}
+   129→
+   130→export interface MaterialTransformContext {
+   131→  /** Tonic pitch class (0..11). */
+   132→  tonic: number
+   133→  /** Scale name (looked up via getScale). */
+   134→  scaleName: string
+   135→  /** Resolved scale (caller may pass directly to skip lookup). */
+   136→  scale?: Scale
+   137→  /** Root MIDI the material should center on (for register/transpose ops). */
+   138→  rootMidi: number
+   139→  /** Deterministic RNG. */
+   140→  rng: { next: () => number; pick: <T>(arr: T[]) => T; int: (min: number, max: number) => number }
+   141→  /** How strongly to transform (0..1). Operators scale their mutation by this. */
+   142→  variationAmount?: number
+   143→  /** Optional cadence target pitch class (used by RESOLVE). */
+   144→  cadenceTargetPc?: number
+   145→}
+   146→
+   147→/** Snap a MIDI to the nearest in-scale tone within +/- 6 semitones. */
+   148→function snapToScale(midi: number, rootPc: number, scale: Scale): number {
+   149→  if (isInScale(rootPc, scale, midi)) return midi
+   150→  for (let offset = 1; offset <= 6; offset++) {
+   151→    if (isInScale(rootPc, scale, midi + offset)) return midi + offset
+   152→    if (isInScale(rootPc, scale, midi - offset)) return midi - offset
+   153→  }
+   154→  return midi
+   155→}
+   156→
+   157→function mean(values: number[]): number {
+   158→  if (values.length === 0) return 0
+   159→  let s = 0
+   160→  for (const v of values) s += v
+   161→  return s / values.length
+   162→}
+   163→
+   164→function pcsOf(midis: number[]): number[] {
+   165→  const set = new Set<number>()
+   166→  for (const m of midis) set.add(((m % 12) + 12) % 12)
+   167→  return Array.from(set).sort((a, b) => a - b)
+   168→}
+   169→
+   170→function intervalsOf(midis: number[]): number[] {
+   171→  const out: number[] = []
+   172→  for (let i = 1; i < midis.length; i++) {
+   173→    const prev = midis[i - 1]
+   174→    const cur = midis[i]
+   175→    if (prev !== undefined && cur !== undefined) out.push(cur - prev)
+   176→  }
+   177→  return out
+   178→}
+   179→
+   180→/**
+   181→ * Extract a PhraseMaterial from a Motif. The material is rendered within a
+   182→ * single bar (stepsPerBar); notes whose step exceeds stepsPerBar are wrapped
+   183→ * modulo stepsPerBar so the material always fits one bar.
+   184→ */
+   185→export function motifToPhraseMaterial(motif: Motif, stepsPerBar: number): PhraseMaterial {
+   186→  const notes = motif.notes
+   187→  const pitchContour: number[] = []
+   188→  const rhythmPattern: number[] = []
+   189→  const accentPattern: number[] = []
+   190→  const noteDurations: number[] = []
+   191→  for (const n of notes) {
+   192→    pitchContour.push(n.midi)
+   193→    rhythmPattern.push(((n.step % stepsPerBar) + stepsPerBar) % stepsPerBar)
+   194→    accentPattern.push(n.velocity)
+   195→    noteDurations.push(n.durationSteps)
+   196→  }
+   197→  const intervals = intervalsOf(pitchContour)
+   198→  return {
+   199→    motifId: motif.id,
+   200→    pitchContour,
+   201→    intervalSequence: intervals,
+   202→    rhythmPattern,
+   203→    onsetPositions: rhythmPattern.slice(),
+   204→    accentPattern,
+   205→    noteDurations,
+   206→    registerProfile: mean(pitchContour),
+   207→    harmonicTargets: pcsOf(pitchContour),
+   208→    stepsPerBar,
+   209→    transformHistory: motif.transformHistory.slice(),
+   210→    // F21 shape fields (derived from the motif).
+   211→    rhythmicCell: deriveRhythmicCell(rhythmPattern),
+   212→    intervalCell: deriveIntervalCell(intervals),
+   213→    contour: classifyContour(intervals),
+   214→    accentShape: { weights: accentPattern.slice(), climaxPosition: findClimax(accentPattern) },
+   215→    densityShape: [Math.min(1, pitchContour.length / stepsPerBar)],
+   216→    registerShape: [mean(pitchContour)],
+   217→    harmonicTargetShape: pcsOf(pitchContour),
+   218→    cadenceTarget:
+   219→      pitchContour.length > 0
+   220→        ? ((pitchContour[pitchContour.length - 1] ?? 0 % 12) + 12) % 12
+   221→        : null,
+   222→    phraseArc: buildPhraseArc(1, mean(pitchContour), 0.3),
+   223→    developmentHistory: [],
+   224→  }
+   225→}
+   226→
+   227→/** Build an empty PhraseMaterial (used for the first phrase of a section). */
+   228→export function emptyPhraseMaterial(motifId: string, stepsPerBar: number): PhraseMaterial {
+   229→  return {
+   230→    motifId,
+   231→    pitchContour: [],
+   232→    intervalSequence: [],
+   233→    rhythmPattern: [],
+   234→    onsetPositions: [],
+   235→    accentPattern: [],
+   236→    noteDurations: [],
+   237→    registerProfile: 0,
+   238→    harmonicTargets: [],
+   239→    stepsPerBar,
+   240→    transformHistory: [],
+   241→    rhythmicCell: [],
+   242→    intervalCell: [],
+   243→    contour: 'flat',
+   244→    accentShape: { weights: [], climaxPosition: 0.5 },
+   245→    densityShape: [0.3],
+   246→    registerShape: [64],
+   247→    harmonicTargetShape: [],
+   248→    cadenceTarget: null,
+   249→    phraseArc: buildPhraseArc(1, 64, 0.3),
+   250→    developmentHistory: [],
+   251→  }
+   252→}
+   253→
+   254→function cloneMaterial(src: PhraseMaterial, newId: string, op: string): PhraseMaterial {
+   255→  return {
+   256→    motifId: newId,
+   257→    pitchContour: src.pitchContour.slice(),
+   258→    intervalSequence: src.intervalSequence.slice(),
+   259→    rhythmPattern: src.rhythmPattern.slice(),
+   260→    onsetPositions: src.onsetPositions.slice(),
+   261→    accentPattern: src.accentPattern.slice(),
+   262→    noteDurations: src.noteDurations.slice(),
+   263→    registerProfile: src.registerProfile,
+   264→    harmonicTargets: src.harmonicTargets.slice(),
+   265→    stepsPerBar: src.stepsPerBar,
+   266→    transformHistory: [...src.transformHistory, op],
+   267→    rhythmicCell: src.rhythmicCell.slice(),
+   268→    intervalCell: src.intervalCell.slice(),
+   269→    contour: src.contour,
+   270→    accentShape: {
+   271→      weights: src.accentShape.weights.slice(),
+   272→      climaxPosition: src.accentShape.climaxPosition,
+   273→    },
+   274→    densityShape: src.densityShape.slice(),
+   275→    registerShape: src.registerShape.slice(),
+   276→    harmonicTargetShape: src.harmonicTargetShape.slice(),
+   277→    cadenceTarget: src.cadenceTarget,
+   278→    phraseArc: src.phraseArc,
+   279→    developmentHistory: src.developmentHistory.slice(),
+   280→  }
+   281→}
+   282→
+   283→// ── F21 SHAPE DERIVATION HELPERS ──
+   284→
+   285→/** Derive a repeating rhythmic cell from a rhythm pattern (find the shortest repeating unit). */
+   286→function deriveRhythmicCell(rhythmPattern: number[]): number[] {
+   287→  if (rhythmPattern.length === 0) return [0]
+   288→  if (rhythmPattern.length === 1) return [0]
+   289→  const offsets: number[] = []
+   290→  for (let i = 1; i < rhythmPattern.length; i++) {
+   291→    const cur = rhythmPattern[i] ?? 0
+   292→    const first = rhythmPattern[0] ?? 0
+   293→    offsets.push(cur - first)
+   294→  }
+   295→  // If the pattern is short enough, use it directly.
+   296→  if (rhythmPattern.length <= 4) return [0, ...offsets]
+   297→  // Otherwise look for a repeating cell of length 2-4.
+   298→  for (let cellLen = 2; cellLen <= 4; cellLen++) {
+   299→    if (rhythmPattern.length >= cellLen * 2) {
+   300→      const cell = rhythmPattern.slice(0, cellLen)
+   301→      let repeats = true
+   302→      for (let i = cellLen; i < rhythmPattern.length; i++) {
+   303→        if (rhythmPattern[i] !== cell[i % cellLen]) {
+   304→          repeats = false
+   305→          break
+   306→        }
+   307→      }
+   308→      if (repeats) {
+   309→        const cellOffsets = [0]
+   310→        for (let i = 1; i < cellLen; i++) {
+   311→          const cur = cell[i] ?? 0
+   312→          const first = cell[0] ?? 0
+   313→          cellOffsets.push(cur - first)
+   314→        }
+   315→        return cellOffsets
+   316→      }
+   317→    }
+   318→  }
+   319→  return [0, ...offsets]
+   320→}
+   321→
+   322→/** Derive a repeating interval cell from an interval sequence. */
+   323→function deriveIntervalCell(intervals: number[]): number[] {
+   324→  if (intervals.length === 0) return [0]
+   325→  if (intervals.length <= 3) return intervals.slice()
+   326→  // Look for a repeating cell of length 2-3.
+   327→  for (let cellLen = 2; cellLen <= 3; cellLen++) {
+   328→    if (intervals.length >= cellLen * 2) {
+   329→      const cell = intervals.slice(0, cellLen)
+   330→      let repeats = true
+   331→      for (let i = cellLen; i < intervals.length; i++) {
+   332→        if (intervals[i] !== cell[i % cellLen]) {
+   333→          repeats = false
+   334→          break
+   335→        }
+   336→      }
+   337→      if (repeats) return cell.slice()
+   338→    }
+   339→  }
+   340→  // Fall back to the first 3 intervals.
+   341→  return intervals.slice(0, 3)
+   342→}
+   343→
+   344→/** Classify a contour from an interval sequence. */
+   345→function classifyContour(intervals: number[]): ContourShape {
+   346→  if (intervals.length === 0) return 'flat'
+   347→  let up = 0
+   348→  let down = 0
+   349→  for (const iv of intervals) {
+   350→    if (iv > 0) up++
+   351→    else if (iv < 0) down++
+   352→  }
+   353→  if (up === intervals.length) return 'ascending'
+   354→  if (down === intervals.length) return 'descending'
+   355→  // Arch: rises then falls.
+   356→  const midpoint = Math.floor(intervals.length / 2)
+   357→  const firstHalfUp = intervals.slice(0, midpoint).filter((iv) => iv > 0).length
+   358→  const secondHalfDown = intervals.slice(midpoint).filter((iv) => iv < 0).length
+   359→  if (firstHalfUp >= midpoint * 0.6 && secondHalfDown >= (intervals.length - midpoint) * 0.6)
+   360→    return 'arch'
+   361→  // Valley: falls then rises.
+   362→  const firstHalfDown = intervals.slice(0, midpoint).filter((iv) => iv < 0).length
+   363→  const secondHalfUp = intervals.slice(midpoint).filter((iv) => iv > 0).length
+   364→  if (firstHalfDown >= midpoint * 0.6 && secondHalfUp >= (intervals.length - midpoint) * 0.6)
+   365→    return 'valley'
+   366→  // Wave: frequent direction changes.
+   367→  let changes = 0
+   368→  for (let i = 1; i < intervals.length; i++) {
+   369→    if (Math.sign(intervals[i] ?? 0) !== Math.sign(intervals[i - 1] ?? 0) && intervals[i] !== 0)
+   370→      changes++
+   371→  }
+   372→  if (changes >= intervals.length * 0.4) return 'wave'
+   373→  return 'flat'
+   374→}
+   375→
+   376→/** Find the climax position (fraction 0..1) in an accent pattern. */
+   377→function findClimax(accents: number[]): number {
+   378→  if (accents.length === 0) return 0.5
+   379→  let maxIdx = 0
+   380→  let maxVal = -1
+   381→  for (let i = 0; i < accents.length; i++) {
+   382→    if (accents[i] ?? 0 > maxVal) {
+   383→      maxVal = accents[i] ?? 0
+   384→      maxIdx = i
+   385→    }
+   386→  }
+   387→  return accents.length > 1 ? maxIdx / (accents.length - 1) : 0.5
+   388→}
+   389→
+   390→/**
+   391→ * Build a PhraseArc for a phrase of `bars` bars. The arc has 6 stages
+   392→ * (OPEN → ESTABLISH → DEVELOP → FOCAL → RELEASE → CADENCE) distributed across
+   393→ * the bars. The focal/climax point falls around 60-70% of the phrase.
+   394→ */
+   395→export function buildPhraseArc(
+   396→  bars: number,
+   397→  registerCenter: number,
+   398→  baseTension: number
+   399→): PhraseArc {
+   400→  const stages: PhraseArcStage[] = []
+   401→  const focalBar = Math.max(1, Math.floor(bars * 0.6))
+   402→  const cadenceBar = bars - 1
+   403→  // Distribute bars across stages proportionally.
+   404→  const fractions = [0.1, 0.2, 0.25, 0.15, 0.15, 0.15] // OPEN, ESTABLISH, DEVELOP, FOCAL, RELEASE, CADENCE
+   405→  const labels: PhraseArcStage['stage'][] = [
+   406→    'OPEN',
+   407→    'ESTABLISH',
+   408→    'DEVELOP',
+   409→    'FOCAL',
+   410→    'RELEASE',
+   411→    'CADENCE',
+   412→  ]
+   413→  let cursor = 0
+   414→  const tensionTrajectory: number[] = []
+   415→  for (let i = 0; i < 6; i++) {
+   416→    const len = Math.max(1, Math.round(bars * (fractions[i] ?? 0.15)))
+   417→    const start = Math.min(cursor, bars - 1)
+   418→    const end = Math.min(cursor + len, bars)
+   419→    const stageTension =
+   420→      i === 3
+   421→        ? Math.min(1, baseTension + 0.4)
+   422→        : i === 5
+   423→          ? baseTension * 0.2
+   424→          : baseTension + i * 0.05
+   425→    const stageDensity = i === 0 ? 0.3 : i === 5 ? 0.4 : Math.min(0.9, 0.4 + i * 0.1)
+   426→    const stageRegister =
+   427→      i === 3 ? registerCenter + 4 : i === 5 ? registerCenter - 2 : registerCenter + (i - 2) * 2
+   428→    const label = labels[i] ?? 'DEVELOP'
+   429→    stages.push({
+   430→      stage: label,
+   431→      barRange: [start, end],
+   432→      density: stageDensity,
+   433→      register: stageRegister,
+   434→      tension: Math.max(0, Math.min(1, stageTension)),
+   435→    })
+   436→    tensionTrajectory.push(Math.max(0, Math.min(1, stageTension)))
+   437→    cursor = end
+   438→    // Don't break early — always add all 6 stages. For short phrases, stages
+   439→    // may share the same bar range, but all labels are present.
+   440→  }
+   441→  // Ensure the last stage is always CADENCE (even for 1-bar phrases).
+   442→  if (stages.length > 0 && stages[stages.length - 1]?.stage !== 'CADENCE') {
+   443→    stages.push({
+   444→      stage: 'CADENCE',
+   445→      barRange: [Math.max(0, bars - 1), bars],
+   446→      density: 0.4,
+   447→      register: registerCenter - 2,
+   448→      tension: Math.max(0, Math.min(1, baseTension * 0.2)),
+   449→    })
+   450→    tensionTrajectory.push(Math.max(0, Math.min(1, baseTension * 0.2)))
+   451→  }
+   452→  return { stages, focalBar, cadenceBar, tensionTrajectory }
+   453→}
+   454→
+   455→/** Get the arc stage active at a given bar index within the phrase. */
+   456→export function arcStageAt(arc: PhraseArc, bar: number): PhraseArcStage | null {
+   457→  for (const s of arc.stages) {
+   458→    if (bar >= s.barRange[0] && bar < s.barRange[1]) return s
+   459→  }
+   460→  return arc.stages[arc.stages.length - 1] ?? null
+   461→}
+   462→
+   463→// ─────────────────────────── OPERATORS ───────────────────────────
+   464→
+   465→/**
+   466→ * CONTINUE — return the material unchanged (lineage only).
+   467→ * The phrase reiterates the previous identity.
+   468→ */
+   469→export function continueMaterial(src: PhraseMaterial): PhraseMaterial {
+   470→  return cloneMaterial(src, `${src.motifId}:continue`, 'CONTINUE')
+   471→}
+   472→
+   473→/**
+   474→ * DEVELOP — mutate the last interval so the contour evolves while keeping the
+   475→ * opening intact. Example: A B C D (intervals [x,y,z]) → A B D E where the
+   476→ * last step is displaced by one scale degree. Also nudges the second-to-last
+   477→ * note occasionally to keep the development from being a single-note change.
+   478→ *
+   479→ * This is real MOTIF DEVELOPMENT: the pitch contour changes, but the opening
+   480→ * shape is preserved so the result is recognizably the same motif.
+   481→ */
+   482→export function developMaterial(
+   483→  src: PhraseMaterial,
+   484→  ctx: MaterialTransformContext
+   485→): PhraseMaterial {
+   486→  const scale = ctx.scale ?? getScale(ctx.scaleName)
+   487→  if (src.pitchContour.length < 2 || !scale)
+   488→    return cloneMaterial(src, `${src.motifId}:develop`, 'DEVELOP')
+   489→  const pcs = scalePcs(ctx.tonic, scale)
+   490→  const out = cloneMaterial(src, `${src.motifId}:develop`, 'DEVELOP')
+   491→  const variation = ctx.variationAmount ?? 0.3
+   492→
+   493→  // Mutate the last interval: shift the last note by one scale degree in the
+   494→  // direction of the existing contour (or up if flat).
+   495→  const lastIdx = src.pitchContour.length - 1
+   496→  const prevMidi = src.pitchContour[lastIdx - 1] ?? ctx.rootMidi
+   497→  const curMidi = src.pitchContour[lastIdx] ?? ctx.rootMidi
+   498→  const dir = curMidi >= prevMidi ? 1 : -1
+   499→  // Pick the next scale degree in `dir`.
+   500→  const curPc = ((curMidi % 12) + 12) % 12
+   501→  const curDegIdx = pcs.indexOf(curPc)
+   502→  const nextDegIdx = curDegIdx >= 0 ? (curDegIdx + dir + pcs.length) % pcs.length : 0
+   503→  const nextPc = pcs[nextDegIdx] ?? curPc
+   504→  // Construct the new midi: keep the octave of curMidi, change the pc, nudge by dir*12 if variation is high.
+   505→  let newMidi = curMidi - curPc + nextPc
+   506→  if (ctx.rng.next() < variation * 0.5) newMidi += dir * 12
+   507→  newMidi = snapToScale(newMidi, ctx.tonic, scale)
+   508→  out.pitchContour[lastIdx] = newMidi
+   509→
+   510→  // Occasionally mutate the second-to-last note too (smaller displacement).
+   511→  if (src.pitchContour.length >= 3 && ctx.rng.next() < variation * 0.6) {
+   512→    const idx = src.pitchContour.length - 2
+   513→    const base = src.pitchContour[idx] ?? ctx.rootMidi
+   514→    const step = ctx.rng.pick([1, -1, 2, -2])
+   515→    out.pitchContour[idx] = snapToScale(base + step, ctx.tonic, scale)
+   516→  }
+   517→
+   518→  out.intervalSequence = intervalsOf(out.pitchContour)
+   519→  out.registerProfile = mean(out.pitchContour)
+   520→  out.harmonicTargets = pcsOf(out.pitchContour)
+   521→  return out
+   522→}
+   523→
+   524→/**
+   525→ * VARIATE — reorder notes (swap two adjacent positions) so the pitch sequence
+   526→ * shuffles while preserving the set of pitches and the rhythm. Example:
+   527→ * A B C D → A C B D. The contour changes but the material is the same set of
+   528→ * notes — a recognizable variant.
+   529→ */
+   530→export function variateMaterial(
+   531→  src: PhraseMaterial,
+   532→  ctx: MaterialTransformContext
+   533→): PhraseMaterial {
+   534→  if (src.pitchContour.length < 3) return cloneMaterial(src, `${src.motifId}:variate`, 'VARIATE')
+   535→  const out = cloneMaterial(src, `${src.motifId}:variate`, 'VARIATE')
+   536→  // Swap two adjacent notes (not the first — keep the opening stable).
+   537→  const i = 1 + Math.floor(ctx.rng.next() * (src.pitchContour.length - 2))
+   538→  const j = i + 1
+   539→  const tmp = out.pitchContour[i]
+   540→  out.pitchContour[i] = out.pitchContour[j] as number
+   541→  out.pitchContour[j] = tmp as number
+   542→  // Also swap the accent/duration so the rhythm+rhythm tags stay aligned to
+   543→  // the pitches (the rhythm PATTERN is preserved — only pitches reorder).
+   544→  const tmpV = out.accentPattern[i]
+   545→  out.accentPattern[i] = out.accentPattern[j] as number
+   546→  out.accentPattern[j] = tmpV as number
+   547→  const tmpD = out.noteDurations[i]
+   548→  out.noteDurations[i] = out.noteDurations[j] as number
+   549→  out.noteDurations[j] = tmpD as number
+   550→  out.intervalSequence = intervalsOf(out.pitchContour)
+   551→  out.registerProfile = mean(out.pitchContour)
+   552→  out.harmonicTargets = pcsOf(out.pitchContour)
+   553→  return out
+   554→}
+   555→
+   556→/**
+   557→ * ANSWER — contour inversion (mirror intervals around the first note). The
+   558→ * rhythm is preserved; the pitch contour flips direction. A rising motif
+   559→ * becomes a falling one — the classic "answer" to a "call".
+   560→ */
+   561→export function answerMaterial(src: PhraseMaterial, ctx: MaterialTransformContext): PhraseMaterial {
+   562→  const scale = ctx.scale ?? getScale(ctx.scaleName)
+   563→  if (src.pitchContour.length < 2 || !scale)
+   564→    return cloneMaterial(src, `${src.motifId}:answer`, 'ANSWER')
+   565→  const out = cloneMaterial(src, `${src.motifId}:answer`, 'ANSWER')
+   566→  const first = src.pitchContour[0] ?? ctx.rootMidi
+   567→  for (let i = 1; i < src.pitchContour.length; i++) {
+   568→    const offset = (src.pitchContour[i] ?? first) - first
+   569→    out.pitchContour[i] = snapToScale(first - offset, ctx.tonic, scale)
+   570→  }
+   571→  out.intervalSequence = intervalsOf(out.pitchContour)
+   572→  out.registerProfile = mean(out.pitchContour)
+   573→  out.harmonicTargets = pcsOf(out.pitchContour)
+   574→  return out
+   575→}
+   576→
+   577→/**
+   578→ * CONTRAST — introduce new material (new motifId) while staying in the same
+   579→ * scale. Generates a fresh short contour from scale degrees. The motifId is
+   580→ * NEW (lineage reset) because the material is intentionally different.
+   581→ */
+   582→export function contrastMaterial(
+   583→  src: PhraseMaterial,
+   584→  ctx: MaterialTransformContext
+   585→): PhraseMaterial {
+   586→  const scale = ctx.scale ?? getScale(ctx.scaleName)
+   587→  if (!scale) return cloneMaterial(src, `${src.motifId}:contrast`, 'CONTRAST')
+   588→  const pcs = scalePcs(ctx.tonic, scale)
+   589→  const len = Math.max(3, Math.min(6, src.pitchContour.length || 4))
+   590→  const pitchContour: number[] = []
+   591→  let cur = ctx.rootMidi
+   592→  for (let i = 0; i < len; i++) {
+   593→    const pc = ctx.rng.pick(pcs)
+   594→    const oct = 4 + (ctx.rng.next() < 0.3 ? 1 : 0)
+   595→    const candidate = degreeToMidi(
+   596→      ctx.tonic,
+   597→      scale,
+   598→      pcs.indexOf(pc) >= 0 ? pcs.indexOf(pc) : 0,
+   599→      oct
+   600→    )
+   601→    pitchContour.push(snapToScale(candidate, ctx.tonic, scale))
+   602→    cur = candidate
+   603→  }
+   604→  void cur
+   605→  const rhythmPattern: number[] = []
+   606→  const accentPattern: number[] = []
+   607→  const noteDurations: number[] = []
+   608→  let step = 0
+   609→  for (let i = 0; i < len; i++) {
+   610→    rhythmPattern.push(step % src.stepsPerBar)
+   611→    accentPattern.push(i === 0 ? 0.9 : 0.5 + ctx.rng.next() * 0.3)
+   612→    noteDurations.push(ctx.rng.pick([1, 1, 2]))
+   613→    step += ctx.rng.pick([1, 2, 2])
+   614→  }
+   615→  const intervals = intervalsOf(pitchContour)
+   616→  return {
+   617→    motifId: `${src.motifId}:contrast-${Date.now().toString(36)}`,
+   618→    pitchContour,
+   619→    intervalSequence: intervals,
+   620→    rhythmPattern,
+   621→    onsetPositions: rhythmPattern.slice(),
+   622→    accentPattern,
+   623→    noteDurations,
+   624→    registerProfile: mean(pitchContour),
+   625→    harmonicTargets: pcsOf(pitchContour),
+   626→    stepsPerBar: src.stepsPerBar,
+   627→    transformHistory: [...src.transformHistory, 'CONTRAST'],
+   628→    // F21 shape fields.
+   629→    rhythmicCell: deriveRhythmicCell(rhythmPattern),
+   630→    intervalCell: deriveIntervalCell(intervals),
+   631→    contour: classifyContour(intervals),
+   632→    accentShape: { weights: accentPattern.slice(), climaxPosition: findClimax(accentPattern) },
+   633→    densityShape: [Math.min(1, pitchContour.length / src.stepsPerBar)],
+   634→    registerShape: [mean(pitchContour)],
+   635→    harmonicTargetShape: pcsOf(pitchContour),
+   636→    cadenceTarget:
+   637→      pitchContour.length > 0
+   638→        ? ((pitchContour[pitchContour.length - 1] ?? 0 % 12) + 12) % 12
+   639→        : null,
+   640→    phraseArc: buildPhraseArc(1, mean(pitchContour), 0.3),
+   641→    developmentHistory: src.developmentHistory.slice(),
+   642→  }
+   643→}
+   644→
+   645→/**
+   646→ * INTENSIFY — rhythmic augmentation: subdivide longer notes into shorter ones
+   647→ * so density rises. Pitches are preserved (a note may repeat). The contour is
+   648→ * unchanged but the rhythm becomes busier — the musical "intensification".
+   649→ */
+   650→export function intensifyMaterial(
+   651→  src: PhraseMaterial,
+   652→  ctx: MaterialTransformContext
+   653→): PhraseMaterial {
+   654→  if (src.pitchContour.length === 0)
+   655→    return cloneMaterial(src, `${src.motifId}:intensify`, 'INTENSIFY')
+   656→  const out = cloneMaterial(src, `${src.motifId}:intensify`, 'INTENSIFY')
+   657→  const newPitches: number[] = []
+   658→  const newRhythm: number[] = []
+   659→  const newAccent: number[] = []
+   660→  const newDurations: number[] = []
+   661→  for (let i = 0; i < src.pitchContour.length; i++) {
+   662→    const midi = src.pitchContour[i] as number
+   663→    const step = src.rhythmPattern[i] as number
+   664→    const dur = src.noteDurations[i] as number
+   665→    const vel = src.accentPattern[i] as number
+   666→    newPitches.push(midi)
+   667→    newRhythm.push(step)
+   668→    newAccent.push(vel)
+   669→    newDurations.push(Math.max(1, Math.floor(dur / 2)))
+   670→    // If the original note was long enough, add a repeated note (rhythmic subdivision).
+   671→    if (dur >= 2 && ctx.rng.next() < (ctx.variationAmount ?? 0.5) + 0.3) {
+   672→      const subStep = (step + Math.floor(dur / 2)) % src.stepsPerBar
+   673→      newPitches.push(midi)
+   674→      newRhythm.push(subStep)
+   675→      newAccent.push(vel * 0.7)
+   676→      newDurations.push(Math.max(1, dur - Math.floor(dur / 2)))
+   677→    }
+   678→  }
+   679→  out.pitchContour = newPitches
+   680→  out.rhythmPattern = newRhythm
+   681→  out.onsetPositions = newRhythm.slice()
+   682→  out.accentPattern = newAccent
+   683→  out.noteDurations = newDurations
+   684→  out.intervalSequence = intervalsOf(newPitches)
+   685→  out.registerProfile = mean(newPitches)
+   686→  out.harmonicTargets = pcsOf(newPitches)
+   687→  return out
+   688→}
+   689→
+   690→/**
+   691→ * REDUCE — fragment: keep only the first half of the material. Creates space.
+   692→ * Example: A B C D → A B. The opening identity is preserved.
+   693→ */
+   694→export function reduceMaterial(src: PhraseMaterial): PhraseMaterial {
+   695→  if (src.pitchContour.length <= 1) return cloneMaterial(src, `${src.motifId}:reduce`, 'REDUCE')
+   696→  const keep = Math.max(1, Math.ceil(src.pitchContour.length / 2))
+   697→  const out = cloneMaterial(src, `${src.motifId}:reduce`, 'REDUCE')
+   698→  out.pitchContour = src.pitchContour.slice(0, keep)
+   699→  out.rhythmPattern = src.rhythmPattern.slice(0, keep)
+   700→  out.onsetPositions = src.onsetPositions.slice(0, keep)
+   701→  out.accentPattern = src.accentPattern.slice(0, keep)
+   702→  out.noteDurations = src.noteDurations.slice(0, keep)
+   703→  out.intervalSequence = intervalsOf(out.pitchContour)
+   704→  out.registerProfile = mean(out.pitchContour)
+   705→  out.harmonicTargets = pcsOf(out.pitchContour)
+   706→  return out
+   707→}
+   708→
+   709→/**
+   710→ * BREAK — strip to a single sustained note (the first pitch). The most
+   711→ * extreme reduction — used at breakdown points.
+   712→ */
+   713→export function breakMaterial(src: PhraseMaterial): PhraseMaterial {
+   714→  if (src.pitchContour.length === 0) return cloneMaterial(src, `${src.motifId}:break`, 'BREAK')
+   715→  const out = cloneMaterial(src, `${src.motifId}:break`, 'BREAK')
+   716→  out.pitchContour = [src.pitchContour[0] as number]
+   717→  out.rhythmPattern = [0]
+   718→  out.onsetPositions = [0]
+   719→  out.accentPattern = [0.9]
+   720→  out.noteDurations = [src.stepsPerBar]
+   721→  out.intervalSequence = []
+   722→  out.registerProfile = out.pitchContour[0] as number
+   723→  out.harmonicTargets = pcsOf(out.pitchContour)
+   724→  return out
+   725→}
+   726→
+   727→/**
+   728→ * RESOLVE — append a stepwise descent to the cadence target pitch class.
+   729→ * The motif's identity is preserved (opening notes unchanged) but a resolving
+   730→ * tail is added that lands on the cadence target (root/third/fifth). This is
+   731→ * the musical "resolution" at a phrase cadence.
+   732→ */
+   733→export function resolveMaterial(
+   734→  src: PhraseMaterial,
+   735→  ctx: MaterialTransformContext
+   736→): PhraseMaterial {
+   737→  const scale = ctx.scale ?? getScale(ctx.scaleName)
+   738→  if (!scale || src.pitchContour.length === 0)
+   739→    return cloneMaterial(src, `${src.motifId}:resolve`, 'RESOLVE')
+   740→  const pcs = scalePcs(ctx.tonic, scale)
+   741→  const targetPc = ctx.cadenceTargetPc ?? pcs[0] ?? ctx.tonic
+   742→  const out = cloneMaterial(src, `${src.motifId}:resolve`, 'RESOLVE')
+   743→  // Start the descent from the last pitch.
+   744→  let cur = src.pitchContour[src.pitchContour.length - 1] ?? ctx.rootMidi
+   745→  let step = ((src.rhythmPattern[src.rhythmPattern.length - 1] ?? 0) + 2) % src.stepsPerBar
+   746→  // Walk down by scale degrees until we land on the target pc.
+   747→  let guard = 0
+   748→  while (((cur % 12) + 12) % 12 !== targetPc && guard < 8) {
+   749→    const curPc = ((cur % 12) + 12) % 12
+   750→    const curDegIdx = pcs.indexOf(curPc)
+   751→    const nextDegIdx = curDegIdx >= 0 ? (curDegIdx - 1 + pcs.length) % pcs.length : 0
+   752→    const nextPc = pcs[nextDegIdx] ?? targetPc
+   753→    cur = cur - curPc + nextPc
+   754→    cur = snapToScale(cur, ctx.tonic, scale)
+   755→    out.pitchContour.push(cur)
+   756→    out.rhythmPattern.push(step)
+   757→    out.onsetPositions.push(step)
+   758→    out.accentPattern.push(0.7)
+   759→    out.noteDurations.push(1)
+   760→    step = (step + 1) % src.stepsPerBar
+   761→    guard++
+   762→  }
+   763→  // Final cadence note — emphasize.
+   764→  out.pitchContour.push(cur)
+   765→  out.rhythmPattern.push(step)
+   766→  out.onsetPositions.push(step)
+   767→  out.accentPattern.push(1.0)
+   768→  out.noteDurations.push(2)
+   769→  out.intervalSequence = intervalsOf(out.pitchContour)
+   770→  out.registerProfile = mean(out.pitchContour)
+   771→  out.harmonicTargets = pcsOf(out.pitchContour)
+   772→  return out
+   773→}
+   774→
+   775→/**
+   776→ * TRANSITION — bridge: generate a short connecting motif that walks from the
+   777→ * last pitch of the source toward the root. Used at section boundaries.
+   778→ */
+   779→export function transitionMaterial(
+   780→  src: PhraseMaterial,
+   781→  ctx: MaterialTransformContext
+   782→): PhraseMaterial {
+   783→  const scale = ctx.scale ?? getScale(ctx.scaleName)
+   784→  if (!scale) return cloneMaterial(src, `${src.motifId}:transition`, 'TRANSITION')
+   785→  const pcs = scalePcs(ctx.tonic, scale)
+   786→  const out = cloneMaterial(src, `${src.motifId}:transition`, 'TRANSITION')
+   787→  let cur = src.pitchContour[src.pitchContour.length - 1] ?? ctx.rootMidi
+   788→  let step = ((src.rhythmPattern[src.rhythmPattern.length - 1] ?? 0) + 2) % src.stepsPerBar
+   789→  // Walk by scale degrees toward the root pc.
+   790→  const rootPc = pcs[0] ?? ctx.tonic
+   791→  let guard = 0
+   792→  while (((cur % 12) + 12) % 12 !== rootPc && guard < 6) {
+   793→    const curPc = ((cur % 12) + 12) % 12
+   794→    const curDegIdx = pcs.indexOf(curPc)
+   795→    const dir = curDegIdx > 0 ? -1 : 0
+   796→    const nextDegIdx = curDegIdx >= 0 ? (curDegIdx + dir + pcs.length) % pcs.length : 0
+   797→    const nextPc = pcs[nextDegIdx] ?? rootPc
+   798→    cur = cur - curPc + nextPc
+   799→    cur = snapToScale(cur, ctx.tonic, scale)
+   800→    out.pitchContour.push(cur)
+   801→    out.rhythmPattern.push(step)
+   802→    out.onsetPositions.push(step)
+   803→    out.accentPattern.push(0.6)
+   804→    out.noteDurations.push(1)
+   805→    step = (step + 1) % src.stepsPerBar
+   806→    guard++
+   807→  }
+   808→  out.intervalSequence = intervalsOf(out.pitchContour)
+   809→  out.registerProfile = mean(out.pitchContour)
+   810→  out.harmonicTargets = pcsOf(out.pitchContour)
+   811→  return out
+   812→}
+   813→
+   814→/**
+   815→ * Dispatch a development operator against a PhraseMaterial. At minimum
+   816→ * DEVELOP / VARIATE / ANSWER / RESOLVE transform real note material; the
+   817→ * remaining operators also transform material (CONTINUE is identity).
+   818→ */
+   819→export function applyOperatorToMaterial(
+   820→  op: DevelopmentOperator,
+   821→  src: PhraseMaterial,
+   822→  ctx: MaterialTransformContext
+   823→): PhraseMaterial {
+   824→  switch (op) {
+   825→    case 'CONTINUE':
+   826→      return continueMaterial(src)
+   827→    case 'DEVELOP':
+   828→      return developMaterial(src, ctx)
+   829→    case 'ANSWER':
+   830→      return answerMaterial(src, ctx)
+   831→    case 'CONTRAST':
+   832→      return contrastMaterial(src, ctx)
+   833→    case 'VARIATE':
+   834→      return variateMaterial(src, ctx)
+   835→    case 'INTENSIFY':
+   836→      return intensifyMaterial(src, ctx)
+   837→    case 'REDUCE':
+   838→      return reduceMaterial(src)
+   839→    case 'BREAK':
+   840→      return breakMaterial(src)
+   841→    case 'RESOLVE':
+   842→      return resolveMaterial(src, ctx)
+   843→    case 'TRANSITION':
+   844→      return transitionMaterial(src, ctx)
+   845→    default:
+   846→      return continueMaterial(src)
+   847→  }
+   848→}
+   849→
+   850→// ─────────────────────────── SIMILARITY ───────────────────────────
+   851→
+   852→/**
+   853→ * Structural similarity in [0, 1] between two PhraseMaterials. Combines:
+   854→ *  - contour direction agreement (fraction of matching interval signs)
+   855→ *  - interval-class agreement (fraction of matching signed interval classes mod 12)
+   856→ *  - pitch-class set overlap (Jaccard of harmonicTargets)
+   857→ *
+   858→ * Returns 1 for identical materials, lower for divergent. Used by the A/B
+   859→ * test suite to prove a transformed phrase is still recognizably related to
+   860→ * its source (motif identity is preserved through development).
+   861→ */
+   862→export function materialSimilarity(a: PhraseMaterial, b: PhraseMaterial): number {
+   863→  if (a.pitchContour.length === 0 && b.pitchContour.length === 0) return 1
+   864→  if (a.pitchContour.length === 0 || b.pitchContour.length === 0) return 0
+   865→
+   866→  // Contour direction agreement.
+   867→  const dirA = a.intervalSequence.map((iv) => (iv > 0 ? 1 : iv < 0 ? -1 : 0))
+   868→  const dirB = b.intervalSequence.map((iv) => (iv > 0 ? 1 : iv < 0 ? -1 : 0))
+   869→  const minLen = Math.min(dirA.length, dirB.length)
+   870→  let dirMatch = 0
+   871→  for (let i = 0; i < minLen; i++) {
+   872→    if (dirA[i] === dirB[i]) dirMatch++
+   873→  }
+   874→  const contourScore = minLen > 0 ? dirMatch / minLen : 0.5
+   875→
+   876→  // Interval-class agreement (signed mod 12).
+   877→  const icA = a.intervalSequence.map((iv) => {
+   878→    const cls = ((iv % 12) + 12) % 12
+   879→    return iv < 0 ? -cls : cls
+   880→  })
+   881→  const icB = b.intervalSequence.map((iv) => {
+   882→    const cls = ((iv % 12) + 12) % 12
+   883→    return iv < 0 ? -cls : cls
+   884→  })
+   885→  const minIc = Math.min(icA.length, icB.length)
+   886→  let icMatch = 0
+   887→  for (let i = 0; i < minIc; i++) {
+   888→    if (icA[i] === icB[i]) icMatch++
+   889→  }
+   890→  const intervalScore = minIc > 0 ? icMatch / minIc : 0.5
+   891→
+   892→  // Pitch-class set overlap (Jaccard).
+   893→  const setA = new Set(a.harmonicTargets)
+   894→  const setB = new Set(b.harmonicTargets)
+   895→  let inter = 0
+   896→  for (const pc of setA) if (setB.has(pc)) inter++
+   897→  const union = setA.size + setB.size - inter
+   898→  const pcScore = union > 0 ? inter / union : 1
+   899→
+   900→  return 0.4 * contourScore + 0.35 * intervalScore + 0.25 * pcScore
+   901→}
+   902→
+   903→/** True if `b` is recognizably derived from `a` (similarity above threshold). */
+   904→export function isMaterialRelated(a: PhraseMaterial, b: PhraseMaterial, threshold = 0.4): boolean {
+   905→  return materialSimilarity(a, b) >= threshold
+   906→}
+   907→
