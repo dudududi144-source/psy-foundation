@@ -50,7 +50,7 @@ function MetricBar({ label, value, invert = false }: { label: string; value: num
 }
 
 export default function Home() {
-  const [bars, setBars] = useState(8)
+  const [bars, setBars] = useState(16)
   const [seed, setSeed] = useState(42)
   const [useSamples, setUseSamples] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -62,10 +62,19 @@ export default function Home() {
   const render = async () => {
     setLoading(true)
     setCritique(null)
+    setAudioUrl(null)
     try {
-      const url = `/api/render-forensic?bars=${bars}&seed=${seed}&samples=${useSamples}`
+      const ts = Date.now()
+      const url = `/api/render-forensic?bars=${bars}&seed=${seed}&samples=${useSamples}&t=${ts}`
       setAudioUrl(url)
-      // Fetch critique in parallel
+
+      setTimeout(() => {
+        if (audioRef.current) {
+          audioRef.current.load()
+          audioRef.current.play().catch(() => {})
+        }
+      }, 200)
+
       setCritiqueLoading(true)
       const res = await fetch(`/api/audio-critique?bars=${bars}&seed=${seed}&samples=${useSamples}`)
       if (res.ok) {
@@ -77,6 +86,12 @@ export default function Home() {
       setCritiqueLoading(false)
     }
   }
+
+  // Auto-render on first load
+  useEffect(() => {
+    render()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const scoreColor = critique
     ? critique.overallScore > 0.6 ? 'text-emerald-400'
