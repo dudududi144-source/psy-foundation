@@ -92,10 +92,10 @@ export class RollingBassVoice {
     this.t += 1 / sr
 
     // Sustain phase: hold at full level until noteOff
-    // Release phase: quick exponential decay after noteOff
+    // Release phase: very quick exponential decay after noteOff (15ms for tight rolling)
     if (this.releasing) {
       this.releaseT += 1 / sr
-      if (this.releaseT > 0.03) { // 30ms release
+      if (this.releaseT > 0.015) { // 15ms release — tighter than 30ms
         this.active = false
         return [0, true]
       }
@@ -324,17 +324,26 @@ export async function renderFoundationSection(
 
   for (const bar of rawScore.bars) {
     const barStart = bar.barIndex * samplesPerBar
+    // Accent grid: downbeats get full velocity, offbeats get less
+    const accentGrid = rawScore.groove.accent
     for (const step of bar.kickNotes) {
-      events.push({ samplePos: barStart + step * samplesPerStep, type: 'kick', velocity: 0.9, durationSteps: 1, durationSamples: samplesPerStep })
+      const accent = accentGrid[step % accentGrid.length] ?? 0.5
+      const velocity = 0.7 + accent * 0.3 // 0.7-1.0 based on accent
+      events.push({ samplePos: barStart + step * samplesPerStep, type: 'kick', velocity, durationSteps: 1, durationSamples: samplesPerStep })
     }
     for (const note of bar.bassNotes) {
-      events.push({ samplePos: barStart + note.step * samplesPerStep, type: 'bass', midi: note.midi, velocity: 0.7, durationSteps: note.durationSteps, durationSamples: note.durationSteps * samplesPerStep })
+      const accent = accentGrid[note.step % accentGrid.length] ?? 0.5
+      const velocity = 0.5 + accent * 0.3 // 0.5-0.8 based on accent
+      events.push({ samplePos: barStart + note.step * samplesPerStep, type: 'bass', midi: note.midi, velocity, durationSteps: note.durationSteps, durationSamples: note.durationSteps * samplesPerStep })
     }
     for (const note of bar.leadNotes) {
       events.push({ samplePos: barStart + note.step * samplesPerStep, type: 'lead', midi: note.midi, velocity: note.velocity, durationSteps: note.durationSteps, durationSamples: note.durationSteps * samplesPerStep })
     }
     for (const step of bar.hatNotes) {
-      events.push({ samplePos: barStart + step * samplesPerStep, type: 'hat', velocity: 0.5, durationSteps: 1, durationSamples: samplesPerStep })
+      // Alternate offbeat hats: louder on offbeats, ghost on downbeats
+      const isOffbeat = step % 4 === 2
+      const velocity = isOffbeat ? 0.6 : 0.35
+      events.push({ samplePos: barStart + step * samplesPerStep, type: 'hat', velocity, durationSteps: 1, durationSamples: samplesPerStep })
     }
   }
 
