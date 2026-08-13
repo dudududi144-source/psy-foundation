@@ -1030,3 +1030,43 @@ Stage Summary:
 - The real samples (909/MD/Nord) are professional quality and should replace synthetic hats/percussion immediately.
 - Foundation's CompositionEngine should drive the forensic engine's event system — the composition engine produces WHAT (notes, phrases, identity), the forensic engine produces HOW IT SOUNDS (DSP, mix, master).
 - RECOMMENDATION: Adopt the forensic engine as the synthesis backend. Fix the bass envelope (add sustain). Wire in real samples for kick/hats. Use Foundation's CompositionEngine to generate events. The psy4-engine.js worklet becomes the live playback engine (same DSP, real-time).
+
+---
+Task ID: F22-RAWWSCORE-FREEZE
+Agent: foundation-lead
+Task: Freeze Foundation as provider. Create experimental RawScore serializer from existing ComposedSection. No source code changes, no new fields, no deletions.
+
+Work Log:
+- Received Vertical-Proof Freeze Instruction. Foundation is now a frozen PROVIDER. No changes to CompositionEngine, no new fields, no deletions, no refactoring.
+- Performed contract audit (subagent): mapped every field in ComposedBar, ComposedPhrase, ComposedSection, GroovePlan, PhraseMaterial, HarmonicPlan, voice plans, and all related types. Classified each field as REQUIRED / DERIVED / REDUNDANT / DEAD / GAP based on actual usage (who writes it, who reads it in production code vs tests).
+- Key audit findings:
+  - 10 ComposedBar fields are "F20 inspection" fields (harmonicPlan, activeChord, spaceMap, kickPlan, bassPlan, leadPlan, synthRecipes, soundDNA, timbreIntent, groove) — written by composePhrase, read ONLY by tests, NOT by AudioRenderer or AudioCritic.
+  - 9 of 17 GroovePlan fields are DEAD (subdivision, hatStyle, density, swing, pulse, microtiming, bassAccentMap, ghostMap, kickMap) — computed but never read by production code.
+  - 6 of 18 PhraseMaterial fields are DEAD (intervalCell, accentShape, densityShape, registerShape, harmonicTargetShape, developmentHistory) — only preserved by cloneMaterial, never inspected.
+  - LeadPlanNote.role and BassPlanNote.function are computed at real cost but DISCARDED when flattening to bar.leadNotes / bar.bassNotes.
+  - InteractionGrammar is the gold standard — every field is causally consumed.
+  - AudioRenderer reads only 6 of 17 ComposedBar fields (barIndex, kickNotes, bassNotes[midi/step/durationSteps], leadNotes[midi/step/durationSteps/velocity], hatNotes, groove.stepsPerBar).
+- Created `raw-score-serializer.ts` (NEW FILE — read-only, does not modify any existing code):
+  - serializeRawScore(section: ComposedSection): RawScore — pure function, reads existing ComposedSection, produces JSON-safe RawScore
+  - serializeRawScoreJSON(section: ComposedSection): string — deterministic JSON string
+  - RawScore interface: bars[], phrases[], groove, arrangement — ONLY REQUIRED fields
+  - RawBar: barIndex, arrangementState, roles, kickNotes, bassNotes, leadNotes, hatNotes, harmonicContext — NO DEAD fields
+  - RawPhrase: motifIds, callbackTo?, phraseMaterial?, developmentOperator? — NO phraseArc, NO harmonicPlan
+  - RawPhraseMaterial: motifId, pitchContour, intervalSequence, rhythmPattern, accentPattern, noteDurations, registerProfile, harmonicTargets, stepsPerBar, transformHistory, rhythmicCell, contour, cadenceTarget, phraseArc — NO DEAD shape fields
+  - RawGroove: stepsPerBar, bassKickAlignment, accentSteps, syncopationBudget, fillBars, accent + _experimental{swing, microtiming, kickSteps, hatSteps}
+  - swing and microtiming included as _experimental (flagged, NOT a contract commitment) so PSY4 can test whether it needs them
+  - DEAD fields EXCLUDED: timbreIntent, synthRecipes, soundDNA, spaceMap, kickPlan, bassPlan, leadPlan, harmonicPlan, activeChord, groove(bar-level), phraseArc(phrase-level), harmonicPlan(phrase-level), subdivision, hatStyle, density, pulse, bassAccentMap, ghostMap, kickMap, intervalCell, accentShape, densityShape, registerShape, harmonicTargetShape, developmentHistory
+- Updated index.ts to export the serializer types and functions.
+- Verified: typecheck clean, lint clean, 333/333 tests pass (no regressions — serializer is purely additive).
+- Verified: deterministic (same input → same JSON, always). Different seeds produce different JSON.
+- Verified: no DEAD fields in JSON output. All REQUIRED fields present.
+- Wrote example RawScore to /home/z/rawscore-example.json (25.2 KB for 8 bars).
+
+Stage Summary:
+- Foundation is FROZEN as provider. No further changes authorized until PSY4 Vertical Validation results.
+- Created 1 new file: raw-score-serializer.ts (read-only serializer, ~200 lines). Updated index.ts with exports.
+- No changes to CompositionEngine, no new fields, no deletions, no refactoring.
+- RawScore JSON is deterministic, contains ONLY REQUIRED musical fields, excludes all DEAD fields.
+- swing and microtiming are included as _experimental for PSY4 to test.
+- GAPs (bass velocity, articulation, microtimingOffset, dynamicsCurve, timbralCharacter) remain OPEN — PSY4 must prove they are needed before they are added.
+- Foundation is READY FOR VERTICAL PROOF.
