@@ -242,7 +242,18 @@ export async function renderFoundationSection(
   const secondsPerStep = 60 / bpm / (rawScore.groove.stepsPerBar / 4)
   const samplesPerStep = Math.ceil(secondsPerStep * SR)
   const samplesPerBar = samplesPerStep * rawScore.groove.stepsPerBar
-  const totalSamples = samplesPerBar * rawScore.bars.length
+
+  // Find the first bar with kick+bass (skip INTRO/BREAK silence)
+  const activeBars = rawScore.bars.filter(b => b.roles.kick && b.roles.bass && b.arrangementState !== 'INTRO' && b.arrangementState !== 'BREAK' && b.arrangementState !== 'OUTRO')
+  const renderBars = activeBars.length > 0 ? activeBars : rawScore.bars
+  // Remap bar indices to be contiguous (remove gaps from skipped bars)
+  const barRemap = new Map<number, number>()
+  let remappedIdx = 0
+  for (const b of renderBars) {
+    barRemap.set(b.barIndex, remappedIdx)
+    remappedIdx++
+  }
+  const totalSamples = samplesPerBar * renderBars.length
   const samplesL = new Float32Array(totalSamples)
   const samplesR = new Float32Array(totalSamples)
   const rng = new Rng(42)
@@ -344,43 +355,50 @@ export async function renderFoundationSection(
   }
   const events: ScheduledEvent[] = []
 
-  for (const bar of rawScore.bars) {
-    const barStart = bar.barIndex * samplesPerBar
-    // Skip INTRO bars — start from GROOVE for immediate musical impact
-    if (bar.arrangementState === 'INTRO' && rawScore.bars.length <= 4) continue
+  for (const bar of renderBars) {
+    const barStart = (barRemap.get(bar.barIndex) ?? 0) * samplesPerBar
+    // Skip INTRO/BREAK/OUTRO bars where kick+bass are off — we want full groove
+    if (!bar.roles.kick || !bar.roles.bass) continue
+
     const accentGrid = rawScore.groove.accent
-    for (const step of bar.kickNotes) {
-      const accent = accentGrid[step % accentGrid.length] ?? 0.5
-      const velocity = 0.7 + accent * 0.3
+
+    // ENFORCE four-on-the-floor kick (steps 0, 4, 8, 12) — non-negotiable for psytrance
+    for (const step of [0, 4, 8, 12]) {
+      const accent = accentGrid[step % accentGrid.length] ?? 1.0
+      const velocity = 0.8 + accent * 0.2 // 0.8-1.0
       events.push({ samplePos: barStart + step * samplesPerStep, type: 'kick', velocity, durationSteps: 1, durationSamples: samplesPerStep })
     }
-    for (const note of bar.bassNotes) {
-      const accent = accentGrid[note.step % accentGrid.length] ?? 0.5
-      const velocity = 0.5 + accent * 0.3
-      events.push({ samplePos: barStart + note.step * samplesPerStep, type: 'bass', midi: note.midi, velocity, durationSteps: note.durationSteps, durationSamples: note.durationSteps * samplesPerStep })
+
+    // ENFORCE rolling bass on every 16th step — use the bass notes from Foundation
+    // but fill all 16 steps. If Foundation gave us fewer notes, repeat the root.
+    const bassRootMidi = bar.bassNotes.length > 0 ? (bar.bassNotes[0]?.midi ?? 40) : 40
+    const bassFifthMidi = bar.bassNotes.length > 0 ? (bar.bassNotes[2]?.midi ?? bassRootMidi) : bassRootMidi
+    for (let step = 0; step < 16; step++) {
+      const accent = accentGrid[step % accentGrid.length] ?? 0.5
+      const velocity = 0.4 + accent * 0.3 // 0.4-0.7
+      // Alternate root and fifth for rolling pattern
+      const midi = (step % 4 === 0) ? bassRootMidi : (step % 8 === 4) ? bassFifthMidi : bassRootMidi
+      events.push({ samplePos: barStart + step * samplesPerStep, type: 'bass', midi, velocity, durationSteps: 1, durationSamples: samplesPerStep })
     }
+
+    // Lead notes from Foundation
     for (const note of bar.leadNotes) {
       events.push({ samplePos: barStart + note.step * samplesPerStep, type: 'lead', midi: note.midi, velocity: note.velocity, durationSteps: note.durationSteps, durationSamples: note.durationSteps * samplesPerStep })
     }
-    for (const step of bar.hatNotes) {
-      const isOffbeat = step % 4 === 2
-      const velocity = isOffbeat ? 0.6 : 0.35
+
+    // Hats on offbeats (2, 6, 10, 14) — driving psytrance hats
+    for (const step of [2, 6, 10, 14]) {
+      const velocity = 0.5
       events.push({ samplePos: barStart + step * samplesPerStep, type: 'hat', velocity, durationSteps: 1, durationSamples: samplesPerStep })
     }
-    // Add claps on beats 2 and 4 (steps 4 and 12) for rhythmic variation
-    if (bar.roles.kick && bar.roles.bass) {
-      events.push({ samplePos: barStart + 4 * samplesPerStep, type: 'clap', velocity: 0.5, durationSteps: 1, durationSamples: samplesPerStep })
-      events.push({ samplePos: barStart + 12 * samplesPerStep, type: 'clap', velocity: 0.5, durationSteps: 1, durationSamples: samplesPerStep })
-    }
-    // Add ghost perc on offbeats for rhythmic interest
-    if (bar.roles.hats && bar.roles.kick) {
-      const ghostSteps = [6, 14]
-      for (const gs of ghostSteps) {
-        if (!bar.hatNotes.includes(gs)) {
-          events.push({ samplePos: barStart + gs * samplesPerStep, type: 'perc', velocity: 0.2, durationSteps: 1, durationSamples: samplesPerStep })
-        }
-      }
-    }
+
+    // Claps on beats 2 and 4
+    events.push({ samplePos: barStart + 4 * samplesPerStep, type: 'clap', velocity: 0.45, durationSteps: 1, durationSamples: samplesPerStep })
+    events.push({ samplePos: barStart + 12 * samplesPerStep, type: 'clap', velocity: 0.45, durationSteps: 1, durationSamples: samplesPerStep })
+
+    // Ghost perc on step 7 and 15 for syncopation
+    events.push({ samplePos: barStart + 7 * samplesPerStep, type: 'perc', velocity: 0.2, durationSteps: 1, durationSamples: samplesPerStep })
+    events.push({ samplePos: barStart + 15 * samplesPerStep, type: 'perc', velocity: 0.2, durationSteps: 1, durationSamples: samplesPerStep })
   }
 
   // Sort events by sample position
@@ -414,13 +432,15 @@ export async function renderFoundationSection(
           kickIdx++
         }
       } else if (ev.type === 'bass' && ev.midi !== undefined) {
-        // Note off previous bass
+        // Note off previous bass immediately — tight 16th note staccato
         if (activeBass) activeBass.noteOff()
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
         const v = bassVoices[bassIdx % bassVoices.length]!
-        v.trigger(freq, ev.durationSamples / SR, ev.velocity, false, bassParams)
+        // Short duration for rolling bass — 80% of a 16th step
+        const bassDur = Math.floor(samplesPerStep * 0.8) / SR
+        v.trigger(freq, bassDur, ev.velocity, false, bassParams)
         activeBass = v
-        activeBassNoteOffPos = i + ev.durationSamples
+        activeBassNoteOffPos = i + Math.floor(samplesPerStep * 0.8)
         bassIdx++
       } else if (ev.type === 'lead' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
@@ -554,7 +574,7 @@ export async function renderFoundationSection(
     samplesR,
     sampleRate: SR,
     durationSec: totalSamples / SR,
-    bars: rawScore.bars.length,
+    bars: renderBars.length,
     events: eventCount,
   }
 }
