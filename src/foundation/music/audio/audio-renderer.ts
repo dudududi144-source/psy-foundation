@@ -170,7 +170,7 @@ export function renderSection(
 
   // ── Master gain + soft clip ──
   for (let i = 0; i < pcm.length; i++) {
-    pcm[i] = Math.max(-1, Math.min(1, pcm[i] ?? 0 * config.masterGain))
+    pcm[i] = Math.max(-1, Math.min(1, (pcm[i] ?? 0) * config.masterGain))
   }
 
   return {
