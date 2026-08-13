@@ -254,7 +254,7 @@ export async function renderFoundationSection(
         bassIdx++
       } else if (ev.type === 'lead' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
-        leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: 3000, detune: 10, res: 0.5, lfoRate: 0.8, lfoDepth: 0.3 })
+        leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: 4000, detune: 10, res: 0.5, lfoRate: 0.8, lfoDepth: 0.3 })
         leadIdx++
       } else if (ev.type === 'hat') {
         if (hatSample) hatSample.trigger(ev.vel)
@@ -280,12 +280,12 @@ export async function renderFoundationSection(
     // Bass (sidechained)
     if (activeBass?.active) { const [s] = activeBass.render(); bL += s * duckEnv; bR += s * duckEnv }
 
-    // Lead (Haas stereo)
+    // Lead (Haas stereo) — louder for presence
     let leadSig = 0
     for (const v of leads) if (v.active) leadSig += v.render()[0]
     haasBuf[i % haasDelay] = leadSig
-    mL += leadSig * 0.8
-    mR += (haasBuf[(i + 1) % haasDelay] ?? 0) * 0.8
+    mL += leadSig * 1.0
+    mR += (haasBuf[(i + 1) % haasDelay] ?? 0) * 1.0
 
     // Hats — louder for high-end presence
     if (hatSample?.active) { const [s] = hatSample.render(); dL += s * 1.0; dR += s * 1.0 }

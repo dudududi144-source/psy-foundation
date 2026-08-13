@@ -261,18 +261,23 @@ export class PsyLead {
     }
     signal /= 3
 
+    // ── Octave layer: add freq*2 saw for brightness ──
+    // This adds high-end harmonics that the filter doesn't kill
+    const octaveSaw = this.saws[0]!.process((this.freq * 2) / SR) * 0.3
+    signal += octaveSaw
+
     // ── Filter envelope: opens on attack, closes to base ──
     const filterEnv = Math.exp(-this.t / 0.15) * this.filterEnvAmount
     const lfo = Math.sin(2 * Math.PI * this.lfoRate * this.t) * this.lfoDepth
     const cutoff = this.cutoff * (1 + filterEnv + lfo * 0.3)
-    const filtered = this.filter.process(signal, Math.max(100, cutoff), this.res, 1.2, SR)
+    const filtered = this.filter.process(signal, Math.max(100, cutoff), this.res, 1.3, SR)
 
-    // ── Air: subtle noise for high-end presence ──
-    const airNoise = this.noise.next() * 0.02 * Math.exp(-this.t / 0.1)
+    // ── Air: noise for high-end presence (stronger) ──
+    const airNoise = this.noise.next() * 0.05 * Math.exp(-this.t / 0.1)
 
-    // ── Saturate ──
+    // ── Saturate (stronger for more harmonics) ──
     let out = filtered + airNoise
-    out = fastTanh(out * 1.3)
+    out = fastTanh(out * 1.5)
 
     // ── Amp envelope: 5ms attack → sustain → 50ms release ──
     const attackEnv = Math.min(1, this.t / 0.005)
