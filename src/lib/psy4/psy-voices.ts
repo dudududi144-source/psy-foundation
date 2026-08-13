@@ -365,3 +365,253 @@ export class PsySample {
     return [sample, false]
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// SNARE — proper snare with noise + tone
+// ═══════════════════════════════════════════════════════════════
+
+export class PsySnare {
+  active = false
+  t = 0
+  amp = 0.5
+  noise: PinkNoise
+  prevNoise = 0
+  tonePhase = 0
+  freq = 200
+
+  constructor(rng: Rng) {
+    this.noise = new PinkNoise(rng)
+  }
+
+  trigger(amp: number) {
+    this.active = true
+    this.t = 0
+    this.amp = amp
+    this.prevNoise = 0
+    this.tonePhase = 0
+    this.noise.reset()
+  }
+
+  render(): [number, boolean] {
+    if (!this.active) return [0, true]
+    this.t += 1 / SR
+    if (this.t > 0.15) { this.active = false; return [0, true] }
+
+    const n = this.noise.next()
+    const hp = n - this.prevNoise
+    this.prevNoise = n
+    const noiseEnv = Math.exp(-this.t / 0.06)
+    const noiseOut = hp * noiseEnv * 0.6
+
+    this.tonePhase += (2 * Math.PI * this.freq) / SR
+    const toneEnv = Math.exp(-this.t / 0.04)
+    const toneOut = Math.sin(this.tonePhase) * toneEnv * 0.3
+
+    return [(noiseOut + toneOut) * this.amp, false]
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUB-BASS — sustained sine root
+// ═══════════════════════════════════════════════════════════════
+
+export class PsySubBass {
+  active = false
+  t = 0
+  phase = 0
+  freq = 50
+  amp = 0.3
+  releasing = false
+  releaseT = 0
+
+  trigger(freq: number, _dur: number, amp: number) {
+    this.active = true
+    this.t = 0
+    this.phase = 0
+    this.freq = freq
+    this.amp = amp
+    this.releasing = false
+    this.releaseT = 0
+  }
+
+  noteOff() {
+    this.releasing = true
+    this.releaseT = 0
+  }
+
+  render(): [number, boolean] {
+    if (!this.active) return [0, true]
+    this.t += 1 / SR
+    if (this.releasing) {
+      this.releaseT += 1 / SR
+      if (this.releaseT > 0.1) { this.active = false; return [0, true] }
+    }
+    this.phase += (2 * Math.PI * this.freq) / SR
+    const attackEnv = Math.min(1, this.t / 0.02)
+    let ampEnv = attackEnv
+    if (this.releasing) ampEnv = attackEnv * Math.exp(-this.releaseT / 0.05)
+    return [Math.sin(this.phase) * ampEnv * this.amp, false]
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PAD — sustained chord with slow filter sweep
+// ═══════════════════════════════════════════════════════════════
+
+export class PsyPad {
+  active = false
+  t = 0
+  saws: BLSaw[]
+  filter = new MoogLadder()
+  amp = 0.12
+  releasing = false
+  releaseT = 0
+  cutoff = 800
+
+  constructor(rng: Rng) {
+    this.saws = [new BLSaw(), new BLSaw(), new BLSaw()]
+    void rng
+  }
+
+  trigger(freqs: number[], _dur: number, amp: number) {
+    this.active = true
+    this.t = 0
+    this.amp = amp
+    this.releasing = false
+    this.releaseT = 0
+    for (let i = 0; i < 3; i++) {
+      this.saws[i]!.reset()
+      this.saws[i]!.setFreq(freqs[i] ?? freqs[0] ?? 220)
+    }
+    this.filter.reset()
+  }
+
+  noteOff() { this.releasing = true; this.releaseT = 0 }
+
+  render(): [number, boolean] {
+    if (!this.active) return [0, true]
+    this.t += 1 / SR
+    if (this.releasing) {
+      this.releaseT += 1 / SR
+      if (this.releaseT > 0.3) { this.active = false; return [0, true] }
+    }
+    let signal = 0
+    for (let i = 0; i < 3; i++) {
+      const f = this.saws[i]!.frequency
+      signal += this.saws[i]!.process(f / SR)
+    }
+    signal /= 3
+    const lfo = Math.sin(2 * Math.PI * 0.5 * this.t) * 0.3
+    const cutoff = Math.max(200, this.cutoff * (1 + lfo))
+    const filtered = this.filter.process(signal, cutoff, 0.2, 1.0, SR)
+    const attackEnv = Math.min(1, this.t / 0.1)
+    let ampEnv = attackEnv
+    if (this.releasing) ampEnv = attackEnv * Math.exp(-this.releaseT / 0.15)
+    return [filtered * ampEnv * this.amp, false]
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHAKER — 16th grid percussion
+// ═══════════════════════════════════════════════════════════════
+
+export class PsyShaker {
+  active = false
+  t = 0
+  amp = 0.25
+  noise: PinkNoise
+  prevNoise = 0
+  filter = new MoogLadder()
+
+  constructor(rng: Rng) { this.noise = new PinkNoise(rng) }
+
+  trigger(amp: number) {
+    this.active = true
+    this.t = 0
+    this.amp = amp
+    this.prevNoise = 0
+    this.noise.reset()
+    this.filter.reset()
+  }
+
+  render(): [number, boolean] {
+    if (!this.active) return [0, true]
+    this.t += 1 / SR
+    if (this.t > 0.04) { this.active = false; return [0, true] }
+    const n = this.noise.next()
+    const hp = n - this.prevNoise
+    this.prevNoise = n
+    const filtered = this.filter.process(hp, 6000, 0.3, 1.0, SR)
+    const env = Math.exp(-this.t / 0.02)
+    return [filtered * env * this.amp * 1.5, false]
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FX RISER — filter sweep for builds
+// ═══════════════════════════════════════════════════════════════
+
+export class PsyRiser {
+  active = false
+  t = 0
+  dur = 2.0
+  amp = 0.25
+  noise: PinkNoise
+  filter = new MoogLadder()
+
+  constructor(rng: Rng) { this.noise = new PinkNoise(rng) }
+
+  trigger(dur: number, amp: number) {
+    this.active = true
+    this.t = 0
+    this.dur = dur
+    this.amp = amp
+    this.noise.reset()
+    this.filter.reset()
+  }
+
+  render(): [number, boolean] {
+    if (!this.active) return [0, true]
+    this.t += 1 / SR
+    if (this.t > this.dur) { this.active = false; return [0, true] }
+    const progress = this.t / this.dur
+    const n = this.noise.next()
+    const cutoff = 200 + progress * 7800
+    const filtered = this.filter.process(n, cutoff, 0.4, 1.5, SR)
+    const env = Math.pow(progress, 2) * this.amp
+    return [filtered * env, false]
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FX IMPACT — sub drop
+// ═══════════════════════════════════════════════════════════════
+
+export class PsyImpact {
+  active = false
+  t = 0
+  phase = 0
+  amp = 0.4
+  noise: PinkNoise
+
+  constructor(rng: Rng) { this.noise = new PinkNoise(rng) }
+
+  trigger(amp: number) {
+    this.active = true
+    this.t = 0
+    this.phase = 0
+    this.amp = amp
+    this.noise.reset()
+  }
+
+  render(): [number, boolean] {
+    if (!this.active) return [0, true]
+    this.t += 1 / SR
+    if (this.t > 0.5) { this.active = false; return [0, true] }
+    const freq = (120 - 35) * Math.exp(-this.t / 0.1) + 35
+    this.phase += (2 * Math.PI * freq) / SR
+    const sub = Math.sin(this.phase) * Math.exp(-this.t / 0.3) * 0.7
+    const crack = this.noise.next() * Math.exp(-this.t / 0.02) * 0.3
+    return [(sub + crack) * this.amp, false]
+  }
+}

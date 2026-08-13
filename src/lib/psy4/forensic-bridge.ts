@@ -13,7 +13,7 @@ import type { ComposedSection } from '../../foundation/music'
 import { Rng } from './forensic/prng'
 import { fastTanh } from './forensic/dsp'
 import { BusProcessor, MasterChain, SchroederReverb, StereoDelay } from './forensic/mixing'
-import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample } from './psy-voices'
+import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact } from './psy-voices'
 
 const SR = 44100
 
@@ -93,6 +93,12 @@ export async function renderFoundationSection(
   const basses = [new PsyBass(), new PsyBass()]
   const leads = [new PsyLead(rng), new PsyLead(rng), new PsyLead(rng), new PsyLead(rng)]
   const hats = [new PsyHat(rng), new PsyHat(rng), new PsyHat(rng), new PsyHat(rng)]
+  const snares = [new PsySnare(rng), new PsySnare(rng)]
+  const subBasses = [new PsySubBass(), new PsySubBass()]
+  const pads = [new PsyPad(rng), new PsyPad(rng)]
+  const shakers = [new PsyShaker(rng), new PsyShaker(rng)]
+  const risers = [new PsyRiser(rng)]
+  const impacts = [new PsyImpact(rng)]
 
   // ── Samples ──
   let kickSample: PsySample | null = null
@@ -143,7 +149,7 @@ export async function renderFoundationSection(
   delay.wet = 0.2
 
   // ── Events ──
-  interface Ev { pos: number; type: string; midi?: number; vel: number; dur: number }
+  interface Ev { pos: number; type: string; midi?: number; freqs?: number[]; vel: number; dur: number }
   const events: Ev[] = []
 
   for (const bar of renderBars) {
@@ -219,6 +225,34 @@ export async function renderFoundationSection(
     events.push({ pos: barStart + 4 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
     events.push({ pos: barStart + 12 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
 
+    // Snare on beats 2 & 4 (backbeat — THE missing element)
+    events.push({ pos: barStart + 4 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
+    events.push({ pos: barStart + 12 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
+
+    // Sub-bass: sustained root for the whole bar
+    events.push({ pos: barStart, type: 'subbass', midi: rootMidi, vel: 0.25, dur: samplesPerBar })
+
+    // Pad: sustained chord (root, third, fifth) — one per 2 bars
+    if (barIdx % 2 === 0) {
+      const rootFreq = 440 * Math.pow(2, (rootMidi - 69) / 12)
+      const thirdFreq = 440 * Math.pow(2, (rootMidi + 4 - 69) / 12)
+      const fifthFreq = 440 * Math.pow(2, (rootMidi + 7 - 69) / 12)
+      events.push({ pos: barStart, type: 'pad', vel: 0.12, dur: samplesPerBar * 2, freqs: [rootFreq, thirdFreq, fifthFreq] })
+    }
+
+    // Shaker on every 16th — driving pulse
+    for (let step = 0; step < 16; step++) {
+      const isStrong = step % 4 === 0
+      events.push({ pos: barStart + step * samplesPerStep, type: 'shaker', vel: isStrong ? 0.3 : 0.15, dur: samplesPerStep })
+    }
+
+    // FX: riser before section changes (last bar of each 4-bar phrase)
+    if (barIdx % 4 === 3) {
+      events.push({ pos: barStart, type: 'riser', vel: 0.2, dur: samplesPerBar })
+      // Impact on the downbeat of the next section
+      events.push({ pos: barStart + samplesPerBar, type: 'impact', vel: 0.4, dur: samplesPerStep })
+    }
+
     // Ghost perc — variation per bar
     const percSteps = pattern === 0 ? [7, 15] : pattern === 1 ? [5, 13] : pattern === 2 ? [3, 11] : [7, 11, 15]
     for (const ps of percSteps) {
@@ -232,6 +266,10 @@ export async function renderFoundationSection(
   let duckEnv = 1.0
   let activeBass: PsyBass | null = null
   let bassNoteOffPos = 0
+  let activeSubBass: PsySubBass | null = null
+  let subBassNoteOffPos = 0
+  let activePad: PsyPad | null = null
+  let padNoteOffPos = 0
   let kickIdx = 0, bassIdx = 0, leadIdx = 0, hatIdx = 0
   const haasDelay = Math.floor(0.015 * SR)
   const haasBuf = new Float32Array(haasDelay)
@@ -263,12 +301,35 @@ export async function renderFoundationSection(
         clapSample.trigger(ev.vel)
       } else if (ev.type === 'perc' && percSample) {
         percSample.trigger(ev.vel)
+      } else if (ev.type === 'snare') {
+        snares[0]!.trigger(ev.vel)
+      } else if (ev.type === 'subbass' && ev.midi !== undefined) {
+        const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
+        if (activeSubBass) activeSubBass.noteOff()
+        subBasses[0]!.trigger(freq, ev.dur / SR, ev.vel)
+        activeSubBass = subBasses[0]!
+        subBassNoteOffPos = i + ev.dur
+      } else if (ev.type === 'pad' && ev.freqs) {
+        if (activePad) activePad.noteOff()
+        pads[0]!.trigger(ev.freqs, ev.dur / SR, ev.vel)
+        activePad = pads[0]!
+        padNoteOffPos = i + ev.dur
+      } else if (ev.type === 'shaker') {
+        shakers[0]!.trigger(ev.vel)
+      } else if (ev.type === 'riser') {
+        risers[0]!.trigger(ev.dur / SR, ev.vel)
+      } else if (ev.type === 'impact') {
+        impacts[0]!.trigger(ev.vel)
       }
       evIdx++
     }
 
     // Bass note off
     if (activeBass && i >= bassNoteOffPos) { activeBass.noteOff(); activeBass = null }
+    // Sub-bass note off
+    if (activeSubBass && i >= subBassNoteOffPos) { activeSubBass.noteOff(); activeSubBass = null }
+    // Pad note off
+    if (activePad && i >= padNoteOffPos) { activePad.noteOff(); activePad = null }
 
     // Render voices
     let dL = 0, dR = 0, bL = 0, bR = 0, mL = 0, mR = 0
@@ -294,6 +355,22 @@ export async function renderFoundationSection(
     // Clap + Perc — louder for rhythmic definition
     if (clapSample?.active) { const [s] = clapSample.render(); dL += s * 0.5; dR += s * 0.5 }
     if (percSample?.active) { const [s] = percSample.render(); dL += s * 0.25; dR += s * 0.25 }
+
+    // Snare (backbeat)
+    for (const v of snares) if (v.active) { const [s] = v.render(); dL += s * 0.6; dR += s * 0.6 }
+
+    // Sub-bass (sustained root — goes to bass bus)
+    if (activeSubBass?.active) { const [s] = activeSubBass.render(); bL += s; bR += s }
+
+    // Pad (sustained chord — goes to music bus with stereo)
+    if (activePad?.active) { const [s] = activePad.render(); mL += s; mR += s * 0.9 }
+
+    // Shaker (16th grid — goes to drum bus)
+    for (const v of shakers) if (v.active) { const [s] = v.render(); dL += s * 0.4; dR += s * 0.4 }
+
+    // FX: Riser + Impact (go to music bus)
+    for (const v of risers) if (v.active) { const [s] = v.render(); mL += s; mR += s * 0.8 }
+    for (const v of impacts) if (v.active) { const [s] = v.render(); bL += s * 0.7; bR += s * 0.7 }
 
     // Buses
     dL = drumL.process(dL, SR); dR = drumR.process(dR, SR)
