@@ -245,13 +245,13 @@ export async function renderFoundationSection(
     mL += leadSig * 0.8
     mR += (haasBuf[(i + 1) % haasDelay] ?? 0) * 0.8
 
-    // Hats
-    if (hatSample?.active) { const [s] = hatSample.render(); dL += s * 0.7; dR += s * 0.7 }
-    else for (const v of hats) if (v.active) { const [s] = v.render(); dL += s * 0.5; dR += s * 0.5 }
+    // Hats — louder for high-end presence
+    if (hatSample?.active) { const [s] = hatSample.render(); dL += s * 1.0; dR += s * 1.0 }
+    else for (const v of hats) if (v.active) { const [s] = v.render(); dL += s * 0.7; dR += s * 0.7 }
 
-    // Clap + Perc
-    if (clapSample?.active) { const [s] = clapSample.render(); dL += s * 0.35; dR += s * 0.35 }
-    if (percSample?.active) { const [s] = percSample.render(); dL += s * 0.15; dR += s * 0.15 }
+    // Clap + Perc — louder for rhythmic definition
+    if (clapSample?.active) { const [s] = clapSample.render(); dL += s * 0.5; dR += s * 0.5 }
+    if (percSample?.active) { const [s] = percSample.render(); dL += s * 0.25; dR += s * 0.25 }
 
     // Buses
     dL = drumL.process(dL, SR); dR = drumR.process(dR, SR)

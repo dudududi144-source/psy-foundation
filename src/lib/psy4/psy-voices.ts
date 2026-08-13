@@ -155,13 +155,13 @@ export class PsyBass {
 
     // Filter envelope: fast attack, settle to cutoffEnd
     const cutoffEnv = (this.cutoffStart - this.cutoffEnd) * Math.exp(-this.t / 0.03) + this.cutoffEnd
-    const filtered = this.filter.process(sawOut, cutoffEnv, this.res, 1.5, SR)
+    const filtered = this.filter.process(sawOut, cutoffEnv, this.res, 1.8, SR)
 
-    // ── Mix sub + mid ──
-    let mixed = sub * 0.5 + filtered * 0.5
+    // ── Mix sub + mid (more mid for harmonic presence) ──
+    let mixed = sub * 0.35 + filtered * 0.65
 
-    // ── Saturation for harmonics ──
-    mixed = fastTanh(mixed * 1.5)
+    // ── Saturation for harmonics (stronger for more high-end) ──
+    mixed = fastTanh(mixed * 2.0)
 
     // ── HP at 30Hz to clean sub rumble ──
     const hpA = (1 / SR) * 2 * Math.PI * 30
