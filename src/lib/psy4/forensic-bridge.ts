@@ -359,11 +359,11 @@ export async function renderFoundationSection(
     // Snare (backbeat)
     for (const v of snares) if (v.active) { const [s] = v.render(); dL += s * 0.6; dR += s * 0.6 }
 
-    // Sub-bass (sustained root — goes to bass bus)
-    if (activeSubBass?.active) { const [s] = activeSubBass.render(); bL += s; bR += s }
+    // Sub-bass (sustained root — lower volume to avoid mud)
+    if (activeSubBass?.active) { const [s] = activeSubBass.render(); bL += s * 0.6; bR += s * 0.6 }
 
-    // Pad (sustained chord — goes to music bus with stereo)
-    if (activePad?.active) { const [s] = activePad.render(); mL += s; mR += s * 0.9 }
+    // Pad (sustained chord — quiet, stereo)
+    if (activePad?.active) { const [s] = activePad.render(); mL += s * 0.7; mR += s * 0.6 }
 
     // Shaker (16th grid — goes to drum bus)
     for (const v of shakers) if (v.active) { const [s] = v.render(); dL += s * 0.4; dR += s * 0.4 }
