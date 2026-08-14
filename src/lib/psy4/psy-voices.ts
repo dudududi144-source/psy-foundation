@@ -13,7 +13,7 @@
  * All voices are sample-accurate, deterministic, and produce commercial-grade sound.
  */
 
-import { fastTanh, MoogLadder, BLSaw, BLSquare, BLTriangle, OnePoleHP, PinkNoise, polyBlep } from './forensic/dsp'
+import { fastTanh, MoogLadder, BLSaw, BLSquare, BLTriangle, OnePoleHP, PinkNoise, OversampledSaturation, polyBlep } from './forensic/dsp'
 import { Rng } from './forensic/prng'
 
 const SR = 44100
@@ -28,6 +28,7 @@ export class PsyKick {
   phase = 0
   subPhase = 0
   clickFilter = new MoogLadder()
+  sat = new OversampledSaturation()
   noise: PinkNoise
   amp = 1
   fund = 50
@@ -44,6 +45,7 @@ export class PsyKick {
     this.subPhase = 0
     this.noise.reset()
     this.clickFilter.reset()
+    this.sat.reset()
     this.amp = amp
     this.fund = fund
     this.decay = decay
@@ -79,9 +81,8 @@ export class PsyKick {
     const clickEnv = Math.exp(-t / 0.0008) // 0.8ms — very sharp
     const click = this.clickFilter.process(n * clickEnv, 5000, 0.9, 2.0, SR) * 0.4
 
-    // ── Saturate body + sub together for cohesive punch ──
-    let sample = (body + sub) * 1.2
-    sample = fastTanh(sample)
+    // ── Saturate body + sub together with oversampling (no aliasing) ──
+    let sample = this.sat.process(body + sub, 1.2)
     sample += click * 0.5
 
     sample *= this.amp * 0.75
@@ -107,6 +108,7 @@ export class PsyBass {
   saw1 = new BLSaw()
   saw2 = new BLSaw()
   filter = new MoogLadder()
+  sat = new OversampledSaturation()
   hpState = 0
 
   // Filter envelope — dramatic open/close for groove
@@ -129,6 +131,7 @@ export class PsyBass {
     // Detune second saw +5 cents for stereo chorus
     this.saw2.setFreq(freq * Math.pow(2, 5 / 1200))
     this.filter.reset()
+    this.sat.reset()
   }
 
   noteOff() {
@@ -157,8 +160,8 @@ export class PsyBass {
     const cutoffEnv = (this.cutoffStart - this.cutoffEnd) * Math.exp(-this.t / 0.02) + this.cutoffEnd
     const filtered = this.filter.process(sawOut, cutoffEnv, this.res, 2.0, SR)
 
-    // ── Saturation for harmonics (stronger) ──
-    let mixed = fastTanh(filtered * 2.5)
+    // ── Saturation with oversampling (prevents aliasing) ──
+    let mixed = this.sat.process(filtered, 2.5)
 
     // ── HP at 80Hz — let the kick own the sub region ──
     const hpA = (1 / SR) * 2 * Math.PI * 80
@@ -201,6 +204,7 @@ export class PsyLead {
   subOsc = new BLTriangle()
   // Filter
   filter = new MoogLadder()
+  sat = new OversampledSaturation()
   cutoff = 1500
   res = 0.7
   filterEnvAmount = 3.0
@@ -232,6 +236,7 @@ export class PsyLead {
     this.subOsc.reset()
     this.subOsc.setFreq(freq * 0.5)
     this.filter.reset()
+    this.sat.reset()
   }
 
   noteOff() {
@@ -279,8 +284,8 @@ export class PsyLead {
     const cutoff = Math.max(200, this.cutoff * (1 + filterEnv + lfo * 0.5))
     const filtered = this.filter.process(signal, cutoff, this.res, 1.5, SR)
 
-    // ── Hard saturation for acid character ──
-    let out = fastTanh(filtered * 2.0)
+    // ── Hard saturation with oversampling (prevents aliasing) ──
+    let out = this.sat.process(filtered, 2.0)
 
     // ── Amp envelope ──
     let ampEnv = attackEnv

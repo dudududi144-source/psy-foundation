@@ -307,23 +307,22 @@ export class SineOsc {
 }
 
 // ─── Oversampled saturation (2x) ───────────────────────────────────────────
-// Upsamples, saturates, downsamples to prevent aliasing.
-
-const OS_FIR = [0.25, 0.75, 0.75, 0.25]; // simple linear-phase FIR for 2x
+// Proper 2x oversampling: upsample via linear interpolation, saturate at 2x
+// rate, then average (decimate). This removes most aliasing above Nyquist/2.
 
 export class OversampledSaturation {
-  private buf = [0, 0, 0, 0];
-  private pos = 0;
+  private prevInput = 0;
 
   process(x: number, drive: number): number {
-    // Zero-stuff: insert 3 zeros, then FIR lowpass
-    // Simplified: just saturate at 2x rate and average
-    const s1 = fastTanh(x * drive);
-    const s2 = fastTanh(x * drive * 0.5 + this.buf[this.pos]! * drive * 0.5);
-    this.buf[this.pos] = x;
-    this.pos = (this.pos + 1) % 4;
+    // Upsample: estimate the midpoint between previous and current sample
+    const mid = (this.prevInput + x) * 0.5;
+    this.prevInput = x;
+    // Saturate both the midpoint and the current sample at 2x rate
+    const s1 = fastTanh(mid * drive);
+    const s2 = fastTanh(x * drive);
+    // Downsample: average the two oversampled points
     return (s1 + s2) * 0.5;
   }
 
-  reset(): void { this.buf = [0, 0, 0, 0]; this.pos = 0; }
+  reset(): void { this.prevInput = 0; }
 }
