@@ -421,6 +421,13 @@ export async function renderFoundationSection(
     let mixL = dL + bL + mL + rL * 0.3 + delL * 0.4
     let mixR = dR + bR + mR + rR * 0.3 + delR * 0.4
 
+    // Stereo widener (M/S processing) — widen the side by 30%
+    const mid = (mixL + mixR) * 0.5
+    const side = (mixL - mixR) * 0.5
+    const widenedSide = side * 1.3
+    mixL = mid + widenedSide
+    mixR = mid - widenedSide
+
     mixL = masterL.process(mixL, SR)
     mixR = masterR.process(mixR, SR)
 
