@@ -215,6 +215,18 @@ export async function renderFoundationSection(
       }
     }
 
+    // Counter-lead — harmony response 3 steps after each lead note
+    if (bar.leadNotes.length > 0 && barIdx >= 2) {
+      for (const n of bar.leadNotes) {
+        const counterStep = n.step + 3
+        if (counterStep < 16) {
+          // Harmony: a third above (midi + 4) or fifth above (midi + 7)
+          const harmonyMidi = n.midi + (counterStep % 2 === 0 ? 4 : 7)
+          events.push({ pos: barStart + counterStep * samplesPerStep, type: 'counter', midi: harmonyMidi, vel: n.velocity * 0.6, dur: samplesPerStep })
+        }
+      }
+    }
+
     // Hats on offbeats — velocity variation
     for (const step of [2, 6, 10, 14]) {
       const isStrong = step % 8 === 6
@@ -325,6 +337,10 @@ export async function renderFoundationSection(
         risers[0]!.trigger(ev.dur / SR, ev.vel)
       } else if (ev.type === 'impact') {
         impacts[0]!.trigger(ev.vel)
+      } else if (ev.type === 'counter' && ev.midi !== undefined) {
+        const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
+        leads[(leadIdx + 2) % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: 2000, detune: 6, res: 0.3, lfoRate: 0.6, lfoDepth: 0.2 })
+        leadIdx++
       }
       evIdx++
     }
