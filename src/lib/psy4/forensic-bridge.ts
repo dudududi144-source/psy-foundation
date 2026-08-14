@@ -245,6 +245,14 @@ export async function renderFoundationSection(
     events.push({ pos: barStart + 4 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
     events.push({ pos: barStart + 12 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
 
+    // Snare roll before section changes (last bar of 4-bar phrase)
+    if (barIdx % 4 === 3) {
+      events.push({ pos: barStart + 13 * samplesPerStep, type: 'snare', vel: 0.3, dur: samplesPerStep })
+      events.push({ pos: barStart + 14 * samplesPerStep, type: 'snare', vel: 0.4, dur: samplesPerStep })
+      events.push({ pos: barStart + 15 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
+      events.push({ pos: barStart + 15 * samplesPerStep + Math.floor(samplesPerStep / 2), type: 'snare', vel: 0.7, dur: samplesPerStep })
+    }
+
     // Sub-bass: sustained root for the whole bar
     events.push({ pos: barStart, type: 'subbass', midi: rootMidi, vel: 0.25, dur: samplesPerBar })
 
