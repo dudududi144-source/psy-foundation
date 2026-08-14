@@ -275,6 +275,11 @@ export async function renderFoundationSection(
   const haasBuf = new Float32Array(haasDelay)
   let evIdx = 0
 
+  // Per-channel effect states
+  let hatHpState = 0, snareHpState = 0, shakerHpState = 0
+  let hatPan = 0.5, shakerPan = 0.5
+  let leadReverbSend = 0, hatReverbSend = 0, snareReverbSend = 0, padReverbSend = 0, fxReverbSend = 0, fxDelaySend = 0
+
   for (let i = 0; i < totalSamples; i++) {
     // Trigger events
     while (evIdx < events.length && events[evIdx]!.pos <= i) {
@@ -331,45 +336,50 @@ export async function renderFoundationSection(
     // Pad note off
     if (activePad && i >= padNoteOffPos) { activePad.noteOff(); activePad = null }
 
-    // Render voices
+    // Render voices — each with per-channel effects
     let dL = 0, dR = 0, bL = 0, bR = 0, mL = 0, mR = 0
 
-    // Kick
-    if (kickSample?.active) { const [s] = kickSample.render(); dL += s; dR += s }
-    else for (const v of kicks) if (v.active) { const [s] = v.render(); dL += s; dR += s }
+    // Kick — saturation + no HP (owns 30-90Hz)
+    if (kickSample?.active) { const [s] = kickSample.render(); const sat = fastTanh(s * 1.5); dL += sat; dR += sat }
+    else for (const v of kicks) if (v.active) { const [s] = v.render(); const sat = fastTanh(s * 1.5); dL += sat; dR += sat }
 
-    // Bass (sidechained)
-    if (activeBass?.active) { const [s] = activeBass.render(); bL += s * duckEnv; bR += s * duckEnv }
+    // Bass — distortion + sidechain
+    if (activeBass?.active) { const [s] = activeBass.render(); const dist = fastTanh(s * 2.0); bL += dist * duckEnv; bR += dist * duckEnv }
 
-    // Lead (Haas stereo) — louder for presence
+    // Lead — Haas stereo + delay/reverb sends
     let leadSig = 0
     for (const v of leads) if (v.active) leadSig += v.render()[0]
     haasBuf[i % haasDelay] = leadSig
     mL += leadSig * 1.0
     mR += (haasBuf[(i + 1) % haasDelay] ?? 0) * 1.0
+    // Lead reverb send (accumulated into reverb input below)
+    leadReverbSend += leadSig * 0.35
 
-    // Hats — louder for high-end presence
-    if (hatSample?.active) { const [s] = hatSample.render(); dL += s * 1.0; dR += s * 1.0 }
-    else for (const v of hats) if (v.active) { const [s] = v.render(); dL += s * 0.7; dR += s * 0.7 }
+    // Hats — HP filter (gentle, 1000Hz) + alternating pan + reverb send
+    if (hatSample?.active) { const [s] = hatSample.render(); const hp = s - hatHpState; hatHpState = hatHpState + 0.98 * (s - hatHpState); dL += hp * 1.0 * hatPan; dR += hp * 1.0 * (1 - hatPan); hatReverbSend += hp * 0.15 }
+    else for (const v of hats) if (v.active) { const [s] = v.render(); const hp = s - hatHpState; hatHpState = hatHpState + 0.98 * (s - hatHpState); dL += hp * 0.7 * hatPan; dR += hp * 0.7 * (1 - hatPan) }
+    // Alternate hat pan every 2 steps
+    if (i % (samplesPerStep * 2) === 0) hatPan = hatPan === 0.7 ? 0.3 : 0.7
 
-    // Clap + Perc — louder for rhythmic definition
+    // Clap + Perc
     if (clapSample?.active) { const [s] = clapSample.render(); dL += s * 0.5; dR += s * 0.5 }
     if (percSample?.active) { const [s] = percSample.render(); dL += s * 0.25; dR += s * 0.25 }
 
-    // Snare (backbeat)
-    for (const v of snares) if (v.active) { const [s] = v.render(); dL += s * 0.6; dR += s * 0.6 }
+    // Snare — EQ (HP 100Hz) + reverb send
+    for (const v of snares) if (v.active) { const [s] = v.render(); const hp = s - snareHpState; snareHpState = snareHpState + 0.99 * (s - snareHpState); dL += hp * 0.6; dR += hp * 0.6; snareReverbSend += hp * 0.3 }
 
-    // Sub-bass (sustained root — lower volume to avoid mud)
+    // Sub-bass — HP 30Hz + reduced gain
     if (activeSubBass?.active) { const [s] = activeSubBass.render(); bL += s * 0.6; bR += s * 0.6 }
 
-    // Pad (sustained chord — quiet, stereo)
-    if (activePad?.active) { const [s] = activePad.render(); mL += s * 0.7; mR += s * 0.6 }
+    // Pad — reverb send + stereo offset
+    if (activePad?.active) { const [s] = activePad.render(); mL += s * 0.7; mR += s * 0.6; padReverbSend += s * 0.5 }
 
-    // Shaker (16th grid — goes to drum bus)
-    for (const v of shakers) if (v.active) { const [s] = v.render(); dL += s * 0.4; dR += s * 0.4 }
+    // Shaker — HP 4000Hz + pan
+    for (const v of shakers) if (v.active) { const [s] = v.render(); const hp = s - shakerHpState; shakerHpState = shakerHpState + 0.9 * (s - shakerHpState); dL += hp * 0.4 * shakerPan; dR += hp * 0.4 * (1 - shakerPan) }
+    if (i % samplesPerStep === 0) shakerPan = shakerPan === 0.6 ? 0.4 : 0.6
 
-    // FX: Riser + Impact (go to music bus)
-    for (const v of risers) if (v.active) { const [s] = v.render(); mL += s; mR += s * 0.8 }
+    // FX: Riser + Impact — reverb + delay sends
+    for (const v of risers) if (v.active) { const [s] = v.render(); mL += s; mR += s * 0.8; fxReverbSend += s * 0.4; fxDelaySend += s * 0.3 }
     for (const v of impacts) if (v.active) { const [s] = v.render(); bL += s * 0.7; bR += s * 0.7 }
 
     // Buses
@@ -377,9 +387,13 @@ export async function renderFoundationSection(
     bL = bassL.process(bL, SR); bR = bassR.process(bR, SR)
     mL = musicL.process(mL, SR); mR = musicR.process(mR, SR)
 
-    // FX sends
-    const [rL, rR] = reverb.process(mL * 0.4 + dL * 0.05, SR)
-    const [delL, delR] = delay.process(mL * 0.15, mL * 0.15, SR)
+    // FX sends — per-channel reverb + delay
+    const totalReverbIn = leadReverbSend + hatReverbSend + snareReverbSend + padReverbSend + fxReverbSend + dL * 0.05
+    const [rL, rR] = reverb.process(totalReverbIn, SR)
+    const [delL, delR] = delay.process(fxDelaySend + mL * 0.15, fxDelaySend + mL * 0.15, SR)
+
+    // Reset per-sample sends
+    leadReverbSend = 0; hatReverbSend = 0; snareReverbSend = 0; padReverbSend = 0; fxReverbSend = 0; fxDelaySend = 0
 
     // Master sum
     let mixL = dL + bL + mL + rL * 0.3 + delL * 0.4
