@@ -1070,3 +1070,132 @@ Stage Summary:
 - swing and microtiming are included as _experimental for PSY4 to test.
 - GAPs (bass velocity, articulation, microtimingOffset, dynamicsCurve, timbralCharacter) remain OPEN — PSY4 must prove they are needed before they are added.
 - Foundation is READY FOR VERTICAL PROOF.
+
+---
+Task ID: 1-C
+Agent: general-purpose
+Task: Create 3-band multiband compressor with Linkwitz-Riley crossovers for PSY4 Stage 6
+
+Work Log:
+- Read worklog.md (1072 lines, last 150 lines reviewed) to understand prior state. Project is a Next.js 16 + TypeScript 5 app at /home/z/my-project. The psy4 audio engine lives in src/lib/psy4/. Foundation was frozen as provider (F22-RAWWSCORE-FREEZE). No prior multiband/compressor existed in the foundation side; the worklet psy4-engine.js had a multiband stage but isomorphic TS version did not. There is NO existing biquad class in src/lib/psy4/forensic/dsp.ts (only fastTanh, MoogLadder, OnePoleLP, ADSR, BLSaw, etc.).
+- Audited tsconfig.json (strict: true, no noUncheckedIndexedAccess; moduleResolution bundler) and eslint.config.mjs (all strict rules off, including no-explicit-any and no-unused-vars). Used `!` non-null assertions on indexed Float32Array reads for defensive consistency with existing dsp.ts style.
+- Created /home/z/my-project/src/lib/psy4/multiband.ts (384 lines). Implements:
+  - `BiquadSection` class: RBJ cookbook biquad, Direct Form II Transposed, supporting 'lp' and 'hp' types. Coefficients computed from w0 = 2*pi*fc/fs, alpha = sin(w0)/(2*Q). Normalizes by a0 so runtime uses 5 multiplies/sample. z1/z2 states init to 0, reset() clears them.
+  - `LR4Crossover` class: cascade of two identical 2nd-order Butterworth sections (Q = Math.SQRT1_2 ≈ 0.70710678) for LP, two for HP. 24 dB/oct slope, phase-matched at crossover (LP and HP have identical group delay → magnitudes sum to unity). process() returns [lowOut, highOut] tuple.
+  - `BandCompressor` class: feed-forward peak detector (rect = abs(input)) + one-pole smoothing envelope follower. Attack/release coefficients derived from analog time constants: coeff = 1 - exp(-1 / (timeMs * 0.001 * sampleRate)). Switches between attack (rect > env) and release (rect <= env) per sample. Gain reduction: gr = pow(threshold/env, 1 - 1/ratio) when env > threshold, else 1. Output = input * gr * makeupGain. Tracks lastGainReductionLinear for metering.
+  - `MultibandCompressor` class: 3-band (low 0-200Hz, mid 200-2000Hz, high 2000-20000Hz). Per-channel separate instances of LR4Crossover (4 per channel = 8 total) and BandCompressor (3 per channel = 6 total) to maintain stereo integrity. processBuffer(L, R) processes in-place, splits each sample into [low, rest] via xover1(200Hz) then [mid, high] via xover2(2000Hz) on rest, compresses each band, sums back. Tracks peak GR (minimum linear gr across both channels) per band, reports as positive dB magnitude via getLowGainReductionDb/getMidGainReductionDb/getHighGainReductionDb. Peak meters reset at the start of each processBuffer call.
+  - Psytrance mastering defaults wired in: low (-18dB thr, 3:1, 10ms att, 100ms rel, +2dB makeup), mid (-22dB, 2.5:1, 15ms, 120ms, +1dB), high (-20dB, 2:1, 5ms, 80ms, +1dB). Crossovers default 200Hz and 2000Hz. All overridable via opts.
+  - Deterministic: no Math.random. All states initialize to 0.
+- Verified: `bunx tsc --noEmit 2>&1 | grep multiband` produces ZERO output (file typechecks clean). The other tsc errors in the repo are all pre-existing (src/foundation, examples, skills) and unrelated to multiband.ts.
+- Verified: `bun run lint` produces 0 errors, 1 warning (pre-existing in src/app/page.tsx about an unused eslint-disable directive). multiband.ts introduces no new lint issues.
+- Smoke test (`bun -e`) verified three properties over a 2-second 30Hz→15kHz exponential sine sweep at 44.1kHz:
+  - TEST 1 (Unity, no compression via ratio=1:1, makeup=0dB): inRMS=0.353461, outRMS=0.352825, out/in=0.998202 (within 1% of unity PASS), GR=0/0/0 dB across all bands. LR4 phase-coherent sum confirmed.
+  - TEST 2 (Aggressive compression, defaults): inRMS=0.565537, outRMS=0.252152, out/in=0.445863 (output quieter PASS), GR low/mid/high = 9.950 / 11.135 / 8.689 dB (all > 0 PASS).
+  - TEST 3 (50Hz band isolation): low RMS=0.352026, mid RMS=0.001776, high RMS=0.000034, high/low ratio=0.000096 (< 1% PASS). 50Hz is 2 octaves below 200Hz crossover — the LR4 LP passes it through while the HP rejects by ~80 dB (24 dB/oct × ~3.3 oct), confirming 4th-order Linkwitz-Riley behavior.
+
+Stage Summary:
+- 1 new file: src/lib/psy4/multiband.ts (384 lines). Pure isomorphic TypeScript, deterministic, all states zero-init.
+- Exports: BiquadSection, LR4Crossover, BandCompressor, MultibandCompressor (+ types BiquadType, BandCompressorOptions, BandDynamicsSettings, MultibandCompressorOptions).
+- Architecture: 3-band split via two cascaded LR4 crossovers (200Hz, 2000Hz) → per-band feed-forward compressor → phase-coherent sum. Per-channel filter/compressor instances (8 crossovers + 6 compressors total) preserve stereo integrity.
+- DSP correctness verified: (a) bands sum to unity (out/in = 0.998 with no compression, < 0.2% deviation), (b) compression engages with default thresholds (peak GR 9-11 dB per band, output 0.45× input), (c) 50Hz tone routed to LOW band with HIGH band 80 dB down (ratio 0.0001, far below the 1% threshold).
+- tsc clean for multiband.ts (zero errors from `grep multiband`). lint clean (0 errors).
+- Stage 6 multiband compressor is READY for integration into the master chain (after the existing bussing, before the glue/limiter stages).
+
+---
+Task ID: 1-A
+Agent: general-purpose
+Task: Create per-channel FX chain (channel-fx.ts + channel-presets.ts) for PSY4 Stage 1
+
+Work Log:
+- Read worklog tail (F22 / F22-AUDIO-PROOF / F22-RAWWSCORE-FREEZE). Foundation is frozen as provider; PSY4 vertical proof is the next stage. Existing DSP primitives live in src/lib/psy4/forensic/dsp.ts (fastTanh, MoogLadder, OnePoleLP, PinkNoise, ADSR, BLSaw, BLSquare) and forensic/mixing.ts (SchroederReverb, StereoDelay, BusProcessor, MasterChain). No BiquadFilter exists — biquad shelf filters were implemented from scratch per RBJ Audio EQ Cookbook.
+- Reviewed forensic-bridge.ts (the main renderer) to confirm relative-import convention (`./forensic/dsp`) and 44100Hz constant sample rate.
+- Created `/home/z/my-project/src/lib/psy4/channel-fx.ts` (444 lines):
+  - `ChannelFXConfig` interface: eq {lowGainDb, lowFreqHz, highGainDb, highFreqHz}, delay {timeMs, feedback, mix, stereoOffsetMs}, reverb {roomSize, decaySec, damping, mix}, pan, width.
+  - `BiquadShelf` class: RBJ low/high shelf coefficients, Direct Form II Transposed. Gain in dB → linear via A = 10^(dB/40) (cookbook uses sqrt of linear). Slope S=1. Standard alpha = (sinw0/2)*sqrt((A+1/A)*(1/S-1)+2). Two coefficient branches (low/high).
+  - `CompactReverb` class: 4 parallel comb filters + 2 series allpass per channel (slightly different allpass delays for L vs R → pseudo-stereo). Comb feedback derived from decaySec via T60 formula: g = 10^(-3*longestDelaySec/T60), clamped to [0.2, 0.99]. Damping → one-pole LP in comb feedback path. RoomSize scales comb delay lengths (0.5×..2× base). Freeverb-style input gain 0.018.
+  - `ChannelFX` class: full chain mono→stereo. EQ (low→high shelf, mono) → Delay (ping-pong cross-feedback, two Float32Array buffers max 2s = 88200 samples, wet/dry mix, skip if timeMs===0 or mix===0) → Reverb (mono sum in, stereo out, wet/dry mix) → Pan (equal-power: panGainL=cos((pan+1)*PI/4), panGainR=sin((pan+1)*PI/4)) → Width (Haas delay on R up to 662 samples, M/S with sideGain=width*1.3; width=0 forces mono via sideGain=0).
+  - Sample-accurate `process(monoIn): [number, number]` — one sample in, one [L,R] pair out.
+  - `reset()` clears all biquad state, delay buffers, reverb buffers, width buffer.
+  - Determinism: no Math.random() anywhere; all state initialized to zero.
+  - NaN/Infinity guards on every external input and inside reverb (mirrors forensic/mixing.ts conventions).
+- Created `/home/z/my-project/src/lib/psy4/channel-presets.ts` (154 lines):
+  - `VoiceType` union: 14 voice types (kick, bass, subbass, lead, counter, hat, openhat, snare, shaker, pad, riser, impact, clap, perc).
+  - `CHANNEL_PRESETS: Record<VoiceType, ChannelFXConfig>` — full preset table from spec verbatim.
+  - `getChannelFX(type, sampleRate?)` factory: returns a fresh `ChannelFX` instance.
+  - Header doc explains design rationale: low-end voices mono+minimal-reverb; lead/counter wide+delayed; hats panned+bright; pad/riser maximum width+reverb. Delay times tuned to 145 BPM subdivisions (125/187.5/250/375/500 ms).
+- Verified `bunx tsc --noEmit src/lib/psy4/channel-fx.ts src/lib/psy4/channel-presets.ts` — clean (no output, exit 0). Full-project `bunx tsc --noEmit` shows only pre-existing errors in src/foundation/music/* (unrelated .ts-extension imports and missing @psy-foundation/dsp module) and skills/examples — zero references to channel-fx/channel-presets.
+- Verified `bun run lint` — clean for new files (zero errors, zero warnings). The single project warning is in src/app/page.tsx (pre-existing, unused eslint-disable directive).
+- Smoke-tested implementation with a temporary Bun script (since deleted): all 14 presets produce finite, deterministic output; kick/bass/subbass produce true mono (L=R) for width=0; pan law math verified externally (pan=-1 → [1,0], pan=0 → [0.707,0.707], pan=+1 → [0,1]); steady-state pan tests confirm L-dominance for pan=-1 and R-dominance for pan=+1 (with width=1 to avoid mono collapse); pad/riser (width=1) produce clear stereo (L≠R); delay echo test confirms 100ms delay produces 0.7071 amplitude echo at sample 4410 (consistent with pan=0 equal-power and width=0 mono); reset() correctly clears all state (silent input after reset → silent output).
+
+Stage Summary:
+- 2 new files created: src/lib/psy4/channel-fx.ts (444 lines) and src/lib/psy4/channel-presets.ts (154 lines). Total 598 lines.
+- ChannelFX class implements full per-channel chain: EQ (RBJ biquad shelves, DF II T) → Delay (ping-pong, Float32Array, max 2s) → Reverb (compact Schroeder, 4 combs + 2 allpass per channel) → Pan (equal-power) → Width (Haas + M/S).
+- Sample-accurate, deterministic, no Math.random(), all state zero-initialized.
+- 14 voice presets tuned for psytrance mix roles (low-end mono/dry, melodic wide/wet, percussion panned/punchy, atmosphere max-width/max-reverb).
+- tsc --noEmit clean for both new files. ESLint clean for both new files. Smoke tests pass (determinism, finiteness, mono-collapse for width=0, pan-law correctness, delay-echo timing, reset clears state).
+- ChannelFX is ready to be wired into forensic-bridge.ts as the per-voice insert FX (next task).
+
+---
+Task ID: 9
+Agent: general-purpose
+Task: Build the auto-fixer closed-loop optimization system (PSY4 Stage 9) and the /api/optimize route. Render → critique → diagnose → vary composition + master params → re-render, picking the best-scoring config.
+
+Work Log:
+- Read worklog.md (1136 lines, last 240 lines reviewed). Prior context: Foundation is FROZEN as provider (F22-RAWWSCORE-FREEZE). PSY4 forensic-bridge renders RawScore → stereo PCM (44100Hz, 5-bus + multiband + stereo widener + LUFS target + true-peak limiter). AudioCritic returns overallScore (0..1) + failures[]. Current score ~0.55, target >0.75. Recent PSY4 stages delivered: channel-fx (Task 1-A), multiband compressor (Task 1-C). Existing API routes: /api/audio-critique, /api/render-forensic — both use the same composition context (tonic=4, phrygian-dominant, octave=4, bpm=145, density=0.7, energy=0.7, tension=0.3, sectionRole='full-on', identity=createIdentityA()).
+- Read forensic-bridge.ts (579 lines): renderFoundationSection(section, { useSamples?, bpm?, targetLufs? }) — voice/mix params (kick fundamental=46Hz, kick decay=0.11s, lead cutoff=4500Hz, hat decay=0.03s, duckAmount=0.75, duckRecovery=0.15s, targetLufs=-9, stereoWidth=1.3, subBassGain=0.25, padGain=0.12, etc.) are HARDCODED inside the function. The function is async (loads WAV samples via fs.promises if useSamples=true). Internal RNG is `new Rng(42)` — deterministic. Filters out INTRO/BREAK/OUTRO bars before rendering. Returns RenderResult { samplesL, samplesR, sampleRate, durationSec, bars, events, lufs, truePeakDb, stereoWidth, monoCompatibility, gainReductionDb }.
+- Read audio-critic.ts: critiqueAudio(pcm: Float32Array, sampleRate, bpm, stepsPerBar=16) → AudioCritique { overallScore, failures: [{ code, diagnosis, correctionTarget, correctionHint, severity }] }. overallScore is the mean of 36 normalized sub-scores (kickClarity, bassClarity, punch, 1-decayOverlap, 1-lowMidMud, etc.). 12 failure codes (BASS_DECAY_TOO_LONG, KICK_TRANSIENT_MASKED, WEAK_PUNCH, LOW_MID_MUD, NO_TIMBRAL_MOVEMENT, LEAD_TOO_BRIGHT, HIGH_END_TOO_WEAK, RHYTHMIC_PATTERN_TOO_UNIFORM, KICK_BASS_PHASE_RISK, LEAD_TOO_STATIC, LEAD_MASKING_BASS, WEAK_MOTIF_IDENTITY). Score does NOT directly weight LUFS — louder signals only help indirectly via better SNR for the spectral/onset metrics.
+- Read CompositionEngine constructor (composition-engine.ts:218-241): CRITICAL FINDING — when an `identity` is passed (as the API routes do via createIdentityA()), the constructor OVERRIDES ctx.energy, ctx.tension, and ctx.density with values derived from the identity (`energy: identity.energy`, `tension: identity.tension`, `density: 0.3 + identity.energy * 0.4`). So varying density/energy/tension in the ctx has NO EFFECT on the composition when an identity is provided. The only effective levers through CompositionEngine are: the seed (controls motif generation), the identity itself, and other ctx fields (tonic, scaleName, sectionRole, etc.). The auto-fixer's "vary density/energy/tension" iterations therefore produce IDENTICAL sections to the baseline. This was confirmed empirically (see smoke test below). The effective levers are: seedOffset (different musical material), targetLufs (master gain → limiter behavior), useSamples (real 909/MD samples vs synthetic voices).
+- Strategy: per the revised spec, the auto-fixer works at the COMPOSITION + MASTER level (since the bridge is frozen and doesn't expose voice params). Defined the RenderConfig interface (24 fields mirroring the bridge's hardcoded values) + DEFAULT_RENDER_CONFIG for forward compatibility — exported but NOT consumed by the current bridge. The actual optimization varies a smaller OptimizationConfig { density, energy, tension, targetLufs, useSamples, seedOffset } across 8 planned iterations:
+    0: baseline (0.7/0.7/0.3, -9 LUFS, samples, seedOff=0)
+    1: energy 0.85 (more intense)
+    2: tension 0.2 (less mud)
+    3: targetLufs -8 (louder master)
+    4: density 0.8 + energy 0.85 (dense + hot)
+    5: seedOffset 1 (different musical material)
+    6: targetLufs -7 + density 0.85 (max loud + dense)
+    7: polish — re-render the best-of-0..6 with seedOffset 0 (verifies the gain wasn't purely a seed artifact)
+- Created /home/z/my-project/src/lib/psy4/auto-fixer.ts (354 lines):
+  - RenderConfig interface (24 fields) + DEFAULT_RENDER_CONFIG — exported for forward compatibility, mirrors forensic-bridge.ts hardcoded values.
+  - OptimizationConfig, OptimizationIteration, OptimizationReport interfaces per spec.
+  - ITERATION_PLANS array (7 entries; iteration 7 polish is filled at runtime from the best-of-0..6).
+  - buildContext(plan) — mirrors the ctx used by /api/audio-critique and /api/render-forensic (so auto-fixer results are directly comparable).
+  - compose(plan, baseSeed, bars) — builds a fresh CompositionEngine with seed = baseSeed + plan.seedOffset, identity=createIdentityA(), context=buildContext(plan), and calls composeSection({ bars }).
+  - downmix(L, R) — (L+R)/2 → Float32Array for the mono AudioCritic.
+  - runIteration(plan, baseSeed, bars) — compose → renderFoundationSection (with useSamples, bpm=145, targetLufs) → retry without samples on failure → downmix → critiqueAudio → { score, failures }.
+  - optimizeRender(baseSeed, bars=8, maxIterations=8, targetScore=0.75) — runs the planned iterations in order, tracks bestScore/bestPlan, appends the polish step if maxIterations > 7, computes verdict (PASS if finalScore >= targetScore; FAIL if finalScore < initialScore — regression; PARTIAL otherwise), returns OptimizationReport with iterations[], initialScore, finalScore, improvement, bestConfig, verdict, durationMs.
+  - Error handling: each iteration is wrapped in try/catch — on failure, the iteration records score=0 with a synthetic ITERATION_FAILED failure and the loop continues. runIteration also has a secondary retry-without-samples fallback for sample-loading failures.
+  - Determinism: no Math.random, no Date-based RNG anywhere in the auto-fixer. The bridge uses a fixed internal Rng(42); the only variable is the composition seed (baseSeed + seedOffset). Verified empirically: two identical /api/optimize?seed=42&bars=8&iterations=3 calls produced bit-identical scores (0.568857689613257 both runs) and identical bestConfig.
+- Created /home/z/my-project/src/app/api/optimize/route.ts (20 lines): GET handler per spec verbatim — parses seed/bars/iterations/target from query params (defaults 42/8/8/0.75), calls optimizeRender, returns OptimizationReport as JSON. runtime='nodejs', dynamic='force-dynamic', maxDuration=300 (5 min — full 8-iteration plan at bars=8 takes ~22-25s in practice, well under the limit).
+- VERIFICATION:
+  - `bunx tsc --noEmit 2>&1 | grep -E "auto-fixer|optimize"` → ZERO output (both files typecheck clean). Remaining tsc errors are all pre-existing in src/foundation/music/* (TS5097 .ts-extension imports — Foundation is frozen, not my files), examples/*, and skills/* — none reference auto-fixer or optimize.
+  - `bun run lint` → 0 errors, 1 warning (pre-existing in src/app/page.tsx, unused eslint-disable directive — unrelated to this task).
+- SMOKE TEST (dev server on :3000, /api/optimize?seed=42&bars=8&iterations=3, HTTP 200, 9.3s):
+  - initialScore: 0.5689 (matches the ~0.55 baseline noted in project context)
+  - finalScore: 0.5689 (no improvement — iterations 0/1/2 all score identically because the identity overrides density/energy/tension)
+  - improvement: 0.0000
+  - verdict: PARTIAL (didn't reach target 0.75, but didn't regress)
+  - durationMs: 8812
+  - bestConfig: { density: 0.7, energy: 0.7, tension: 0.3, targetLufs: -9, useSamples: true, seedOffset: 0 } (baseline retained on ties)
+  - 4 failures per iteration: BASS_DECAY_TOO_LONG (sev 1.0), HIGH_END_TOO_WEAK (sev 0.076), RHYTHMIC_PATTERN_TOO_UNIFORM (sev 0.026), KICK_BASS_PHASE_RISK (sev 0.296)
+- EXTENDED TEST (iterations=7, HTTP 200, 19.6s, ~2.8s/iteration after first-request compilation):
+  - it 0 (baseline):       score=0.5689  (best)
+  - it 1 (energy 0.85):    score=0.5689  (identical — identity overrides energy)
+  - it 2 (tension 0.2):    score=0.5689  (identical — identity overrides tension)
+  - it 3 (targetLufs -8):  score=0.5573  (-0.0116 — louder master hurts: limiter squashes punch)
+  - it 4 (dens 0.8+nrg 0.85): score=0.5689  (identical — identity overrides both)
+  - it 5 (seedOffset 1):   score=0.5510  (-0.0179 — different seed produces worse material)
+  - it 6 (tLufs -7+dens 0.85): score=0.5590  (-0.0098 — even louder = even more squash)
+  - finalScore: 0.5689, verdict: PARTIAL. The auto-fixer correctly retains the baseline as bestConfig because all variations either had no effect (identity override) or made the score worse.
+- KEY FINDINGS (reported for downstream tasks):
+  1. The identity (createIdentityA) overrides ctx.energy/tension/density in CompositionEngine's constructor — so varying those fields in the composition context has NO effect when an identity is provided. This is by Foundation design (the identity wins; the radio/context is evidence not authority — per worklog F22 / R-MAT). The auto-fixer's density/energy/tension iterations are therefore no-ops. To make these effective, the auto-fixer would need to either (a) pass a DIFFERENT identity, or (b) skip the identity entirely (compose from context alone). Neither is in scope for this task.
+  2. Louder targetLufs HURTS the score. The AudioCritic rewards dynamic range and punch; pushing targetLufs from -9 → -8 → -7 engages the true-peak limiter harder, squashing transients. The bridge's current -9 LUFS target is already near-optimal for the critic's scoring function.
+  3. seedOffset 1 (different musical material) scored worse than seed=42+identityA. This is seed/material dependent — a broader seed sweep might find better material, but the spec's 8-iteration plan only tests seedOffset 0 and 1.
+  4. The baseline score (0.5689) is well below the 0.75 target. The remaining failures (BASS_DECAY_TOO_LONG severity 1.0, KICK_BASS_PHASE_RISK severity 0.30) are DSP-level issues that can ONLY be fixed by changing the render's voice parameters (bass envelope, kick/bass phase alignment) — which requires the parameterize-bridge task that this auto-fixer's RenderConfig interface was designed to enable. The auto-fixer's PARTIAL verdict correctly signals that composition-level + master-level variation alone cannot reach the target; the next step is to wire RenderConfig into forensic-bridge.ts.
+
+Stage Summary:
+- 2 new files created: src/lib/psy4/auto-fixer.ts (354 lines), src/app/api/optimize/route.ts (20 lines). Total 374 lines.
+- auto-fixer.ts exports: RenderConfig interface, DEFAULT_RENDER_CONFIG, OptimizationConfig, OptimizationIteration, OptimizationReport, optimizeRender(baseSeed, bars, maxIterations, targetScore). RenderConfig is forward-compat — defined and exported but NOT yet consumed by the frozen forensic-bridge.ts; it documents the 24 voice/mix params currently hardcoded so the next "parameterize-bridge" task has a single source of truth.
+- API route: GET /api/optimize?seed=42&bars=8&iterations=8&target=0.75 → OptimizationReport JSON. runtime=nodejs, dynamic=force-dynamic, maxDuration=300s.
+- tsc clean for both new files (grep "auto-fixer|optimize" → 0 lines). lint clean (0 new errors/warnings).
+- Smoke test passes: HTTP 200, valid JSON, all spec'd fields present (iterations[], initialScore, finalScore, improvement, bestConfig, verdict, durationMs). Determinism verified (two identical calls → bit-identical scores). 7-iteration run completes in 19.6s.
+- The auto-fixer correctly identifies that the baseline config is the best of the 7 tested variations, returning PARTIAL verdict (no regression, target not yet met). The remaining gap to 0.75 requires DSP-level voice parameter tuning (bass decay, kick/bass phase) that the frozen bridge does not yet expose — the RenderConfig interface defined here is the API contract for that future work.

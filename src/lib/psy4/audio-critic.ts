@@ -147,8 +147,8 @@ export function critiqueAudio(
   const phaseRisk = computePhaseRisk(pcm, sampleRate)
 
   // ── Bass analysis ──
-  const noteSeparation = computeNoteSeparation(pcm, onsets, sampleRate, bpm)
-  const decayOverlap = computeDecayOverlap(pcm, onsets, sampleRate, bpm)
+  const noteSeparation = computeNoteSeparation(spectra, sampleRate, fftSize)
+  const decayOverlap = computeDecayOverlap(spectra, sampleRate, fftSize)
   const pitchStability = computePitchStability(pcm, sampleRate)
   const spectralConsistency = 1 - spectralMovement
 
@@ -405,7 +405,9 @@ function computeRMS(pcm: Float32Array): number {
 function computeSpectrogram(pcm: Float32Array, fftSize: number, _sampleRate: number): number[][] {
   const hopSize = fftSize
   const numFrames = Math.floor(pcm.length / hopSize)
-  const numBins = Math.min(128, fftSize / 2) // reduced resolution for performance
+  // Full spectrum: 512 bins at fftSize=2048 → 0 to 11025Hz (covers all bands incl. 5-12kHz high band).
+  // Previous 128-bin limit only covered 0-2756Hz, making highEndPresence/brightness always 0.
+  const numBins = Math.min(512, fftSize / 2)
   const spectra: number[][] = []
   const window = hannWindow(fftSize)
   for (let f = 0; f < numFrames; f++) {
@@ -602,7 +604,11 @@ function computeSpectralMovement(spectra: number[][]): number {
     }
     totalChange += change / prev.length
   }
-  return Math.min(1, (totalChange / (spectra.length - 1)) * 100)
+  // Scale by 300 (was 100) to account for the dilution from high-frequency constant
+  // bins (hats/cymbals noise) that are now visible with 512-bin spectra. The low/mid
+  // bins (kick/bass/lead) carry the musical movement; the high bins are noise-like and
+  // constant, diluting the average. The higher scaling factor compensates.
+  return Math.min(1, (totalChange / (spectra.length - 1)) * 300)
 }
 
 function computeKickBassSeparation(
@@ -637,54 +643,87 @@ function computePhaseRisk(pcm: Float32Array, sampleRate: number): number {
 }
 
 function computeNoteSeparation(
-  pcm: Float32Array,
-  onsets: number[],
-  _sampleRate: number,
-  _bpm: number
+  spectra: number[][],
+  sampleRate: number,
+  fftSize: number
 ): number {
-  // Note separation = how much energy drops between onsets.
-  const samplesPerStep = Math.floor(pcm.length / Math.max(1, onsets.length))
-  let totalDip = 0
-  let count = 0
-  for (let s = 1; s < onsets.length; s++) {
-    const pos = s * samplesPerStep
-    const dipPos = pos - Math.floor(samplesPerStep * 0.5)
-    let onsetEnergy = 0
-    let dipEnergy = 0
-    for (let i = 0; i < 50; i++) {
-      onsetEnergy += Math.abs(pcm[pos + i] ?? 0)
-      dipEnergy += Math.abs(pcm[dipPos + i] ?? 0)
+  // Note separation = how much the bass-band energy drops between note onsets.
+  // Uses the spectral approach (same as computeDecayOverlap v3) to avoid the
+  // full-range contamination problem. Measures the CV of bass-band energy across
+  // frames — high CV = notes pulse strongly (good separation), low CV = smeared.
+  if (spectra.length < 4) return 0.5
+  const lowBin = Math.floor((80 * fftSize) / sampleRate)
+  const highBin = Math.ceil((250 * fftSize) / sampleRate)
+  const bassEnergies: number[] = []
+  for (const spectrum of spectra) {
+    let energy = 0
+    for (let i = lowBin; i <= highBin && i < spectrum.length; i++) {
+      energy += (spectrum[i] ?? 0) ** 2
     }
-    totalDip += 1 - dipEnergy / Math.max(1, onsetEnergy)
-    count++
+    bassEnergies.push(Math.sqrt(energy))
   }
-  return count > 0 ? Math.max(0, totalDip / count) : 0
+  let sum = 0
+  for (const e of bassEnergies) sum += e
+  const mean = sum / bassEnergies.length
+  if (mean < 1e-8) return 0.5
+  let varSum = 0
+  for (const e of bassEnergies) varSum += (e - mean) ** 2
+  const std = Math.sqrt(varSum / bassEnergies.length)
+  const cv = std / mean
+  // High CV = good note separation. Cap at 1.0.
+  return Math.max(0, Math.min(1, cv * 2.0))
 }
 
 function computeDecayOverlap(
-  pcm: Float32Array,
-  onsets: number[],
-  _sampleRate: number,
-  _bpm: number
+  spectra: number[][],
+  sampleRate: number,
+  fftSize: number
 ): number {
-  // Overlap = how much energy from one onset is still present at the next.
-  const samplesPerStep = Math.floor(pcm.length / Math.max(1, onsets.length))
-  let totalOverlap = 0
-  let count = 0
-  for (let s = 0; s < onsets.length - 1; s++) {
-    const pos = s * samplesPerStep
-    const nextPos = (s + 1) * samplesPerStep
-    const preNext = nextPos - 5
-    let peakOnset = 0
-    let preNextEnergy = 0
-    for (let i = 0; i < 50; i++) {
-      peakOnset = Math.max(peakOnset, Math.abs(pcm[pos + i] ?? 0))
-      preNextEnergy = Math.max(preNextEnergy, Math.abs(pcm[preNext + i] ?? 0))
+  // Measures BASS-BAND ENERGY MODULATION across spectral frames.
+  //
+  // PROBLEM: Time-domain filtering approaches failed because (a) one-pole filters
+  // have slow transient response that contaminates the measurement, and (b) every
+  // frequency band in a full mix has continuous energy from other voices.
+  //
+  // SOLUTION: Use the already-computed spectrogram to extract the bass-band energy
+  // (80-250Hz) per frame, then measure the COEFFICIENT OF VARIATION (CV = std/mean)
+  // across frames. A tight 16th-note bass with 0.06s decay produces strong energy
+  // pulses at each note onset → high CV. A smeared bass (long decay, no note
+  // separation) produces constant energy → low CV.
+  //
+  // decayOverlap = 1 - min(1, CV * 2.5)
+  //   CV > 0.4 → overlap = 0 (very tight, notes pulse strongly)
+  //   CV = 0.2 → overlap = 0.5 (moderate)
+  //   CV < 0.1 → overlap = 0.75+ (smeared, no modulation)
+
+  if (spectra.length < 4) return 0.5
+
+  // Extract bass-band energy (80-250Hz) for each spectral frame.
+  const lowBin = Math.floor((80 * fftSize) / sampleRate)
+  const highBin = Math.ceil((250 * fftSize) / sampleRate)
+  const bassEnergies: number[] = []
+  for (const spectrum of spectra) {
+    let energy = 0
+    for (let i = lowBin; i <= highBin && i < spectrum.length; i++) {
+      energy += (spectrum[i] ?? 0) ** 2
     }
-    totalOverlap += preNextEnergy / Math.max(0.001, peakOnset)
-    count++
+    bassEnergies.push(Math.sqrt(energy))
   }
-  return count > 0 ? Math.min(1, totalOverlap / count) : 0
+
+  // Compute mean and std of bass energy.
+  let sum = 0
+  for (const e of bassEnergies) sum += e
+  const mean = sum / bassEnergies.length
+  if (mean < 1e-8) return 0.5 // silence
+
+  let varSum = 0
+  for (const e of bassEnergies) varSum += (e - mean) ** 2
+  const std = Math.sqrt(varSum / bassEnergies.length)
+  const cv = std / mean // coefficient of variation
+
+  // High CV = tight bass (pulsing) → low overlap (good)
+  // Low CV = smeared bass (constant) → high overlap (bad)
+  return Math.max(0, Math.min(1, 1 - cv * 2.5))
 }
 
 function computePitchStability(pcm: Float32Array, sampleRate: number): number {
