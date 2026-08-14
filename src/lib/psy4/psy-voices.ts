@@ -91,7 +91,7 @@ export class PsyKick {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// BASS — rolling psytrance bass with filter groove
+// BASS — rolling psytrance bass with filter groove + stereo detune
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyBass {
@@ -103,8 +103,9 @@ export class PsyBass {
   releaseT = 0
   noteOffTime = 0
 
-  // Mid oscillator (saw through Moog) — NO separate sub (kick owns the sub)
-  saw = new BLSaw()
+  // Two detuned saws through Moog for stereo width
+  saw1 = new BLSaw()
+  saw2 = new BLSaw()
   filter = new MoogLadder()
   hpState = 0
 
@@ -122,8 +123,11 @@ export class PsyBass {
     this.releaseT = 0
     this.noteOffTime = dur
     this.hpState = 0
-    this.saw.reset()
-    this.saw.setFreq(freq)
+    this.saw1.reset()
+    this.saw1.setFreq(freq)
+    this.saw2.reset()
+    // Detune second saw +5 cents for stereo chorus
+    this.saw2.setFreq(freq * Math.pow(2, 5 / 1200))
     this.filter.reset()
   }
 
@@ -142,9 +146,11 @@ export class PsyBass {
       if (this.releaseT > 0.005) { this.active = false; return [0, true] }
     }
 
-    // ── Saw through Moog with dramatic filter envelope ──
+    // ── Two detuned saws through Moog for stereo width ──
     const inc = this.freq / SR
-    const sawOut = this.saw.process(inc)
+    const sawOut1 = this.saw1.process(inc)
+    const sawOut2 = this.saw2.process(this.freq * Math.pow(2, 5 / 1200) / SR)
+    const sawOut = (sawOut1 + sawOut2) * 0.5
 
     // Filter envelope: opens to 800Hz, closes to 200Hz over 20ms
     // This creates the "wub" groove on each 16th note
@@ -586,7 +592,7 @@ export class PsyShaker {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// FX RISER — filter sweep for builds
+// FX RISER — noise + saw sweep with pitch rise for tension build
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyRiser {
@@ -596,6 +602,9 @@ export class PsyRiser {
   amp = 0.25
   noise: PinkNoise
   filter = new MoogLadder()
+  // Saw oscillator for pitched rise
+  saw = new BLSaw()
+  sawPhase = 0
 
   constructor(rng: Rng) { this.noise = new PinkNoise(rng) }
 
@@ -606,6 +615,8 @@ export class PsyRiser {
     this.amp = amp
     this.noise.reset()
     this.filter.reset()
+    this.saw.reset()
+    this.sawPhase = 0
   }
 
   render(): [number, boolean] {
@@ -613,11 +624,22 @@ export class PsyRiser {
     this.t += 1 / SR
     if (this.t > this.dur) { this.active = false; return [0, true] }
     const progress = this.t / this.dur
+
+    // Noise sweep: filter opens from 200Hz to 10kHz
     const n = this.noise.next()
-    const cutoff = 200 + progress * 7800
-    const filtered = this.filter.process(n, cutoff, 0.4, 1.5, SR)
+    const cutoff = 200 + Math.pow(progress, 1.5) * 9800
+    const filtered = this.filter.process(n, cutoff, 0.5, 1.5, SR)
+
+    // Pitched saw: rises from 100Hz to 800Hz exponentially
+    const sawFreq = 100 * Math.pow(8, progress) // 100→800Hz
+    this.sawPhase += sawFreq / SR
+    if (this.sawPhase >= 1) this.sawPhase -= 1
+    const sawSig = (2 * this.sawPhase - 1) * 0.3
+
+    // Mix noise + saw, with exponential energy build
+    const mixed = filtered * 0.6 + sawSig * 0.4
     const env = Math.pow(progress, 2) * this.amp
-    return [filtered * env, false]
+    return [mixed * env, false]
   }
 }
 
