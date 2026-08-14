@@ -13,19 +13,20 @@
  * All voices are sample-accurate, deterministic, and produce commercial-grade sound.
  */
 
-import { fastTanh, MoogLadder, BLSaw, BLSquare, PinkNoise, polyBlep } from './forensic/dsp'
+import { fastTanh, MoogLadder, BLSaw, BLSquare, BLTriangle, OnePoleHP, PinkNoise, polyBlep } from './forensic/dsp'
 import { Rng } from './forensic/prng'
 
 const SR = 44100
 
 // ═══════════════════════════════════════════════════════════════
-// KICK — commercial psytrance kick (punchy, tight, with weight)
+// KICK — commercial psytrance kick (3-layer: body + sub + click)
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyKick {
   active = false
   t = 0
   phase = 0
+  subPhase = 0
   clickFilter = new MoogLadder()
   noise: PinkNoise
   amp = 1
@@ -40,6 +41,7 @@ export class PsyKick {
     this.active = true
     this.t = 0
     this.phase = 0
+    this.subPhase = 0
     this.noise.reset()
     this.clickFilter.reset()
     this.amp = amp
@@ -50,38 +52,39 @@ export class PsyKick {
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    const decayTotal = this.decay + 0.03
+    const decayTotal = this.decay + 0.1 // longer tail for sub
     if (this.t > decayTotal) { this.active = false; return [0, true] }
 
     const t = this.t
     const f0 = this.fund
 
-    // ── Pitch envelope: aggressive sweep 220Hz → 45Hz over 15ms ──
-    // This creates the "punch" — the pitch drops fast, creating a percussive transient
-    const pitchStart = 220
+    // ── Pitch envelope: aggressive sweep 200Hz → 45Hz over 12ms ──
+    const pitchStart = 200
     const pitchEnd = f0
-    const pitchDecay = 0.015 // 15ms — faster than before (was 30ms)
+    const pitchDecay = 0.012 // 12ms
     const currentFreq = (pitchStart - pitchEnd) * Math.exp(-t / pitchDecay) + pitchEnd
 
-    // ── Body: sine with pitch sweep + 2nd harmonic for character ──
+    // ── Body: sine with pitch sweep (the "thump") ──
     this.phase += (2 * Math.PI * currentFreq) / SR
-    const bodyEnv = Math.exp(-t / (this.decay * 0.6))
-    const body = Math.sin(this.phase) * bodyEnv * 0.9
-    // Add 2nd harmonic for "knock" character
-    const harm = Math.sin(this.phase * 2) * bodyEnv * 0.15
+    const bodyEnv = Math.exp(-t / (this.decay * 0.5))
+    const body = Math.sin(this.phase) * bodyEnv * 1.0
 
-    // ── Click: noise through Moog bandpass for crisp attack ──
+    // ── Sub: sine at fundamental, longer decay (the "weight") ──
+    this.subPhase += (2 * Math.PI * f0) / SR
+    const subEnv = Math.exp(-t / (this.decay * 1.5)) // longer than body
+    const sub = Math.sin(this.subPhase) * subEnv * 0.6
+
+    // ── Click: noise through Moog bandpass ──
     const n = this.noise.next()
-    const clickEnv = Math.exp(-t / 0.001) // 1ms — very short
-    const click = this.clickFilter.process(n * clickEnv, 4000, 0.8, 2.0, SR) * 0.5
+    const clickEnv = Math.exp(-t / 0.0008) // 0.8ms — very sharp
+    const click = this.clickFilter.process(n * clickEnv, 5000, 0.9, 2.0, SR) * 0.4
 
-    // ── Saturate body hard for punch ──
-    let sample = (body + harm) * 1.5
-    sample = fastTanh(sample) // hard saturation
-    sample += click * 0.6
+    // ── Saturate body + sub together for cohesive punch ──
+    let sample = (body + sub) * 1.2
+    sample = fastTanh(sample)
+    sample += click * 0.5
 
-    // ── Final amp ──
-    sample *= this.amp * 0.8
+    sample *= this.amp * 0.75
 
     return [sample, false]
   }
@@ -168,7 +171,7 @@ export class PsyBass {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// LEAD — acid psytrance lead (303-style filter sweeps)
+// LEAD — FM + acid filter (richer, psychedelic)
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyLead {
@@ -181,23 +184,23 @@ export class PsyLead {
   releaseT = 0
   noteOffTime = 0
 
-  // 2 detuned saws (was 3 — cleaner, more focused)
-  saws: BLSaw[]
-  detune = 12 // cents (was 8 — wider for richer chorus)
-  // Filter — high resonance for acid character
+  // Carrier + modulator for FM
+  carPhase = 0
+  modPhase = 0
+  modRatio = 2.0 // modulator at 2x carrier frequency
+  modIndex = 200 // FM depth in Hz — grows over note for "buzzy" attack
+  // Sub oscillator (triangle, one octave down for weight)
+  subOsc = new BLTriangle()
+  // Filter
   filter = new MoogLadder()
   cutoff = 1500
-  res = 0.7 // was 0.4 — much higher for acid sweep
-  filterEnvAmount = 3.0 // was 0.6 — dramatic sweep
-  // LFO for filter modulation
-  lfoPhase = 0
+  res = 0.7
+  filterEnvAmount = 3.0
+  // LFO
   lfoRate = 1.2
   lfoDepth = 0.5
 
-  constructor(rng: Rng) {
-    this.saws = [new BLSaw(), new BLSaw()]
-    void rng
-  }
+  constructor(_rng: Rng) {}
 
   trigger(freq: number, dur: number, amp: number, params?: {
     cutoff?: number; detune?: number; res?: number; lfoRate?: number; lfoDepth?: number
@@ -211,17 +214,13 @@ export class PsyLead {
     this.releaseT = 0
     this.noteOffTime = dur
     this.cutoff = params?.cutoff ?? 1500
-    this.detune = params?.detune ?? 12
     this.res = params?.res ?? 0.7
     this.lfoRate = params?.lfoRate ?? 1.2
     this.lfoDepth = params?.lfoDepth ?? 0.5
-    this.lfoPhase = 0
-
-    for (let i = 0; i < 2; i++) {
-      this.saws[i]!.reset()
-      const cents = (i === 0 ? -1 : 1) * this.detune
-      this.saws[i]!.setFreq(freq * Math.pow(2, cents / 1200))
-    }
+    this.carPhase = 0
+    this.modPhase = 0
+    this.subOsc.reset()
+    this.subOsc.setFreq(freq * 0.5)
     this.filter.reset()
   }
 
@@ -239,26 +238,38 @@ export class PsyLead {
       if (this.releaseT > 0.05) { this.active = false; return [0, true] }
     }
 
-    // ── 2 detuned saws ──
-    let signal = 0
-    for (let i = 0; i < 2; i++) {
-      signal += this.saws[i]!.process(this.freq / SR)
-    }
-    signal /= 2
+    // ── FM carrier: sine modulated by sine ──
+    // modIndex grows during attack for "buzzy" onset, then decays
+    const attackEnv = Math.min(1, this.t / 0.003)
+    const modEnv = Math.exp(-this.t / 0.08) // mod depth decays over 80ms
+    const currentModIndex = this.modIndex * (0.3 + 0.7 * modEnv)
 
-    // ── Acid filter envelope: opens wide on attack, sweeps down ──
-    // This is the 303-style "wah" that defines acid psytrance
+    // Modulator: sine at freq * modRatio
+    this.modPhase += (this.freq * this.modRatio) / SR
+    if (this.modPhase >= 1) this.modPhase -= 1
+    const modSig = Math.sin(2 * Math.PI * this.modPhase) * currentModIndex
+
+    // Carrier: sine at freq + FM modulation
+    this.carPhase += (this.freq + modSig) / SR
+    if (this.carPhase >= 1) this.carPhase -= 1
+    const carSig = Math.sin(2 * Math.PI * this.carPhase)
+
+    // ── Sub oscillator: triangle one octave down for weight ──
+    const subSig = this.subOsc.process(this.freq * 0.5 / SR) * 0.3
+
+    // ── Mix carrier + sub ──
+    let signal = carSig * 0.8 + subSig
+
+    // ── Acid filter envelope ──
     const filterEnv = Math.exp(-this.t / 0.12) * this.filterEnvAmount
     const lfo = Math.sin(2 * Math.PI * this.lfoRate * this.t) * this.lfoDepth
-    // Cutoff sweeps from (cutoff * 4) down to cutoff, modulated by LFO
     const cutoff = Math.max(200, this.cutoff * (1 + filterEnv + lfo * 0.5))
     const filtered = this.filter.process(signal, cutoff, this.res, 1.5, SR)
 
     // ── Hard saturation for acid character ──
     let out = fastTanh(filtered * 2.0)
 
-    // ── Amp envelope: 3ms attack → sustain → 50ms release ──
-    const attackEnv = Math.min(1, this.t / 0.003)
+    // ── Amp envelope ──
     let ampEnv = attackEnv
     if (this.releasing) {
       ampEnv = attackEnv * Math.exp(-this.releaseT / 0.02)
