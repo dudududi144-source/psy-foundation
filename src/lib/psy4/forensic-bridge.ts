@@ -30,7 +30,7 @@ import { measureLUFS, lufsToGainOffset } from './loudness'
 import { TruePeakLimiter } from './limiter'
 
 const SR = 44100
-const TARGET_LUFS = -9.0
+const TARGET_LUFS = -11.0
 
 // ── WAV decoder ──
 
@@ -221,12 +221,12 @@ export async function renderFoundationSection(
   }
 
   // ── Mix bus (stereo) — glue compression per bus ──
-  const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 0.85 })
-  const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 0.85 })
-  const bassBusL = new BusProcessor({ hpFreq: 110, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
-  const bassBusR = new BusProcessor({ hpFreq: 110, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
-  const musicBusL = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 0.95 })
-  const musicBusR = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 0.95 })
+  const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 1.0 })
+  const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 1.0 })
+  const bassBusL = new BusProcessor({ hpFreq: 100, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: 0.55 })
+  const bassBusR = new BusProcessor({ hpFreq: 100, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: 0.55 })
+  const musicBusL = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: 1.1 })
+  const musicBusR = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: 1.1 })
 
   const masterGlueL = new MasterChain()
   const masterGlueR = new MasterChain()
@@ -246,11 +246,13 @@ export async function renderFoundationSection(
       events.push({ pos: barStart + step * samplesPerStep, type: 'kick', vel: 0.8 + a * 0.2, dur: samplesPerStep })
     }
 
-    // Rolling 16th bass — with variation per bar
+    // Rolling 16th bass — with swing and dramatic velocity variation
     const rootMidi = bar.bassNotes[0]?.midi ?? 40
     const fifthMidi = bar.bassNotes[2]?.midi ?? rootMidi
     const thirdMidi = bar.bassNotes[4]?.midi ?? rootMidi
     const pattern = barIdx % 4
+    // Swing: delay odd 16th steps by ~15% of step duration for groove
+    const swingAmount = Math.floor(samplesPerStep * 0.15)
     for (let step = 0; step < 16; step++) {
       const a = accent[step % accent.length] ?? 0.5
       let midi = rootMidi
@@ -263,8 +265,21 @@ export async function renderFoundationSection(
       } else {
         midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : (step % 4 === 3) ? rootMidi + 12 : rootMidi
       }
-      const vel = step % 4 === 0 ? 0.6 + a * 0.2 : 0.35 + a * 0.2
-      events.push({ pos: barStart + step * samplesPerStep, type: 'bass', midi, vel, dur: Math.floor(samplesPerStep * 0.85) })
+      // Dramatic velocity: downbeats strong, offbeats ghost notes
+      const isDownbeat = step % 4 === 0
+      const isOffbeat = step % 2 === 1
+      let vel: number
+      if (isDownbeat) vel = 0.7 + a * 0.2
+      else if (isOffbeat) vel = 0.25 + a * 0.15 // ghost notes
+      else vel = 0.45 + a * 0.2
+
+      // Swing: delay odd steps
+      const swingOffset = step % 2 === 1 ? swingAmount : 0
+      events.push({
+        pos: barStart + step * samplesPerStep + swingOffset,
+        type: 'bass', midi, vel,
+        dur: Math.floor(samplesPerStep * (isOffbeat ? 0.6 : 0.85))
+      })
     }
 
     // Lead — use Foundation's lead notes + add fills on empty steps
