@@ -93,6 +93,11 @@ function applyFailureCorrections(
         overrides.shakerGain = Math.min(2.0, (overrides.shakerGain ?? base.shakerGain) * 1.2)
         overrides.hatGain = Math.min(2.0, (overrides.hatGain ?? base.hatGain) * 1.15)
         break
+      case 'NO_TIMBRAL_MOVEMENT':
+        overrides.leadCutoff = Math.min(8000, (overrides.leadCutoff ?? base.leadCutoff) * 1.25)
+        overrides.leadResonance = Math.min(0.9, (overrides.leadResonance ?? base.leadResonance) + 0.15)
+        overrides.leadGain = Math.min(2.0, (overrides.leadGain ?? base.leadGain) * 1.1)
+        break
     }
   }
   return overrides

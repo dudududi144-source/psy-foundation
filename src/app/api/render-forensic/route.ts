@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CompositionEngine } from '@/foundation/music'
 import { createIdentityA } from '@/foundation/music'
-import { renderFoundationSection, encodeWav } from '@/lib/psy4/forensic-bridge'
+import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG } from '@/lib/psy4/forensic-bridge'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// Best config found by auto-fixer (score 0.6568 on 32 bars)
+const BEST_CONFIG = {
+  ...DEFAULT_RENDER_CONFIG,
+  kickDecay: 0.079475,
+  bassGain: 0.75,
+  leadCutoff: 6500,
+  leadGain: 1.4,
+  hatGain: 1.6,
+  shakerGain: 1.8,
+  subBassGain: 0.5,
+  duckAmount: 0.95,
+  stereoWidth: 1.5,
+}
 
 export async function GET(req: NextRequest) {
   const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
@@ -34,10 +48,10 @@ export async function GET(req: NextRequest) {
 
   let result
   try {
-    result = await renderFoundationSection(section, { useSamples, bpm: 145 })
+    result = await renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
   } catch (e) {
     console.error('Render failed, retrying without samples:', (e as Error).message)
-    result = await renderFoundationSection(section, { useSamples: false, bpm: 145 })
+    result = await renderFoundationSection(section, { useSamples: false, bpm: 145, config: BEST_CONFIG })
   }
 
   const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)

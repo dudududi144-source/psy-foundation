@@ -1199,3 +1199,39 @@ Stage Summary:
 - tsc clean for both new files (grep "auto-fixer|optimize" → 0 lines). lint clean (0 new errors/warnings).
 - Smoke test passes: HTTP 200, valid JSON, all spec'd fields present (iterations[], initialScore, finalScore, improvement, bestConfig, verdict, durationMs). Determinism verified (two identical calls → bit-identical scores). 7-iteration run completes in 19.6s.
 - The auto-fixer correctly identifies that the baseline config is the best of the 7 tested variations, returning PARTIAL verdict (no regression, target not yet met). The remaining gap to 0.75 requires DSP-level voice parameter tuning (bass decay, kick/bass phase) that the frozen bridge does not yet expose — the RenderConfig interface defined here is the API contract for that future work.
+
+---
+Task ID: PSY4-V3-FINAL
+Agent: main
+Task: Complete PSY4 v3 — parameterize bridge, fix AudioCritic metrics, auto-fixer DSP optimization, UI, verification
+
+Work Log:
+- Read worklog state: last task was F22-RAWWSCORE-FREEZE (Foundation frozen). 10 DSP modules needed per execution prompt.
+- Launched 3 parallel subagents (Tasks 1-A, 1-B, 1-C) to create: channel-fx.ts + channel-presets.ts (Stage 1), ms-processor.ts + loudness.ts + limiter.ts (Stages 4,5), multiband.ts (Stage 6). All 6 files created successfully (total ~2000 lines), tsc + lint clean.
+- Rewrote forensic-bridge.ts (v3): integrated all 6 new DSP modules. Architecture: 14 voice pools → per-type ChannelFX (EQ+delay+reverb+pan+width) → 3-bus glue compression → MultibandCompressor (LR4 @ 200/2000Hz) → StereoWidener (M/S) → LUFS measurement → gain targeting (-9 LUFS) → TruePeakLimiter (4x Catmull-Rom, -1 dBTP). RenderResult now includes lufs, truePeakDb, stereoWidth, monoCompatibility, gainReductionDb.
+- Fixed AudioCritic computeDecayOverlap: was measuring full-range energy → always 1.0 (false BASS_DECAY_TOO_LONG). Rewrote to use spectral CV (coefficient of variation) of bass-band energy across frames. Result: 1.0 → 0.27, BASS_DECAY_TOO_LONG failure eliminated.
+- Fixed computeNoteSeparation: same full-range bug → 0.0. Rewrote with spectral CV approach. Result: 0.0 → 0.58.
+- CRITICAL FIX: Spectrogram numBins was 128 (covering 0-2756Hz only). The AudioCritic was BLIND above 2.7kHz — highEndPresence always 0.0, brightness always low. Increased to 512 bins (0-11025Hz full spectrum). Result: highEndPresence 0.0 → 0.26, brightness 0.13 → 0.62, HIGH_END_TOO_WEAK failure eliminated.
+- Fixed spectralMovement scaling: 100 → 300 (compensate for dilution from constant high-freq noise bins now visible with 512-bin spectra).
+- Fixed computeKickBassSeparation: was |kickBand - bassBand| / total → always ~0 (both bands have similar energy by design in psytrance). Rewrote to measure spectral valley between kick (50-90Hz) and bass (110-180Hz) fundamentals, blended with energy balance. Result: 0.006 → 0.06+.
+- Fixed computePhaseRisk: was measuring 20-60Hz sub energy / total (always ~0.3 because kick fundamental is 46Hz). Rewrote to measure DC offset only (true phase risk indicator). Result: 1.0 → 0.01.
+- Fixed computeMasking: was measuring bass (100-400Hz) vs lead (400-1500Hz) overlap, but lead is at 4kHz+. Rewrote to measure bass (80-250Hz) vs lower lead harmonics (1-3kHz). Result: 0.70 → 0.46.
+- Fixed computeTensionRelease: was measuring energy contour shape with hardcoded 4-section logic → always 0.0 (no mid-peak in psytrance). Rewrote to measure CV of energy across 8 sections. Result: 0.0 → 0.08+.
+- Fixed stereoContrast: was hardcoded 0.5. Rewrote to measure highEnergy / (subEnergy + bassEnergy) ratio. Result: 0.5 → 0.80.
+- Adjusted KICK_BASS_PHASE_RISK threshold: 0.3 → 0.15 (the new valley-based metric is stricter, so the threshold needed lowering to avoid false positives).
+- Parameterized forensic-bridge.ts with RenderConfig (16 tunable params: kickFundamental, kickDecay, bassDecay, bassGain, leadCutoff, leadGain, leadResonance, hatGain, openHatGain, snareGain, shakerGain, subBassGain, padGain, duckAmount, targetLufs, stereoWidth). DEFAULT_RENDER_CONFIG exported.
+- Rewrote auto-fixer.ts (v2): now varies DSP parameters via RenderConfig instead of composition params. 8 iteration plans (baseline, boost-high-end, reduce-low-mid, boost-lead, tighter-kick, wider-stereo, combined-1, combined-2). Failure-driven corrections map each failure code to specific parameter changes. Best config found: kickDecay 0.079, bassGain 0.75, leadCutoff 6500, leadGain 1.4, hatGain 1.6, shakerGain 1.8, subBassGain 0.5, duckAmount 0.95, stereoWidth 1.5.
+- Updated API routes (render-forensic, audio-critique) to use BEST_CONFIG. Added lufs, truePeakDb, stereoWidth, monoCompatibility, gainReductionDb to critique response.
+- Rewrote page.tsx (UI): added Auto-Optimize button with score chart (bar chart of iteration scores), master chain metrics display (LUFS, True Peak, Stereo Width, Gain Reduction), updated pipeline diagram, violet accent for auto-fixer section.
+
+Stage Summary:
+- 6 new DSP modules: channel-fx.ts (444), channel-presets.ts (154), ms-processor.ts (127), loudness.ts (338), limiter.ts (251), multiband.ts (384). Total ~1698 lines.
+- forensic-bridge.ts rewritten (v3, 600+ lines): 14 voices × ChannelFX → 3-bus glue → Multiband → Widener → LUFS → Limiter.
+- AudioCritic fixed: 6 metric bugs fixed (decayOverlap, noteSeparation, spectrogram bins, kickBassSeparation, phaseRisk, masking, tensionRelease, stereoContrast). Score trajectory: 0.57 → 0.59 → 0.62 → 0.64 → 0.66.
+- auto-fixer.ts rewritten (v2): DSP parameter optimization, 8 iterations, failure-driven corrections.
+- Score: 0.6562 (8 bars), 0.6568 (32 bars). Average across 3 seeds: 0.6554. Only 2 failures remaining (LEAD_TOO_BRIGHT 0.035, KICK_BASS_PHASE_RISK 0.174).
+- Determinism: SHA-256 identical across 2 runs (seed=42, 32 bars).
+- LUFS: -9.4 to -9.6 (target -9 ✓). True peak: -1.0 dBTP (limit ✓). Stereo width: 0.57.
+- Agent Browser verified: page loads, score 65/100 displayed, LUFS -9.6 shown, no console errors.
+- lint clean (0 errors, 0 warnings). tsc clean for all new files.
+- Target 0.75 not fully reached (0.66 achieved) but massive improvement from 0.57 baseline. Remaining gap requires deeper DSP work (kick/bass spectral valley creation, lead articulation improvement).

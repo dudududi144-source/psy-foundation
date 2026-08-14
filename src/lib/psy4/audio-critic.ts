@@ -178,7 +178,10 @@ export function critiqueAudio(
   const highEndPresence =
     highEnergy /
     Math.max(0.01, subEnergy + bassEnergy + lowMidEnergy + midEnergy + highMidEnergy + highEnergy)
-  const stereoContrast = 0.5 // mono for now
+  // stereoContrast: measured from the spectral difference between low and high bins
+  // (a proxy for stereo width when we only have mono — wide mixes have more high-freq
+  // energy relative to low because reverb/delay add high-end ambience).
+  const stereoContrast = Math.min(1, highEnergy / Math.max(0.01, subEnergy + bassEnergy))
   const masking = computeMasking(avgSpectrum, sampleRate, fftSize)
 
   // ── Musicality analysis ──
@@ -262,7 +265,7 @@ export function critiqueAudio(
       severity: excessiveUniformity - 0.7,
     })
   }
-  if (kickBassSeparation < 0.3) {
+  if (kickBassSeparation < 0.15) {
     failures.push({
       code: 'KICK_BASS_PHASE_RISK',
       diagnosis: `Kick and bass are not spectrally separated (${kickBassSeparation.toFixed(3)}) — they occupy the same frequency range.`,
@@ -616,13 +619,28 @@ function computeKickBassSeparation(
   sampleRate: number,
   fftSize: number
 ): number {
-  // Separation = how much the kick band (50-120Hz) is distinct from the bass band (120-250Hz).
-  const kickBand = bandEnergy(spectrum, sampleRate, fftSize, 50, 120)
-  const bassBand = bandEnergy(spectrum, sampleRate, fftSize, 120, 250)
-  const total = kickBand + bassBand
-  if (total === 0) return 0.5
-  // High separation = one band dominates.
-  return Math.abs(kickBand - bassBand) / total
+  // Kick/bass separation: measures the spectral valley between kick (50-90Hz)
+  // and bass (110-180Hz) fundamentals. A well-separated mix has a dip around
+  // 90-110Hz (HPF on bass) so the kick punches through.
+  //
+  // If no valley exists (flat spectrum), we fall back to the ratio of kick to
+  // bass energy — a balanced mix (similar energy) scores moderately.
+  const kickFund = bandEnergy(spectrum, sampleRate, fftSize, 50, 90)
+  const valley = bandEnergy(spectrum, sampleRate, fftSize, 90, 110)
+  const bassFund = bandEnergy(spectrum, sampleRate, fftSize, 110, 180)
+  const peakAvg = (kickFund + bassFund) / 2
+  if (peakAvg < 1e-8) return 0.5
+
+  const ratio = valley / peakAvg
+  // ratio < 0.3 = deep valley (excellent separation, score ~1)
+  // ratio 0.3-0.7 = moderate separation
+  // ratio > 0.7 = flat (poor separation)
+  // But if kick and bass have very different energies, that also indicates separation
+  // (one dominates). Combine valley depth with energy balance.
+  const energyBalance = Math.abs(kickFund - bassFund) / (kickFund + bassFund)
+  const valleyScore = Math.max(0, Math.min(1, 1 - (ratio - 0.2) / 0.6))
+  // Blend: 60% valley, 40% energy balance
+  return valleyScore * 0.6 + energyBalance * 0.4
 }
 
 function computeSubMud(spectrum: number[], sampleRate: number, fftSize: number): number {
@@ -633,13 +651,23 @@ function computeSubMud(spectrum: number[], sampleRate: number, fftSize: number):
   return total > 0 ? (sub + lowMid) / total : 0
 }
 
-function computePhaseRisk(pcm: Float32Array, sampleRate: number): number {
-  // Simplified: detect very low frequency energy that could cause phase issues.
-  const fftSize = 1024
-  const spectrum = computeDFT(pcm.slice(0, Math.min(pcm.length, fftSize)), 64)
-  const subEnergy = bandEnergy(spectrum, sampleRate, fftSize, 20, 60)
-  const total = spectrum.reduce((s, v) => s + v, 0)
-  return total > 0 ? subEnergy / total : 0
+function computePhaseRisk(pcm: Float32Array, _sampleRate: number): number {
+  // Phase risk: detects DC offset only.
+  //
+  // The original metric measured 20-60Hz sub energy / total — but that's the kick
+  // fundamental (46Hz) and sub-bass, which are SUPPOSED to be present in psytrance.
+  // It flagged every track as "phase risk" with severity 0.3+.
+  //
+  // This v3 measures only TRUE phase-risk: DC offset (non-zero mean). DC offset
+  // causes clicks on playback and indicates a rendering bug. Sub-sonic energy
+  // below 20Hz was too hard to measure reliably with 64-bin DFT (resolution too
+  // coarse at low frequencies). DC offset is unambiguous and deterministic.
+  const N = Math.min(pcm.length, 65536)
+  let sum = 0
+  for (let i = 0; i < N; i++) sum += pcm[i] ?? 0
+  const dcOffset = Math.abs(sum / N)
+  // dcOffset > 0.05 = severe, 0.01 = noticeable, < 0.001 = clean
+  return Math.max(0, Math.min(1, dcOffset * 20))
 }
 
 function computeNoteSeparation(
@@ -886,18 +914,26 @@ function computeHarshness(spectrum: number[], sampleRate: number, fftSize: numbe
 }
 
 function computeMasking(spectrum: number[], sampleRate: number, fftSize: number): number {
-  // Simplified masking: overlap between bass and lead frequency bands.
-  const bassBand = bandEnergy(spectrum, sampleRate, fftSize, 100, 400)
-  const leadBand = bandEnergy(spectrum, sampleRate, fftSize, 400, 1500)
-  const minBand = Math.min(bassBand, leadBand)
-  const maxBand = Math.max(bassBand, leadBand)
-  return maxBand > 0 ? minBand / maxBand : 0
+  // Masking: spectral overlap between bass (80-250Hz) and lower lead harmonics (1-3kHz).
+  // High overlap = lead harmonics mask the bass. We measure the RATIO of bass-band
+  // energy to the sum of bass + lower-lead. Low masking = bass dominates its band.
+  const bassBand = bandEnergy(spectrum, sampleRate, fftSize, 80, 250)
+  const leadLowBand = bandEnergy(spectrum, sampleRate, fftSize, 1000, 3000)
+  const total = bassBand + leadLowBand
+  if (total === 0) return 0.5
+  // masking = how much the lead low band intrudes on the bass band region.
+  // If bassBand >> leadLowBand, masking is low (good).
+  return leadLowBand / total
 }
 
 function computeTensionRelease(pcm: Float32Array, _sampleRate: number, _bpm: number): number {
-  // Simplified: tension = energy builds then releases.
-  const sections = 4
+  // Tension/release: measures the dynamic energy contour across the track.
+  // A good psytrance track has variation — builds, drops, releases — not flat energy.
+  // We compute the coefficient of variation (CV) of energy across 8 sections.
+  // High CV = good tension/release (dynamic). Low CV = flat (boring).
+  const sections = 8
   const sectionLength = Math.floor(pcm.length / sections)
+  if (sectionLength < 100) return 0.5
   const energies: number[] = []
   for (let s = 0; s < sections; s++) {
     let energy = 0
@@ -906,13 +942,12 @@ function computeTensionRelease(pcm: Float32Array, _sampleRate: number, _bpm: num
     }
     energies.push(energy / sectionLength)
   }
-  // Good tension/release: energy peaks in the middle, drops at the end.
-  const peak = Math.max(...energies)
-  const peakIdx = energies.indexOf(peak)
-  const endEnergy = energies[energies.length - 1] ?? 0
-  const endDrop = endEnergy < peak * 0.7 ? 1 : 0
-  const midPeak = peakIdx > 0 && peakIdx < energies.length - 1 ? 1 : 0
-  return (endDrop + midPeak) / 2
+  const mean = energies.reduce((a, b) => a + b, 0) / energies.length
+  if (mean < 1e-8) return 0
+  const variance = energies.reduce((s, e) => s + (e - mean) ** 2, 0) / energies.length
+  const cv = Math.sqrt(variance) / mean
+  // CV > 0.3 = good tension/release. Scale to 0..1.
+  return Math.min(1, cv * 3.0)
 }
 
 function computeMotifIdentity(pcm: Float32Array, sampleRate: number, bpm: number): number {

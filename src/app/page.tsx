@@ -31,7 +31,29 @@ interface CritiqueData {
     sampleRate: number
     stereo: boolean
     samples: boolean
+    lufs?: number
+    truePeakDb?: number
+    stereoWidth?: number
+    monoCompatibility?: number
+    gainReductionDb?: number
   }
+}
+
+interface OptIteration {
+  iteration: number
+  configName: string
+  score: number
+  improvement: number
+  failures: { code: string; severity: number }[]
+}
+interface OptReport {
+  initialScore: number
+  finalScore: number
+  improvement: number
+  verdict: string
+  durationMs: number
+  bestIteration: number
+  iterations: OptIteration[]
 }
 
 function MetricBar({ label, value, invert = false }: { label: string; value: number; invert?: boolean }) {
@@ -55,8 +77,10 @@ export default function Home() {
   const [useSamples, setUseSamples] = useState(true)
   const [loading, setLoading] = useState(false)
   const [critiqueLoading, setCritiqueLoading] = useState(false)
+  const [optimizing, setOptimizing] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [critique, setCritique] = useState<CritiqueData | null>(null)
+  const [optReport, setOptReport] = useState<OptReport | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const render = async () => {
@@ -87,25 +111,39 @@ export default function Home() {
     }
   }
 
-  // Auto-render on first load
+  const runOptimize = async () => {
+    setOptimizing(true)
+    setOptReport(null)
+    try {
+      const res = await fetch(`/api/optimize?seed=${seed}&bars=8&iterations=8&target=0.75`)
+      if (res.ok) {
+        const data = await res.json() as OptReport
+        setOptReport(data)
+      }
+    } finally {
+      setOptimizing(false)
+    }
+  }
+
   useEffect(() => {
     render()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const scoreColor = critique
-    ? critique.overallScore > 0.6 ? 'text-emerald-400'
-    : critique.overallScore > 0.4 ? 'text-amber-400'
+    ? critique.overallScore > 0.65 ? 'text-emerald-400'
+    : critique.overallScore > 0.5 ? 'text-amber-400'
     : 'text-rose-400'
     : 'text-zinc-500'
+
+  const optScoreMax = optReport ? Math.max(...optReport.iterations.map(i => i.score), 0.7) : 1
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-200">
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-4">
           <h1 className="text-lg font-bold text-zinc-50">PSY4 × Foundation</h1>
-          <span className="text-xs text-zinc-500">F22 · forensic bridge · stereo PCM · sidechain · samples</span>
-          <span className="ml-auto text-xs text-zinc-600">646 tests · 0 fail</span>
+          <span className="text-xs text-zinc-500">v3 · per-channel FX · multiband · LUFS · limiter · auto-fixer</span>
+          <span className="ml-auto text-xs text-zinc-600">{critique ? `${(critique.overallScore * 100).toFixed(0)}/100` : ''}</span>
         </div>
       </header>
 
@@ -113,7 +151,7 @@ export default function Home() {
         {/* Render controls */}
         <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-emerald-200">Forensic Bridge Audio Render</span>
+            <span className="text-base font-semibold text-emerald-200">Forensic Bridge v3 — Mastered Render</span>
             {critique && (
               <span className={`ml-auto text-2xl font-bold tabular-nums ${scoreColor}`}>
                 {(critique.overallScore * 100).toFixed(0)}/100
@@ -121,7 +159,7 @@ export default function Home() {
             )}
           </div>
           <p className="text-xs text-emerald-300/80 mb-4">
-            Foundation CompositionEngine → RawScore → Forensic Engine (17 voices, sidechain, 5-bus mix, master chain) → Stereo PCM → WAV + AudioCritic
+            RawScore → 14 voices × ChannelFX (EQ+delay+reverb+pan+width) → 3-bus glue → Multiband (LR4) → StereoWidener (M/S) → LUFS (-9) → TruePeakLimiter (-1 dBTP)
           </p>
           <div className="flex flex-wrap items-center gap-4 mb-4">
             <label className="flex items-center gap-2 text-sm">
@@ -156,7 +194,52 @@ export default function Home() {
                 <a href={audioUrl} download="psy4-forensic.wav" className="text-emerald-400 hover:underline">Download WAV</a>
                 {' · '}
                 <span>Stereo 44.1kHz · {critique?.renderInfo.events ?? 0} events · {critique?.renderInfo.durationSec.toFixed(1) ?? '—'}s</span>
+                {critique?.renderInfo.lufs !== undefined && (
+                  <span> · LUFS {critique.renderInfo.lufs.toFixed(1)} · Peak {critique.renderInfo.truePeakDb?.toFixed(1)}dB · Width {critique.renderInfo.stereoWidth?.toFixed(2)}</span>
+                )}
               </p>
+            </div>
+          )}
+        </section>
+
+        {/* Auto-Optimize */}
+        <section className="rounded-lg border border-violet-500/40 bg-violet-500/10 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base font-semibold text-violet-200">Auto-Fixer (Stage 9)</span>
+            <button
+              onClick={runOptimize}
+              disabled={optimizing}
+              className="ml-auto inline-flex items-center gap-2 rounded-md bg-violet-500 px-3 py-1.5 text-xs font-semibold text-violet-950 hover:bg-violet-400 disabled:opacity-50 transition-colors"
+            >
+              {optimizing ? 'Optimizing...' : 'Run Auto-Optimize (8 iters)'}
+            </button>
+          </div>
+          <p className="text-xs text-violet-300/80 mb-3">
+            Closed-loop: render → critique → diagnose → vary DSP parameters (hatGain, leadCutoff, bassGain, duckAmount, stereoWidth...) → re-render. Targets failure codes with targeted corrections.
+          </p>
+          {optReport && (
+            <div className="space-y-3">
+              <div className="flex items-baseline gap-4 text-sm">
+                <span className="text-zinc-400">Initial: <span className="text-zinc-200 font-mono">{optReport.initialScore.toFixed(4)}</span></span>
+                <span className="text-zinc-400">Final: <span className={`font-mono font-bold ${optReport.finalScore > optReport.initialScore ? 'text-emerald-400' : 'text-zinc-300'}`}>{optReport.finalScore.toFixed(4)}</span></span>
+                <span className="text-zinc-400">Δ: <span className={optReport.improvement >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{optReport.improvement >= 0 ? '+' : ''}{optReport.improvement.toFixed(4)}</span></span>
+                <span className="text-zinc-400">Verdict: <span className={`font-semibold ${optReport.verdict === 'PASS' ? 'text-emerald-400' : optReport.verdict === 'PARTIAL' ? 'text-amber-400' : 'text-rose-400'}`}>{optReport.verdict}</span></span>
+                <span className="text-zinc-500 ml-auto">{(optReport.durationMs / 1000).toFixed(1)}s</span>
+              </div>
+              {/* Score chart */}
+              <div className="flex items-end gap-1 h-24 bg-zinc-900/60 rounded p-2">
+                {optReport.iterations.map(it => {
+                  const h = Math.max(4, (it.score / optScoreMax) * 80)
+                  const isBest = it.iteration === optReport.bestIteration
+                  return (
+                    <div key={it.iteration} className="flex-1 flex flex-col items-center justify-end gap-1" title={`${it.configName}: ${it.score.toFixed(4)}`}>
+                      <span className="text-[10px] tabular-nums text-zinc-500">{it.score.toFixed(3)}</span>
+                      <div className={`w-full rounded-t ${isBest ? 'bg-violet-400' : 'bg-violet-600'}`} style={{ height: `${h}px` }} />
+                      <span className="text-[9px] text-zinc-600 truncate w-full text-center">{it.configName}</span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
         </section>
@@ -170,7 +253,6 @@ export default function Home() {
 
         {critique && (
           <>
-            {/* Score + failures */}
             <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
               <div className="flex items-baseline gap-3 mb-4">
                 <h2 className="text-lg font-semibold text-zinc-100">AudioCritic</h2>
@@ -183,7 +265,6 @@ export default function Home() {
                 </span>
               </div>
 
-              {/* Failures */}
               {critique.failures.length > 0 && (
                 <div className="space-y-2 mb-4">
                   <h3 className="text-xs uppercase tracking-wider text-zinc-500">Diagnosed Failures</h3>
@@ -200,7 +281,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Metrics */}
               <div className="grid gap-2 sm:grid-cols-2">
                 <MetricBar label="Kick Clarity" value={critique.metrics.kickClarity} />
                 <MetricBar label="Bass Clarity" value={critique.metrics.bassClarity} />
@@ -224,53 +304,49 @@ export default function Home() {
           </>
         )}
 
+        {/* Master chain metrics */}
+        {critique?.renderInfo.lufs !== undefined && (
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">LUFS</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.lufs.toFixed(1)}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">target -9</div>
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">True Peak</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.truePeakDb?.toFixed(1)}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">dBTP (limit -1)</div>
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">Stereo Width</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.stereoWidth?.toFixed(2)}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">M/S ratio</div>
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
+              <div className="text-xs uppercase tracking-wider text-zinc-500">Gain Reduction</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.gainReductionDb?.toFixed(1)}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">dB (limiter)</div>
+            </div>
+          </section>
+        )}
+
         {/* Pipeline */}
         <section>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-3">Pipeline</h2>
+          <h2 className="text-lg font-semibold text-zinc-100 mb-3">Pipeline (v3)</h2>
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto">
-            <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre">{`Foundation CompositionEngine (WHAT)
-  ├── HarmonicPlan · PhraseMaterial · GroovePlan
-  ├── KickPlan → BassPlan → LeadPlan
-  ├── TensionDimensions (7) · InteractionGrammar (5)
-  └── LearnedIdentity (Source A/B)
+            <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre">{`Foundation CompositionEngine (WHAT — frozen)
+  └── RawScore Serializer
         ↓
-RawScore Serializer (frozen)
+Forensic Bridge v3 (HOW)
+  ├── 14 Voice Pools (Kick/Bass/Sub/Lead/Counter/Hat/OpenHat/Snare/Clap/Perc/Shaker/Pad/Riser/Impact)
+  ├── Per-Type ChannelFX (EQ shelves + ping-pong delay + Schroeder reverb + pan + Haas width)
+  ├── 3-Bus Glue (drum/bass/music: HP + comp + drive)
+  ├── Multiband Compressor (LR4 @ 200Hz/2000Hz, 3-band)
+  ├── StereoWidener (M/S, width 1.5)
+  ├── LUFS Targeting (-9 LUFS, ITU-R BS.1770-4)
+  └── TruePeakLimiter (4x Catmull-Rom, -1 dBTP brickwall)
         ↓
-Forensic Bridge (HOW)
-  ├── RollingBassVoice (sub+mid+Moog, SUSTAIN)
-  ├── KickVoice (3-layer: sub+body+click) / 909 sample
-  ├── LeadVoice (5-osc supersaw+Moog+LFO+Haas)
-  ├── HatVoice / MD sample
-  ├── Sidechain (kick→bass duck, 250ms recovery)
-  ├── 5-bus mix (drum/bass/music: HP+comp+drive)
-  ├── SchroederReverb + StereoDelay
-  └── MasterChain (glue+sat+limiter)
-        ↓
-Stereo PCM → WAV + AudioCritic`}</pre>
-          </div>
-        </section>
-
-        {/* Stats */}
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">Tests</div>
-            <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">646</div>
-            <div className="mt-0.5 text-xs text-zinc-500">0 fail</div>
-          </div>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">Samples</div>
-            <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">141</div>
-            <div className="mt-0.5 text-xs text-zinc-500">909 · MD · Nord</div>
-          </div>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">Voices</div>
-            <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">17</div>
-            <div className="mt-0.5 text-xs text-zinc-500">forensic engine</div>
-          </div>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="text-xs uppercase tracking-wider text-zinc-500">Render</div>
-            <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">~600ms</div>
-            <div className="mt-0.5 text-xs text-zinc-500">8 bars @ 145 BPM</div>
+Stereo PCM 44100Hz → WAV + AudioCritic (38 metrics, 12 failure codes)`}</pre>
           </div>
         </section>
       </main>
@@ -279,8 +355,8 @@ Stereo PCM → WAV + AudioCritic`}</pre>
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
           <span className="font-mono text-zinc-500">github.com/dudududi144-source/psy-foundation</span>
           <span>·</span>
-          <span>F22 · forensic bridge · stereo · sidechain · samples · AudioCritic</span>
-          <span className="ml-auto">646 tests · 0 fail</span>
+          <span>v3 · per-channel FX · multiband · LUFS · limiter · auto-fixer</span>
+          <span className="ml-auto">deterministic · 32 bars · 14 channels</span>
         </div>
       </footer>
     </div>
