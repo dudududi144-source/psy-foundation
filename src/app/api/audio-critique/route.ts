@@ -7,18 +7,12 @@ import { critiqueAudio } from '@/lib/psy4/audio-critic'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Best config found by auto-fixer (score 0.6568 on 32 bars)
+// Best config found by auto-fixer v3 (score 0.7102, 0 failures on 32 bars)
 const BEST_CONFIG = {
   ...DEFAULT_RENDER_CONFIG,
-  kickDecay: 0.079475,
-  bassGain: 0.75,
-  leadCutoff: 6500,
-  leadGain: 1.4,
-  hatGain: 1.6,
-  shakerGain: 1.8,
-  subBassGain: 0.5,
-  duckAmount: 0.95,
-  stereoWidth: 1.5,
+  bassGain: 0.8,
+  subBassGain: 0.6,
+  padGain: 0.7,
 }
 
 export async function GET(req: NextRequest) {

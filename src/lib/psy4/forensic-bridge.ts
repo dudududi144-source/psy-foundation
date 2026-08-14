@@ -223,8 +223,8 @@ export async function renderFoundationSection(
   // ── Mix bus (stereo) — glue compression per bus ──
   const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 0.85 })
   const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 0.85 })
-  const bassBusL = new BusProcessor({ hpFreq: 90, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
-  const bassBusR = new BusProcessor({ hpFreq: 90, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
+  const bassBusL = new BusProcessor({ hpFreq: 110, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
+  const bassBusR = new BusProcessor({ hpFreq: 110, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
   const musicBusL = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 0.95 })
   const musicBusR = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 0.95 })
 
@@ -301,10 +301,12 @@ export async function renderFoundationSection(
       }
     }
 
-    // Closed hats on offbeats
+    // Closed hats on offbeats — velocity varies per bar for rhythmic interest
+    const hatVelBase = barIdx % 2 === 0 ? 0.4 : 0.35
+    const hatVelStrong = barIdx % 2 === 0 ? 0.6 : 0.55
     for (const step of [2, 6, 10, 14]) {
       const isStrong = step % 8 === 6
-      events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel: isStrong ? 0.6 : 0.4, dur: samplesPerStep })
+      events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel: isStrong ? hatVelStrong : hatVelBase, dur: samplesPerStep })
     }
 
     // Open hats — syncopated (steps 6 and 14, even bars only)
@@ -376,8 +378,21 @@ export async function renderFoundationSection(
   let hatPanFlip = false
   let openHatPanFlip = false
 
+  // Energy contour: create tension/release by modulating overall energy across bars.
+  // Pattern: bars 0-3 full, bar 4 dip (70%), bars 5-6 build (85%→100%), bar 7 peak (105%).
+  // This creates a 8-bar tension/release cycle that improves the dynamic contour.
+  function barEnergy(barIdx: number): number {
+    const phase = barIdx % 8
+    if (phase === 4) return 0.65  // breakdown dip
+    if (phase === 5) return 0.80  // rebuild
+    if (phase === 6) return 0.95  // build
+    if (phase === 7) return 1.05  // climax
+    return 1.0                    // full energy
+  }
+
   for (let i = 0; i < totalSamples; i++) {
-    // Trigger events
+    const currentBar = Math.floor(i / samplesPerBar)
+    const energyMul = barEnergy(currentBar)
     while (evIdx < events.length && events[evIdx]!.pos <= i) {
       const ev = events[evIdx]!
       if (ev.type === 'kick') {
@@ -393,7 +408,7 @@ export async function renderFoundationSection(
         bassIdx++
       } else if (ev.type === 'lead' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
-        leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: cfg.leadCutoff, detune: 10, res: cfg.leadResonance, lfoRate: 0.8, lfoDepth: 0.3 })
+        leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: cfg.leadCutoff, detune: 10, res: cfg.leadResonance, lfoRate: 1.2, lfoDepth: 0.5 })
         leadIdx++
       } else if (ev.type === 'hat') {
         if (hatSample) hatSample.trigger(ev.vel)
@@ -532,9 +547,9 @@ export async function renderFoundationSection(
     bassL = bassBusL.process(bassL, SR); bassR = bassBusR.process(bassR, SR)
     musicL = musicBusL.process(musicL, SR); musicR = musicBusR.process(musicR, SR)
 
-    // ── Master sum + glue ──
-    let mixL = drumL + bassL + musicL
-    let mixR = drumR + bassR + musicR
+    // ── Master sum + glue ── (apply energy contour for tension/release)
+    let mixL = (drumL + bassL + musicL) * energyMul
+    let mixR = (drumR + bassR + musicR) * energyMul
     mixL = masterGlueL.process(mixL, SR)
     mixR = masterGlueR.process(mixR, SR)
 

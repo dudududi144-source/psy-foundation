@@ -140,7 +140,8 @@ export function critiqueAudio(
   const spectralMovement = computeSpectralMovement(spectra)
 
   // ── Low-end analysis ──
-  const kickClarity = onsetSharpness // kick clarity = how sharp the onsets are
+  // kickClarity: kick-specific clarity = onset sharpness weighted by low-end energy presence
+  const kickClarity = onsetSharpness * 0.7 + Math.min(1, (subEnergy + bassEnergy) / Math.max(0.01, subEnergy + bassEnergy + lowMidEnergy + midEnergy)) * 0.3
   const bassClarity = Math.min(1, bassEnergy / Math.max(0.01, subEnergy + bassEnergy))
   const kickBassSeparation = computeKickBassSeparation(avgSpectrum, sampleRate, fftSize)
   const subMud = computeSubMud(avgSpectrum, sampleRate, fftSize)
@@ -153,10 +154,11 @@ export function critiqueAudio(
   const spectralConsistency = 1 - spectralMovement
 
   // ── Groove analysis ──
-  const onsetClarity = onsetSharpness
   const pocketConsistency = computePocketConsistency(onsets, sampleRate, bpm, stepsPerBar)
   const kickBassLock = computeKickBassLock(pcm, onsets, sampleRate, bpm)
   const excessiveUniformity = computeExcessiveUniformity(pcm, sampleRate, bpm)
+  // onsetClarity: general onset clarity = sharpness × consistency (how regular the onsets are)
+  const onsetClarity = onsetSharpness * (1 - excessiveUniformity * 0.3)
 
   // ── Lead analysis ──
   const articulation = computeArticulation(pcm, sampleRate)
@@ -169,7 +171,19 @@ export function critiqueAudio(
   const brightness = Math.min(1, spectralCentroid / 5000)
   const roughness = computeRoughness(avgSpectrum, sampleRate, fftSize)
   const noisiness = computeNoisiness(avgSpectrum, sampleRate, fftSize)
-  const modulationDepth = spectralMovement
+  // Modulation depth: measures how much the spectral centroid changes over time.
+  // Unlike spectralMovement (which measures frame-to-frame spectral diff), this
+  // captures the DEPTH of timbral modulation (bright→dark sweeps, filter movement).
+  const centroidOverTime = spectra.map(s => computeCentroid(s, sampleRate, fftSize))
+  let centroidMean = 0
+  for (const c of centroidOverTime) centroidMean += c
+  centroidMean /= Math.max(1, centroidOverTime.length)
+  let centroidVar = 0
+  for (const c of centroidOverTime) centroidVar += (c - centroidMean) ** 2
+  centroidVar /= Math.max(1, centroidOverTime.length)
+  const centroidStd = Math.sqrt(centroidVar)
+  // Normalize: centroidStd > 500Hz = strong modulation, < 100Hz = static
+  const modulationDepth = Math.min(1, centroidStd / 500)
   const identityStrength = computeIdentityStrength(spectra)
 
   // ── Mix analysis ──
@@ -189,7 +203,8 @@ export function critiqueAudio(
   const motifIdentity = computeMotifIdentity(pcm, sampleRate, bpm)
   const development = computeDevelopment(pcm, sampleRate, bpm)
   const callResponse = computeCallResponse(pcm, sampleRate, bpm)
-  const rhythmicInterest = 1 - excessiveUniformity
+  // rhythmicInterest: measures syncopation and rhythmic variation (not just 1-uniformity)
+  const rhythmicInterest = Math.min(1, (1 - excessiveUniformity) * 0.6 + pocketConsistency * 0.4)
 
   // ── Diagnose failures ──
   if (subMud > 0.6) {
@@ -265,14 +280,14 @@ export function critiqueAudio(
       severity: excessiveUniformity - 0.7,
     })
   }
-  if (kickBassSeparation < 0.15) {
+  if (kickBassSeparation < 0.10) {
     failures.push({
       code: 'KICK_BASS_PHASE_RISK',
       diagnosis: `Kick and bass are not spectrally separated (${kickBassSeparation.toFixed(3)}) — they occupy the same frequency range.`,
       correctionTarget: 'kick.pitchEnd / bass.sub.cutoffHz',
       correctionHint:
         'Lower kick sub frequency; raise bass sub cutoff; ensure kick is done before bass starts',
-      severity: 0.3 - kickBassSeparation,
+      severity: 0.2 - kickBassSeparation,
     })
   }
   if (melodicClarity < 0.3) {
@@ -817,30 +832,46 @@ function computeExcessiveUniformity(pcm: Float32Array, sampleRate: number, bpm: 
 
 function computeArticulation(pcm: Float32Array, sampleRate: number): number {
   // Articulation = how much the envelope changes (not sustains).
-  const windowSize = Math.floor(sampleRate * 0.02)
+  // Measures the rate of envelope change in 5ms windows. Higher = more articulated.
+  const windowSize = Math.floor(sampleRate * 0.005) // 5ms
   let changes = 0
   let prevEnv = 0
+  let count = 0
   for (let i = 0; i < pcm.length; i += windowSize) {
     let env = 0
     for (let j = 0; j < windowSize && i + j < pcm.length; j++) {
       env += Math.abs(pcm[i + j] ?? 0)
     }
     env /= windowSize
-    changes += Math.abs(env - prevEnv)
+    if (count > 0) changes += Math.abs(env - prevEnv)
     prevEnv = env
+    count++
   }
-  return Math.min(1, (changes / (pcm.length / windowSize)) * 10)
+  // Average change per window. Scale by 30 (was 10) — the lead's filter envelope
+  // and note on/off produce ~0.01-0.03 change per 5ms window.
+  return Math.min(1, (changes / Math.max(1, count)) * 30)
 }
 
 function computeMelodicClarity(pcm: Float32Array, sampleRate: number): number {
-  // Simplified: melodic clarity = spectral peaks are distinct (not noise).
+  // Melodic clarity = spectral peakiness. A clear melody has distinct harmonic peaks
+  // (high spectral crest factor). A noisy/muddy mix has flat spectrum.
   const fftSize = 2048
-  const spectrum = computeDFT(pcm.slice(0, Math.min(pcm.length, fftSize)), 128)
-  const centroid = computeCentroid(spectrum, sampleRate, fftSize)
-  // If centroid is in a reasonable lead range (500-4000Hz), clarity is higher.
-  if (centroid > 500 && centroid < 4000) return 0.7
-  if (centroid > 300 && centroid < 6000) return 0.4
-  return 0.2
+  const spectrum = computeDFT(pcm.slice(0, Math.min(pcm.length, fftSize)), 512)
+  // Spectral crest factor = max(bin) / mean(bin) in the lead range (500-5000Hz)
+  const lowBin = Math.floor((500 * fftSize) / sampleRate)
+  const highBin = Math.ceil((5000 * fftSize) / sampleRate)
+  let maxBin = 0, sumBins = 0, binCount = 0
+  for (let i = lowBin; i <= highBin && i < spectrum.length; i++) {
+    const v = spectrum[i] ?? 0
+    if (v > maxBin) maxBin = v
+    sumBins += v
+    binCount++
+  }
+  if (binCount === 0 || sumBins < 1e-8) return 0.3
+  const meanBin = sumBins / binCount
+  const crest = maxBin / meanBin
+  // crest > 5 = very clear peaks (good melody), crest < 2 = flat/noisy
+  return Math.max(0, Math.min(1, (crest - 1) / 4))
 }
 
 function computePhraseContrast(pcm: Float32Array, sampleRate: number, _bpm: number): number {
@@ -929,9 +960,10 @@ function computeMasking(spectrum: number[], sampleRate: number, fftSize: number)
 function computeTensionRelease(pcm: Float32Array, _sampleRate: number, _bpm: number): number {
   // Tension/release: measures the dynamic energy contour across the track.
   // A good psytrance track has variation — builds, drops, releases — not flat energy.
-  // We compute the coefficient of variation (CV) of energy across 8 sections.
-  // High CV = good tension/release (dynamic). Low CV = flat (boring).
-  const sections = 8
+  // Uses 32 sections (1 per bar at 32 bars) for fine-grained contour detection.
+  // Measures the ratio of max-section-energy to min-section-energy (dynamic range
+  // across sections) AND the coefficient of variation.
+  const sections = 32
   const sectionLength = Math.floor(pcm.length / sections)
   if (sectionLength < 100) return 0.5
   const energies: number[] = []
@@ -946,8 +978,13 @@ function computeTensionRelease(pcm: Float32Array, _sampleRate: number, _bpm: num
   if (mean < 1e-8) return 0
   const variance = energies.reduce((s, e) => s + (e - mean) ** 2, 0) / energies.length
   const cv = Math.sqrt(variance) / mean
-  // CV > 0.3 = good tension/release. Scale to 0..1.
-  return Math.min(1, cv * 3.0)
+  // Also measure max/min ratio (dynamic range across sections)
+  const maxE = Math.max(...energies)
+  const minE = Math.min(...energies)
+  const drRatio = minE > 0 ? Math.min(maxE / minE, 4) / 4 : 0
+  // Blend: 50% CV (variation shape), 50% DR ratio (contrast)
+  // CV > 0.3 = good, scale to 1.0. DR ratio > 0.75 (3:1 contrast) = good.
+  return Math.min(1, cv * 2.0 * 0.5 + drRatio * 0.5)
 }
 
 function computeMotifIdentity(pcm: Float32Array, sampleRate: number, bpm: number): number {
