@@ -187,8 +187,10 @@ export class PsyLead {
   // Carrier + modulator for FM
   carPhase = 0
   modPhase = 0
-  modRatio = 2.0 // modulator at 2x carrier frequency
-  modIndex = 200 // FM depth in Hz — grows over note for "buzzy" attack
+  modRatio = 2.0
+  modIndex = 150
+  // Saw layer for harmonics (mixed with FM carrier)
+  saw = new BLSaw()
   // Sub oscillator (triangle, one octave down for weight)
   subOsc = new BLTriangle()
   // Filter
@@ -219,6 +221,8 @@ export class PsyLead {
     this.lfoDepth = params?.lfoDepth ?? 0.5
     this.carPhase = 0
     this.modPhase = 0
+    this.saw.reset()
+    this.saw.setFreq(freq)
     this.subOsc.reset()
     this.subOsc.setFreq(freq * 0.5)
     this.filter.reset()
@@ -257,8 +261,11 @@ export class PsyLead {
     // ── Sub oscillator: triangle one octave down for weight ──
     const subSig = this.subOsc.process(this.freq * 0.5 / SR) * 0.3
 
-    // ── Mix carrier + sub ──
-    let signal = carSig * 0.8 + subSig
+    // ── Saw layer for harmonics ──
+    const sawSig = this.saw.process(this.freq / SR) * 0.4
+
+    // ── Mix carrier + saw + sub ──
+    let signal = carSig * 0.5 + sawSig + subSig
 
     // ── Acid filter envelope ──
     const filterEnv = Math.exp(-this.t / 0.12) * this.filterEnvAmount
