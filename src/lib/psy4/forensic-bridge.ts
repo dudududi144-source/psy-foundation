@@ -118,7 +118,7 @@ export const DEFAULT_RENDER_CONFIG: RenderConfig = {
   padGain: 1.0,
   duckAmount: 0.75,
   targetLufs: TARGET_LUFS,
-  stereoWidth: 1.3,
+  stereoWidth: 1.6,
 }
 
 // ── Render ──
@@ -240,6 +240,20 @@ export async function renderFoundationSection(
     const accent = rawScore.groove.accent
     const barIdx = barRemap.get(bar.barIndex) ?? 0
 
+    // Arrangement: which voices play in this bar
+    // 8-bar phrase: intro(0-1) → build(2-3) → full(4-5) → break(6) → drop(7)
+    const phase = barIdx % 8
+    const playKick = true
+    const playBass = true
+    const playHats = phase >= 2      // hats enter at bar 2
+    const playLead = phase >= 3      // lead enters at bar 3
+    const playCounter = phase >= 4   // counter at bar 4
+    const playPad = phase >= 2 && phase !== 6  // pad except break
+    const playSnare = phase >= 4     // snare at full
+    const playShaker = phase >= 2    // shaker at build
+    const playFX = phase === 6 || phase === 7  // riser/impact at break/drop
+    const isBreak = phase === 6      // break bar: drop lead, keep percussion
+
     // Four-on-the-floor kick
     for (const step of [0, 4, 8, 12]) {
       const a = accent[step % accent.length] ?? 1
@@ -282,8 +296,8 @@ export async function renderFoundationSection(
       })
     }
 
-    // Lead — use Foundation's lead notes (start from bar 0, not bar 2)
-    if (bar.leadNotes.length > 0) {
+    // Lead — enters at bar 3 (build phase)
+    if (playLead && !isBreak && bar.leadNotes.length > 0) {
       for (const n of bar.leadNotes) {
         events.push({ pos: barStart + n.step * samplesPerStep, type: 'lead', midi: n.midi, vel: n.velocity, dur: n.durationSteps * samplesPerStep })
       }
@@ -317,16 +331,18 @@ export async function renderFoundationSection(
       }
     }
 
-    // Closed hats on offbeats — velocity varies per bar for rhythmic interest
-    const hatVelBase = barIdx % 2 === 0 ? 0.4 : 0.35
-    const hatVelStrong = barIdx % 2 === 0 ? 0.6 : 0.55
-    for (const step of [2, 6, 10, 14]) {
-      const isStrong = step % 8 === 6
-      events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel: isStrong ? hatVelStrong : hatVelBase, dur: samplesPerStep })
+    // Closed hats — enter at bar 2 (build)
+    if (playHats) {
+      const hatVelBase = barIdx % 2 === 0 ? 0.4 : 0.35
+      const hatVelStrong = barIdx % 2 === 0 ? 0.6 : 0.55
+      for (const step of [2, 6, 10, 14]) {
+        const isStrong = step % 8 === 6
+        events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel: isStrong ? hatVelStrong : hatVelBase, dur: samplesPerStep })
+      }
     }
 
-    // Open hats — syncopated (steps 6 and 14, even bars only)
-    if (barIdx % 2 === 0) {
+    // Open hats — syncopated
+    if (playHats && barIdx % 2 === 0) {
       events.push({ pos: barStart + 6 * samplesPerStep, type: 'openhat', vel: 0.4, dur: samplesPerStep })
       events.push({ pos: barStart + 14 * samplesPerStep, type: 'openhat', vel: 0.4, dur: samplesPerStep })
     }
@@ -335,9 +351,11 @@ export async function renderFoundationSection(
     events.push({ pos: barStart + 4 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
     events.push({ pos: barStart + 12 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
 
-    // Snare on beats 2 & 4 (backbeat)
-    events.push({ pos: barStart + 4 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
-    events.push({ pos: barStart + 12 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
+    // Snare — enters at bar 4 (full)
+    if (playSnare) {
+      events.push({ pos: barStart + 4 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
+      events.push({ pos: barStart + 12 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
+    }
 
     // Snare roll before section changes (last bar of 4-bar phrase)
     if (barIdx % 4 === 3) {
@@ -350,22 +368,24 @@ export async function renderFoundationSection(
     // Sub-bass: sustained root for the whole bar
     events.push({ pos: barStart, type: 'subbass', midi: rootMidi, vel: 0.25, dur: samplesPerBar })
 
-    // Pad: sustained chord — one per 2 bars
-    if (barIdx % 2 === 0) {
+    // Pad — enters at bar 2, drops during break
+    if (playPad && barIdx % 2 === 0) {
       const rootFreq = 440 * Math.pow(2, (rootMidi - 69) / 12)
       const thirdFreq = 440 * Math.pow(2, (rootMidi + 4 - 69) / 12)
       const fifthFreq = 440 * Math.pow(2, (rootMidi + 7 - 69) / 12)
       events.push({ pos: barStart, type: 'pad', vel: 0.12, dur: samplesPerBar * 2, freqs: [rootFreq, thirdFreq, fifthFreq] })
     }
 
-    // Shaker on every 16th
-    for (let step = 0; step < 16; step++) {
-      const isStrong = step % 4 === 0
-      events.push({ pos: barStart + step * samplesPerStep, type: 'shaker', vel: isStrong ? 0.3 : 0.15, dur: samplesPerStep })
+    // Shaker — enters at bar 2
+    if (playShaker) {
+      for (let step = 0; step < 16; step++) {
+        const isStrong = step % 4 === 0
+        events.push({ pos: barStart + step * samplesPerStep, type: 'shaker', vel: isStrong ? 0.3 : 0.15, dur: samplesPerStep })
+      }
     }
 
-    // FX: riser + impact before section changes
-    if (barIdx % 4 === 3) {
+    // FX: riser + impact at break/drop
+    if (playFX) {
       events.push({ pos: barStart, type: 'riser', vel: 0.2, dur: samplesPerBar })
       events.push({ pos: barStart + samplesPerBar, type: 'impact', vel: 0.4, dur: samplesPerStep })
     }
