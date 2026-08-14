@@ -111,8 +111,8 @@ export class PsyBass {
   hpState = 0
 
   // Filter envelope
-  cutoffStart = 600
-  cutoffEnd = 200
+  cutoffStart = 500
+  cutoffEnd = 120
   res = 0.15
 
   trigger(freq: number, dur: number, amp: number) {
@@ -200,7 +200,7 @@ export class PsyLead {
   filter = new MoogLadder()
   cutoff = 2000
   res = 0.4
-  filterEnvAmount = 0.5
+  filterEnvAmount = 0.6
   // LFO
   lfoPhase = 0
   lfoRate = 0.8

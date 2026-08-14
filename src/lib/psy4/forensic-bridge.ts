@@ -135,8 +135,8 @@ export async function renderFoundationSection(
   // ── Mix bus (stereo) ──
   const drumL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 0.9 })
   const drumR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 0.9 })
-  const bassL = new BusProcessor({ hpFreq: 90, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
-  const bassR = new BusProcessor({ hpFreq: 90, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
+  const bassL = new BusProcessor({ hpFreq: 100, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
+  const bassR = new BusProcessor({ hpFreq: 100, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.1, drive: 1.1, gain: 1.0 })
   const musicL = new BusProcessor({ hpFreq: 200, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 1.0 })
   const musicR = new BusProcessor({ hpFreq: 200, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.2, drive: 1.1, gain: 1.0 })
 
@@ -312,7 +312,7 @@ export async function renderFoundationSection(
       if (ev.type === 'kick') {
         duckEnv = 0.25 // deep sidechain duck
         if (kickSample) kickSample.trigger(ev.vel)
-        else { kicks[kickIdx % 4]!.trigger(ev.vel, 48, 0.13); kickIdx++ }
+        else { kicks[kickIdx % 4]!.trigger(ev.vel, 46, 0.11); kickIdx++ }
       } else if (ev.type === 'bass' && ev.midi !== undefined) {
         if (activeBass) activeBass.noteOff()
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
@@ -322,7 +322,7 @@ export async function renderFoundationSection(
         bassIdx++
       } else if (ev.type === 'lead' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
-        leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: 4000, detune: 10, res: 0.5, lfoRate: 0.8, lfoDepth: 0.3 })
+        leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: 4500, detune: 10, res: 0.5, lfoRate: 0.8, lfoDepth: 0.3 })
         leadIdx++
       } else if (ev.type === 'hat') {
         if (hatSample) hatSample.trigger(ev.vel)
@@ -387,8 +387,8 @@ export async function renderFoundationSection(
     leadReverbSend += leadSig * 0.35
 
     // Hats — HP filter (gentle, 1000Hz) + alternating pan + reverb send
-    if (hatSample?.active) { const [s] = hatSample.render(); const hp = s - hatHpState; hatHpState = hatHpState + 0.98 * (s - hatHpState); dL += hp * 1.0 * hatPan; dR += hp * 1.0 * (1 - hatPan); hatReverbSend += hp * 0.15 }
-    else for (const v of hats) if (v.active) { const [s] = v.render(); const hp = s - hatHpState; hatHpState = hatHpState + 0.98 * (s - hatHpState); dL += hp * 0.7 * hatPan; dR += hp * 0.7 * (1 - hatPan) }
+    if (hatSample?.active) { const [s] = hatSample.render(); const hp = s - hatHpState; hatHpState = hatHpState + 0.98 * (s - hatHpState); dL += hp * 1.1 * hatPan; dR += hp * 1.1 * (1 - hatPan); hatReverbSend += hp * 0.15 }
+    else for (const v of hats) if (v.active) { const [s] = v.render(); const hp = s - hatHpState; hatHpState = hatHpState + 0.98 * (s - hatHpState); dL += hp * 0.8 * hatPan; dR += hp * 0.8 * (1 - hatPan) }
     // Alternate hat pan every 2 steps
     if (i % (samplesPerStep * 2) === 0) hatPan = hatPan === 0.7 ? 0.3 : 0.7
 
