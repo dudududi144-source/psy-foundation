@@ -287,7 +287,7 @@ export class PsyLead {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// HAT — synthetic hat (fallback when no sample)
+// HAT — metallic synthesis (TR-808 style: 6 square oscillators)
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyHat {
@@ -296,35 +296,52 @@ export class PsyHat {
   amp = 0.5
   open = false
   decay = 0.03
-  noise: PinkNoise
-  prevNoise = 0
 
-  constructor(rng: Rng) {
-    this.noise = new PinkNoise(rng)
-  }
+  // 6 square oscillators at inharmonic ratios (TR-808 frequencies)
+  // These create the characteristic metallic shimmer
+  private phases = new Float64Array(6)
+  private freqs = [540, 800, 1080, 1360, 1700, 2400]
+  // Bandpass filter for the metallic clang
+  private bp = new MoogLadder()
+  // Highpass for cleaning up low end
+  private hp = new OnePoleHP()
+
+  constructor(_rng: Rng) {}
 
   trigger(amp: number, open = false) {
     this.active = true
     this.t = 0
     this.amp = amp
     this.open = open
-    this.decay = open ? 0.15 : 0.03
-    this.prevNoise = 0
-    this.noise.reset()
+    this.decay = open ? 0.18 : 0.04
+    this.phases.fill(0)
+    this.bp.reset()
+    this.hp.reset()
   }
 
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    if (this.t > this.decay * 1.5) { this.active = false; return [0, true] }
+    if (this.t > this.decay * 2) { this.active = false; return [0, true] }
 
-    const n = this.noise.next()
-    // High-pass via differentiation (6kHz+ emphasis)
-    const hp = n - this.prevNoise
-    this.prevNoise = n
+    // Sum 6 square oscillators at inharmonic frequencies
+    let metallic = 0
+    for (let i = 0; i < 6; i++) {
+      this.phases[i] = (this.phases[i]! + this.freqs[i]! / SR) % 1
+      // Square wave (2 * (2*floor(phase) - floor(2*phase)) ... simplified)
+      metallic += this.phases[i]! < 0.5 ? 1 : -1
+    }
+    metallic /= 6
 
+    // Bandpass at ~10kHz for shimmer
+    const bpOut = this.bp.process(metallic, 10000, 0.5, 1.0, SR)
+    // Highpass at 6kHz to remove any low leakage
+    const hpOut = this.hp.process(bpOut, 6000, SR)
+
+    // Two-stage envelope: fast attack, exponential decay
     const env = Math.exp(-this.t / this.decay)
-    return [hp * env * this.amp * 2.0, false]
+
+    return [hpOut * env * this.amp * 1.5, false]
   }
 }
 
@@ -363,7 +380,7 @@ export class PsySample {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SNARE — proper snare with noise + tone
+// SNARE — 2 tone oscillators + filtered noise (TR-808 style)
 // ═══════════════════════════════════════════════════════════════
 
 export class PsySnare {
@@ -371,9 +388,15 @@ export class PsySnare {
   t = 0
   amp = 0.5
   noise: PinkNoise
-  prevNoise = 0
-  tonePhase = 0
-  freq = 200
+  // Two tone oscillators at 180Hz and 330Hz (snare body)
+  tone1Phase = 0
+  tone2Phase = 0
+  freq1 = 180
+  freq2 = 330
+  // Bandpass for the noise component
+  noiseBP = new MoogLadder()
+  // Highpass for cleaning
+  noiseHP = new OnePoleHP()
 
   constructor(rng: Rng) {
     this.noise = new PinkNoise(rng)
@@ -383,25 +406,32 @@ export class PsySnare {
     this.active = true
     this.t = 0
     this.amp = amp
-    this.prevNoise = 0
-    this.tonePhase = 0
+    this.tone1Phase = 0
+    this.tone2Phase = 0
     this.noise.reset()
+    this.noiseBP.reset()
+    this.noiseHP.reset()
   }
 
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    if (this.t > 0.15) { this.active = false; return [0, true] }
+    if (this.t > 0.2) { this.active = false; return [0, true] }
 
+    // ── Noise component: filtered through bandpass + highpass ──
     const n = this.noise.next()
-    const hp = n - this.prevNoise
-    this.prevNoise = n
-    const noiseEnv = Math.exp(-this.t / 0.06)
-    const noiseOut = hp * noiseEnv * 0.6
+    const bpOut = this.noiseBP.process(n, 1800, 0.7, 1.0, SR) // ~1.8kHz bandpass
+    const hpOut = this.noiseHP.process(bpOut, 1000, SR) // HP at 1kHz
+    // Noise has longer decay (the "sizzle")
+    const noiseEnv = Math.exp(-this.t / 0.08)
+    const noiseOut = hpOut * noiseEnv * 0.7
 
-    this.tonePhase += (2 * Math.PI * this.freq) / SR
-    const toneEnv = Math.exp(-this.t / 0.04)
-    const toneOut = Math.sin(this.tonePhase) * toneEnv * 0.3
+    // ── Tone component: 2 sines at 180+330Hz (the "body") ──
+    this.tone1Phase += (2 * Math.PI * this.freq1) / SR
+    this.tone2Phase += (2 * Math.PI * this.freq2) / SR
+    // Tone has shorter decay (the "thwack")
+    const toneEnv = Math.exp(-this.t / 0.05)
+    const toneOut = (Math.sin(this.tone1Phase) * 0.5 + Math.sin(this.tone2Phase) * 0.4) * toneEnv * 0.4
 
     return [(noiseOut + toneOut) * this.amp, false]
   }
