@@ -233,6 +233,10 @@ export async function renderFoundationSection(
       events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel: isStrong ? 0.6 : 0.4, dur: samplesPerStep })
     }
 
+    // Open hats — syncopated, longer decay
+    events.push({ pos: barStart + 6 * samplesPerStep, type: 'openhat', vel: 0.4, dur: samplesPerStep })
+    events.push({ pos: barStart + 14 * samplesPerStep, type: 'openhat', vel: 0.4, dur: samplesPerStep })
+
     // Claps on 2 & 4
     events.push({ pos: barStart + 4 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
     events.push({ pos: barStart + 12 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
@@ -314,6 +318,8 @@ export async function renderFoundationSection(
       } else if (ev.type === 'hat') {
         if (hatSample) hatSample.trigger(ev.vel)
         else { hats[hatIdx % 4]!.trigger(ev.vel, false); hatIdx++ }
+      } else if (ev.type === 'openhat') {
+        hats[(hatIdx + 2) % 4]!.trigger(ev.vel, true) // open=true, longer decay
       } else if (ev.type === 'clap' && clapSample) {
         clapSample.trigger(ev.vel)
       } else if (ev.type === 'perc' && percSample) {
