@@ -295,6 +295,7 @@ export async function renderFoundationSection(
   let hatHpState = 0, snareHpState = 0, shakerHpState = 0
   let hatPan = 0.5, shakerPan = 0.5
   let leadReverbSend = 0, hatReverbSend = 0, snareReverbSend = 0, padReverbSend = 0, fxReverbSend = 0, fxDelaySend = 0
+  let lufsMs = 0.001, lufsGain = 1.0
 
   for (let i = 0; i < totalSamples; i++) {
     // Trigger events
