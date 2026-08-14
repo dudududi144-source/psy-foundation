@@ -492,9 +492,10 @@ export class PsyPad {
   amp = 0.12
   releasing = false
   releaseT = 0
-  cutoff = 800
+  cutoff = 600
 
   constructor(rng: Rng) {
+    // 3 detuned saws with wider spread for chorus effect
     this.saws = [new BLSaw(), new BLSaw(), new BLSaw()]
     void rng
   }
@@ -505,9 +506,12 @@ export class PsyPad {
     this.amp = amp
     this.releasing = false
     this.releaseT = 0
+    // Detune the 3 oscillators: -7, 0, +7 cents
     for (let i = 0; i < 3; i++) {
       this.saws[i]!.reset()
-      this.saws[i]!.setFreq(freqs[i] ?? freqs[0] ?? 220)
+      const baseFreq = freqs[i] ?? freqs[0] ?? 220
+      const detune = (i - 1) * 7 // -7, 0, +7 cents
+      this.saws[i]!.setFreq(baseFreq * Math.pow(2, detune / 1200))
     }
     this.filter.reset()
   }
@@ -519,7 +523,7 @@ export class PsyPad {
     this.t += 1 / SR
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > 0.3) { this.active = false; return [0, true] }
+      if (this.releaseT > 0.4) { this.active = false; return [0, true] }
     }
     let signal = 0
     for (let i = 0; i < 3; i++) {
@@ -527,10 +531,13 @@ export class PsyPad {
       signal += this.saws[i]!.process(f / SR)
     }
     signal /= 3
-    const lfo = Math.sin(2 * Math.PI * 0.5 * this.t) * 0.3
-    const cutoff = Math.max(200, this.cutoff * (1 + lfo))
-    const filtered = this.filter.process(signal, cutoff, 0.2, 1.0, SR)
-    const attackEnv = Math.min(1, this.t / 0.1)
+    // Slow filter sweep: 0.15Hz LFO for evolving texture
+    const lfo1 = Math.sin(2 * Math.PI * 0.15 * this.t) * 0.5
+    const lfo2 = Math.sin(2 * Math.PI * 0.23 * this.t) * 0.2 // slight phase offset
+    const cutoff = Math.max(200, this.cutoff * (1 + lfo1 + lfo2))
+    const filtered = this.filter.process(signal, cutoff, 0.3, 1.0, SR)
+    // Long attack (0.3s) for pad swell
+    const attackEnv = Math.min(1, this.t / 0.3)
     let ampEnv = attackEnv
     if (this.releasing) ampEnv = attackEnv * Math.exp(-this.releaseT / 0.15)
     return [filtered * ampEnv * this.amp, false]
@@ -538,7 +545,7 @@ export class PsyPad {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SHAKER — 16th grid percussion
+// SHAKER — filtered noise with bandpass + two-stage decay
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyShaker {
@@ -546,8 +553,10 @@ export class PsyShaker {
   t = 0
   amp = 0.25
   noise: PinkNoise
-  prevNoise = 0
-  filter = new MoogLadder()
+  // Bandpass for the "shhh" character
+  bp = new MoogLadder()
+  // Highpass for cleanup
+  hp = new OnePoleHP()
 
   constructor(rng: Rng) { this.noise = new PinkNoise(rng) }
 
@@ -555,21 +564,24 @@ export class PsyShaker {
     this.active = true
     this.t = 0
     this.amp = amp
-    this.prevNoise = 0
     this.noise.reset()
-    this.filter.reset()
+    this.bp.reset()
+    this.hp.reset()
   }
 
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    if (this.t > 0.04) { this.active = false; return [0, true] }
+    if (this.t > 0.06) { this.active = false; return [0, true] }
     const n = this.noise.next()
-    const hp = n - this.prevNoise
-    this.prevNoise = n
-    const filtered = this.filter.process(hp, 6000, 0.3, 1.0, SR)
-    const env = Math.exp(-this.t / 0.02)
-    return [filtered * env * this.amp * 1.5, false]
+    // Bandpass at 7kHz with resonance for "shaker" character
+    const bpOut = this.bp.process(n, 7000, 0.4, 1.0, SR)
+    const hpOut = this.hp.process(bpOut, 4000, SR)
+    // Two-stage envelope: fast body + slow tail
+    const bodyEnv = Math.exp(-this.t / 0.008)
+    const tailEnv = Math.exp(-this.t / 0.03)
+    const env = bodyEnv * 0.7 + tailEnv * 0.3
+    return [hpOut * env * this.amp * 2.0, false]
   }
 }
 
