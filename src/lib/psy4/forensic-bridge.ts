@@ -282,7 +282,7 @@ export async function renderFoundationSection(
       })
     }
 
-    // Lead — use Foundation's lead notes + add fills on empty steps
+    // Lead — use Foundation's lead notes (start from bar 0, not bar 2)
     if (bar.leadNotes.length > 0) {
       for (const n of bar.leadNotes) {
         events.push({ pos: barStart + n.step * samplesPerStep, type: 'lead', midi: n.midi, vel: n.velocity, dur: n.durationSteps * samplesPerStep })
@@ -297,7 +297,8 @@ export async function renderFoundationSection(
           }
         }
       }
-    } else if (barIdx >= 2) {
+    } else {
+      // No lead from Foundation — generate a simple motif from bar 0
       const motifNotes = [64, 67, 71, 67]
       for (let i = 0; i < motifNotes.length; i++) {
         const step = i * 2
@@ -305,8 +306,8 @@ export async function renderFoundationSection(
       }
     }
 
-    // Counter-lead — harmony response 3 steps after each lead note
-    if (bar.leadNotes.length > 0 && barIdx >= 2) {
+    // Counter-lead — harmony response (start from bar 0)
+    if (bar.leadNotes.length > 0) {
       for (const n of bar.leadNotes) {
         const counterStep = n.step + 3
         if (counterStep < 16) {
