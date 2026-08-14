@@ -66,17 +66,17 @@ export const CHANNEL_PRESETS: Record<VoiceType, ChannelFXConfig> = {
   },
   lead: {
     eq: { lowGainDb: -2, lowFreqHz: 200, highGainDb: 1, highFreqHz: 6000 },
-    delay: { timeMs: 375, feedback: 0.3, mix: 0.18, stereoOffsetMs: 12 },
-    reverb: { roomSize: 0.4, decaySec: 1.8, damping: 0.7, mix: 0.22 },
+    delay: { timeMs: 375, feedback: 0.35, mix: 0.22, stereoOffsetMs: 15 },
+    reverb: { roomSize: 0.4, decaySec: 1.8, damping: 0.7, mix: 0.25 },
     pan: 0,
-    width: 0.6,
+    width: 0.9,
   },
   counter: {
     eq: { lowGainDb: -3, lowFreqHz: 300, highGainDb: 2, highFreqHz: 8000 },
-    delay: { timeMs: 500, feedback: 0.35, mix: 0.22, stereoOffsetMs: 18 },
-    reverb: { roomSize: 0.5, decaySec: 2.2, damping: 0.6, mix: 0.28 },
+    delay: { timeMs: 500, feedback: 0.4, mix: 0.28, stereoOffsetMs: 22 },
+    reverb: { roomSize: 0.5, decaySec: 2.2, damping: 0.6, mix: 0.32 },
     pan: 0,
-    width: 0.8,
+    width: 1.0,
   },
   hat: {
     eq: { lowGainDb: -6, lowFreqHz: 500, highGainDb: 2, highFreqHz: 10000 },

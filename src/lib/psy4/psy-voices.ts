@@ -278,11 +278,17 @@ export class PsyLead {
     // ── Mix carrier + saw + sub ──
     let signal = carSig * 0.5 + sawSig + subSig
 
-    // ── Acid filter envelope ──
-    const filterEnv = Math.exp(-this.t / 0.12) * this.filterEnvAmount
-    const lfo = Math.sin(2 * Math.PI * this.lfoRate * this.t) * this.lfoDepth
-    const cutoff = Math.max(200, this.cutoff * (1 + filterEnv + lfo * 0.5))
-    const filtered = this.filter.process(signal, cutoff, this.res, 1.5, SR)
+    // ── Acid filter envelope: deep sweep for timbral movement ──
+    // The filter opens wide on attack (cutoff * 4) and sweeps down over 150ms.
+    // Combined with high resonance, this creates the "talking" acid sweep.
+    const filterEnv = Math.exp(-this.t / 0.15) * this.filterEnvAmount
+    // Dual LFO: slow (0.7Hz) for filter, fast (5.5Hz) for shimmer
+    const lfo1 = Math.sin(2 * Math.PI * this.lfoRate * this.t) * this.lfoDepth
+    const lfo2 = Math.sin(2 * Math.PI * 5.5 * this.t) * 0.15
+    const cutoff = Math.max(200, this.cutoff * (1 + filterEnv + lfo1 + lfo2))
+    // FM index also modulated by LFO for living harmonics
+    const fmMod = 1 + Math.sin(2 * Math.PI * 0.3 * this.t) * 0.3
+    const filtered = this.filter.process(signal * fmMod, cutoff, this.res, 1.5, SR)
 
     // ── Hard saturation with oversampling (prevents aliasing) ──
     let out = this.sat.process(filtered, 2.0)
