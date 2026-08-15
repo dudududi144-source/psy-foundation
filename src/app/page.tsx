@@ -72,7 +72,7 @@ function MetricBar({ label, value, invert = false }: { label: string; value: num
 }
 
 export default function Home() {
-  const [bars, setBars] = useState(32)
+  const [bars, setBars] = useState(88)
   const [seed, setSeed] = useState(42)
   const [useSamples, setUseSamples] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -169,6 +169,7 @@ export default function Home() {
                 <option value={8}>8</option>
                 <option value={16}>16</option>
                 <option value={32}>32</option>
+                <option value={88}>88 (full)</option>
               </select>
             </label>
             <label className="flex items-center gap-2 text-sm">

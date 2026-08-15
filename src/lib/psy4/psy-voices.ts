@@ -358,15 +358,24 @@ export class PsyHat {
   private bp = new MoogLadder()
   // Highpass for cleaning up low end
   private hp = new OnePoleHP()
+  // Per-hit variation (deterministic via Rng)
+  private rng: Rng
+  private pitchMul = 1.0
+  private decayMul = 1.0
 
-  constructor(_rng: Rng) {}
+  constructor(rng: Rng) {
+    this.rng = rng
+  }
 
   trigger(amp: number, open = false) {
     this.active = true
     this.t = 0
     this.amp = amp
     this.open = open
-    this.decay = open ? 0.18 : 0.04
+    // Per-hit variation: ±2% pitch, ±10% decay (HAT_SPEC)
+    this.pitchMul = 1.0 + (this.rng.range(-1, 1) * HAT_SPEC.pitchVar)
+    this.decayMul = 1.0 + (this.rng.range(-1, 1) * 0.1)
+    this.decay = (open ? 0.18 : 0.04) * this.decayMul
     this.phases.fill(0)
     this.bp.reset()
     this.hp.reset()
@@ -377,11 +386,10 @@ export class PsyHat {
     this.t += 1 / SR
     if (this.t > this.decay * 2) { this.active = false; return [0, true] }
 
-    // Sum 6 square oscillators at inharmonic frequencies
+    // Sum 6 square oscillators at inharmonic frequencies (with per-hit pitch variation)
     let metallic = 0
     for (let i = 0; i < 6; i++) {
-      this.phases[i] = (this.phases[i]! + this.freqs[i]! / SR) % 1
-      // Square wave (2 * (2*floor(phase) - floor(2*phase)) ... simplified)
+      this.phases[i] = (this.phases[i]! + (this.freqs[i]! * this.pitchMul) / SR) % 1
       metallic += this.phases[i]! < 0.5 ? 1 : -1
     }
     metallic /= 6

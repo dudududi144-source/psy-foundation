@@ -57,6 +57,12 @@ export class StereoWidener {
   processBuffer(L: Float32Array, R: Float32Array): void {
     const n = Math.min(L.length, R.length)
     const w = this.width
+    // Mono below 120Hz: one-pole LP on the mid signal
+    // This prevents phase issues in the bass region (PSY3 Rule 9)
+    const monoFreq = 120
+    const a = (1 / 44100) * 2 * Math.PI * monoFreq
+    const lpCoef = a / (1 + a)
+    let lpState = 0
     for (let i = 0; i < n; i++) {
       const l = L[i]!
       const r = R[i]!
@@ -70,8 +76,17 @@ export class StereoWidener {
       // M/S widen.
       const mid = sum * 0.5
       const side = diff * 0.5
-      L[i] = mid + w * side
-      R[i] = mid - w * side
+      let outL = mid + w * side
+      let outR = mid - w * side
+
+      // Mono below 120Hz: extract low-freq with LP, force mono
+      lpState += lpCoef * (mid - lpState)
+      const stereoContent = (outL + outR) * 0.5 - lpState
+      outL = lpState + stereoContent * w
+      outR = lpState - stereoContent * w
+
+      L[i] = outL
+      R[i] = outR
     }
   }
 
