@@ -103,7 +103,7 @@ export interface RenderConfig {
 }
 
 export const DEFAULT_RENDER_CONFIG: RenderConfig = {
-  kickFundamental: 46,
+  kickFundamental: 40,
   kickDecay: 0.11,
   bassDecay: 0.06,
   bassGain: 1.0,
@@ -118,7 +118,7 @@ export const DEFAULT_RENDER_CONFIG: RenderConfig = {
   padGain: 1.0,
   duckAmount: 0.75,
   targetLufs: TARGET_LUFS,
-  stereoWidth: 1.6,
+  stereoWidth: 1.2,
 }
 
 // ── Render ──
@@ -221,10 +221,10 @@ export async function renderFoundationSection(
   }
 
   // ── Mix bus (stereo) — glue compression per bus ──
-  const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 1.0 })
-  const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 1.0 })
-  const bassBusL = new BusProcessor({ hpFreq: 100, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: 0.55 })
-  const bassBusR = new BusProcessor({ hpFreq: 100, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: 0.55 })
+  const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 1.2 })
+  const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 1.2 })
+  const bassBusL = new BusProcessor({ hpFreq: 120, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: 0.35 })
+  const bassBusR = new BusProcessor({ hpFreq: 120, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: 0.35 })
   const musicBusL = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: 1.1 })
   const musicBusR = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: 1.1 })
 

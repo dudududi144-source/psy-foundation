@@ -27,7 +27,7 @@ export class PsyKick {
   t = 0
   phase = 0
   subPhase = 0
-  clickFilter = new MoogLadder()
+  clickHPState = 0
   sat = new OversampledSaturation()
   noise: PinkNoise
   amp = 1
@@ -43,8 +43,8 @@ export class PsyKick {
     this.t = 0
     this.phase = 0
     this.subPhase = 0
+    this.clickHPState = 0
     this.noise.reset()
-    this.clickFilter.reset()
     this.sat.reset()
     this.amp = amp
     this.fund = fund
@@ -73,19 +73,22 @@ export class PsyKick {
 
     // ── Sub: sine at fundamental, longer decay (the "weight") ──
     this.subPhase += (2 * Math.PI * f0) / SR
-    const subEnv = Math.exp(-t / (this.decay * 1.5)) // longer than body
-    const sub = Math.sin(this.subPhase) * subEnv * 0.6
+    const subEnv = Math.exp(-t / (this.decay * 2.0)) // longer decay for more sub energy
+    const sub = Math.sin(this.subPhase) * subEnv * 1.0
 
-    // ── Click: noise through Moog bandpass ──
+    // ── Click: raw highpassed noise for instant attack (no filter smoothing) ──
     const n = this.noise.next()
-    const clickEnv = Math.exp(-t / 0.0008) // 0.8ms — very sharp
-    const click = this.clickFilter.process(n * clickEnv, 5000, 0.9, 2.0, SR) * 0.4
+    const clickEnv = Math.exp(-t / 0.0005) // 0.5ms — ultra sharp
+    // Simple one-pole HP for the click (Moog filter smooths transients too much)
+    const hpOut = n - this.clickHPState
+    this.clickHPState = this.clickHPState + 0.95 * (n - this.clickHPState)
+    const click = hpOut * clickEnv * 1.5
 
     // ── Saturate body + sub together with oversampling (no aliasing) ──
-    let sample = this.sat.process(body + sub, 1.2)
-    sample += click * 0.5
+    let sample = this.sat.process(body + sub, 1.5)
+    sample += click * 0.7
 
-    sample *= this.amp * 0.75
+    sample *= this.amp * 1.2
 
     return [sample, false]
   }
