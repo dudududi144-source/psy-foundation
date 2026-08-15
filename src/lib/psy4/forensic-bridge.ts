@@ -619,32 +619,69 @@ export async function renderFoundationSection(
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // POST-LOOP MASTER CHAIN
+  // POST-LOOP MASTER CHAIN (PSY3 style)
   // ═══════════════════════════════════════════════════════════════
 
-  // 1. Multiband compressor (3-band, LR4 crossovers at 200Hz / 2000Hz)
+  // 0. HP at 25Hz — clean DC and subsonic rumble
+  const hpState = [0, 0]
+  const hpA = (1 / SR) * 2 * Math.PI * MASTER_SPEC.hpFreq
+  for (let i = 0; i < totalSamples; i++) {
+    hpState[0] += (hpA * (samplesL[i]! - hpState[0])) / (1 + hpA)
+    hpState[1] += (hpA * (samplesR[i]! - hpState[1])) / (1 + hpA)
+    samplesL[i] = samplesL[i]! - hpState[0]
+    samplesR[i] = samplesR[i]! - hpState[1]
+  }
+
+  // 1. Multiband compressor (3-band, LR4 crossovers)
   const multiband = new MultibandCompressor({ sampleRate: SR })
   multiband.processBuffer(samplesL, samplesR)
 
-  // 2. Stereo widener (M/S, width from config)
+  // 2. Glue compression (PSY3: thr=0.6, ratio=2, att=4ms, rel=120ms, makeup=1.3)
+  // Feed-forward compressor on the sum
+  let glueEnv = 0
+  const glueA = 1 - Math.exp(-1 / (MASTER_SPEC.glueAttack * SR))
+  const glueR = 1 - Math.exp(-1 / (MASTER_SPEC.glueRelease * SR))
+  for (let i = 0; i < totalSamples; i++) {
+    const abs = Math.max(Math.abs(samplesL[i]!), Math.abs(samplesR[i]!))
+    const coef = abs > glueEnv ? glueA : glueR
+    glueEnv += (abs - glueEnv) * coef
+    let glueGain = 1
+    if (glueEnv > MASTER_SPEC.glueThr) {
+      const over = glueEnv - MASTER_SPEC.glueThr
+      const reduction = over * (1 - 1 / MASTER_SPEC.glueRatio)
+      glueGain = (glueEnv - reduction) / glueEnv
+    }
+    samplesL[i] = samplesL[i]! * glueGain * MASTER_SPEC.glueMakeup
+    samplesR[i] = samplesR[i]! * glueGain * MASTER_SPEC.glueMakeup
+  }
+
+  // 3. Saturation (PSY3: drive=1.15, mix=0.15 — subtle harmonic addition)
+  for (let i = 0; i < totalSamples; i++) {
+    const satL = fastTanh(samplesL[i]! * MASTER_SPEC.satDrive)
+    const satR = fastTanh(samplesR[i]! * MASTER_SPEC.satDrive)
+    // 85% dry + 15% wet
+    samplesL[i] = samplesL[i]! * (1 - MASTER_SPEC.satMix) + satL * MASTER_SPEC.satMix
+    samplesR[i] = samplesR[i]! * (1 - MASTER_SPEC.satMix) + satR * MASTER_SPEC.satMix
+  }
+
+  // 4. Stereo widener (M/S, width from config)
   const widener = new StereoWidener(cfg.stereoWidth)
   widener.processBuffer(samplesL, samplesR)
   const monoCompat = widener.getMonoCompatibility()
 
-  // 3. Measure LUFS
+  // 5. Measure LUFS
   const lufsResult = measureLUFS(samplesL, samplesR, SR)
 
-  // 4. Apply LUFS gain targeting (-9 LUFS)
+  // 6. Apply LUFS gain targeting (-9 LUFS)
   const gainOffset = lufsToGainOffset(lufsResult.integratedLUFS, targetLufs)
-  // Clamp gain to avoid extreme boosts on quiet signals
   const safeGain = Math.max(0.1, Math.min(8.0, gainOffset))
   for (let i = 0; i < totalSamples; i++) {
     samplesL[i] = (samplesL[i] ?? 0) * safeGain
     samplesR[i] = (samplesR[i] ?? 0) * safeGain
   }
 
-  // 5. True-peak limiter (4x oversampled, -1 dBTP brickwall)
-  const limiter = new TruePeakLimiter({ thresholdDb: -1.0, ceilingDb: -1.0, sampleRate: SR })
+  // 7. True-peak limiter (4x oversampled, ceiling 0.98)
+  const limiter = new TruePeakLimiter({ thresholdDb: -0.2, ceilingDb: -0.2, sampleRate: SR })
   limiter.processBuffer(samplesL, samplesR)
 
   // Final safety clamp
