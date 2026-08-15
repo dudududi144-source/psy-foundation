@@ -15,24 +15,27 @@
 
 import { fastTanh, MoogLadder, BLSaw, BLSquare, BLTriangle, OnePoleHP, PinkNoise, OversampledSaturation, polyBlep } from './forensic/dsp'
 import { Rng } from './forensic/prng'
+import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, ACID_SPEC, HAT_SPEC, SNARE_SPEC } from './voice-specs'
 
 const SR = 44100
 
 // ═══════════════════════════════════════════════════════════════
-// KICK — commercial psytrance kick (3-layer: body + sub + click)
+// KICK — 3-layer: SUB (dominant) + mid + click
+// PSY3 Rule 1: Sub over click (sub 90x longer than click)
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyKick {
   active = false
   t = 0
-  phase = 0
-  subPhase = 0
+  phase = 0          // mid body phase
+  subPhase = 0       // sub phase
+  midPhase = 0       // mid triangle phase
   clickHPState = 0
   sat = new OversampledSaturation()
   noise: PinkNoise
   amp = 1
-  fund = 50
-  decay = 0.15
+  fund = KICK_SPEC.fundamental
+  decay = KICK_SPEC.subDecay
 
   constructor(rng: Rng) {
     this.noise = new PinkNoise(rng)
@@ -43,60 +46,61 @@ export class PsyKick {
     this.t = 0
     this.phase = 0
     this.subPhase = 0
+    this.midPhase = 0
     this.clickHPState = 0
     this.noise.reset()
     this.sat.reset()
     this.amp = amp
-    this.fund = fund
-    this.decay = decay
+    this.fund = fund || KICK_SPEC.fundamental
+    this.decay = decay || KICK_SPEC.subDecay
   }
 
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    const decayTotal = this.decay + 0.1 // longer tail for sub
+    // Sub tail extends well beyond mid (PSY3: sub 0.18s, mid 0.05s)
+    const decayTotal = KICK_SPEC.subDecay + 0.05
     if (this.t > decayTotal) { this.active = false; return [0, true] }
 
     const t = this.t
     const f0 = this.fund
 
-    // ── Pitch envelope: aggressive sweep 200Hz → 45Hz over 12ms ──
-    const pitchStart = 200
-    const pitchEnd = f0
-    const pitchDecay = 0.012 // 12ms
-    const currentFreq = (pitchStart - pitchEnd) * Math.exp(-t / pitchDecay) + pitchEnd
-
-    // ── Body: sine with pitch sweep, starting at peak (cosine phase) ──
-    // Starting at sin(π/2) = 1 gives instant maximum amplitude = punch
-    this.phase += (2 * Math.PI * currentFreq) / SR
-    const bodyEnv = Math.exp(-t / (this.decay * 0.5))
-    const body = Math.sin(this.phase + Math.PI / 2) * bodyEnv * 1.2
-
-    // ── Sub: sine at fundamental, also starting at peak ──
+    // ── Layer 1: SUB (dominant) — sine at fundamental, 0.18s decay ──
+    // Starts at peak (cosine phase) for instant punch
     this.subPhase += (2 * Math.PI * f0) / SR
-    const subEnv = Math.exp(-t / (this.decay * 2.0))
-    const sub = Math.sin(this.subPhase + Math.PI / 2) * subEnv * 1.2
+    const subEnv = Math.exp(-t / KICK_SPEC.subDecay)
+    const sub = Math.sin(this.subPhase + Math.PI / 2) * subEnv * KICK_SPEC.subLevel
 
-    // ── Click: raw highpassed noise for instant attack (no filter smoothing) ──
+    // ── Layer 2: MID — triangle with pitch sweep, 0.05s decay ──
+    const pitchStart = KICK_SPEC.pitchStart
+    const pitchEnd = f0
+    const currentFreq = (pitchStart - pitchEnd) * Math.exp(-t / KICK_SPEC.pitchDecay) + pitchEnd
+    this.midPhase += (2 * Math.PI * currentFreq) / SR
+    const midEnv = Math.exp(-t / KICK_SPEC.midDecay)
+    // Triangle for warmer mid (sine is too clean, saw too harsh)
+    const midTri = 2 * Math.abs(2 * (this.midPhase % 1) - 1) - 1
+    const mid = midTri * midEnv * KICK_SPEC.midLevel
+
+    // ── Layer 3: CLICK — noise HP, 0.002s decay (90x shorter than sub) ──
     const n = this.noise.next()
-    const clickEnv = Math.exp(-t / 0.0005) // 0.5ms — ultra sharp
-    // Simple one-pole HP for the click (Moog filter smooths transients too much)
+    const clickEnv = Math.exp(-t / KICK_SPEC.clickDecay)
     const hpOut = n - this.clickHPState
     this.clickHPState = this.clickHPState + 0.95 * (n - this.clickHPState)
-    const click = hpOut * clickEnv * 1.5
+    const click = hpOut * clickEnv * KICK_SPEC.clickLevel
 
-    // ── Saturate body + sub together with oversampling (no aliasing) ──
-    let sample = this.sat.process(body + sub, 1.5)
-    sample += click * 0.7
+    // ── Saturate sub + mid together (cohesive punch) ──
+    let sample = this.sat.process(sub + mid, KICK_SPEC.saturation)
+    sample += click  // click is additive, not saturated
 
-    sample *= this.amp * 1.8
+    sample *= this.amp
 
     return [sample, false]
   }
 }
 
 // ═══════════════════════════════════════════════════════════════
-// BASS — rolling psytrance bass with filter groove + stereo detune
+// BASS — 3-layer: sub + body + character, pluck/sustain mode
+// PSY3 Rule 2: Bass leaves room (filter drops to 150Hz)
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyBass {
@@ -107,18 +111,19 @@ export class PsyBass {
   releasing = false
   releaseT = 0
   noteOffTime = 0
+  mode: 'pluck' | 'sustain' = BASS_SPEC.mode
 
-  // Two detuned saws through Moog for stereo width
+  // Layer 1: Sub (sine at f/2, mono)
+  subPhase = 0
+  // Layer 2: Body (saw through Moog)
   saw1 = new BLSaw()
-  saw2 = new BLSaw()
+  saw2 = new BLSaw()  // detuned for stereo width
   filter = new MoogLadder()
+  // Layer 3: Character (square through BP, stereo)
+  charSquare = new BLSquare()
+  charFilter = new MoogLadder()
   sat = new OversampledSaturation()
   hpState = 0
-
-  // Filter envelope — dramatic open/close for groove
-  cutoffStart = 800
-  cutoffEnd = 200
-  res = 0.3 // higher resonance for "rubber" character
 
   trigger(freq: number, dur: number, amp: number) {
     this.active = true
@@ -129,13 +134,22 @@ export class PsyBass {
     this.releaseT = 0
     this.noteOffTime = dur
     this.hpState = 0
+    this.subPhase = 0
+    // Body saws
     this.saw1.reset()
     this.saw1.setFreq(freq)
     this.saw2.reset()
-    // Detune second saw +5 cents for stereo chorus
-    this.saw2.setFreq(freq * Math.pow(2, 5 / 1200))
+    this.saw2.setFreq(freq * Math.pow(2, 5 / 1200)) // +5 cents detune
+    // Character square
+    this.charSquare.reset()
+    this.charSquare.setFreq(freq * 2) // octave up
     this.filter.reset()
+    this.charFilter.reset()
     this.sat.reset()
+  }
+
+  setMode(mode: 'pluck' | 'sustain') {
+    this.mode = mode
   }
 
   noteOff() {
@@ -147,36 +161,53 @@ export class PsyBass {
     if (!this.active) return [0, true]
     this.t += 1 / SR
 
-    // Release phase: 5ms quick fade (was 10ms — tighter)
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > 0.005) { this.active = false; return [0, true] }
+      if (this.releaseT > BASS_SPEC.sustainRelease) { this.active = false; return [0, true] }
     }
 
-    // ── Two detuned saws through Moog for stereo width ──
+    // ── Layer 1: SUB — sine at f/2, mono, clean low end ──
+    this.subPhase += (2 * Math.PI * this.freq * 0.5) / SR
+    const sub = Math.sin(this.subPhase) * BASS_SPEC.subLevel
+
+    // ── Layer 2: BODY — 2 detuned saws through Moog ──
     const inc = this.freq / SR
     const sawOut1 = this.saw1.process(inc)
     const sawOut2 = this.saw2.process(this.freq * Math.pow(2, 5 / 1200) / SR)
     const sawOut = (sawOut1 + sawOut2) * 0.5
 
-    // Filter envelope: opens to 800Hz, closes to 200Hz over 20ms
-    // This creates the "wub" groove on each 16th note
-    const cutoffEnv = (this.cutoffStart - this.cutoffEnd) * Math.exp(-this.t / 0.02) + this.cutoffEnd
-    const filtered = this.filter.process(sawOut, cutoffEnv, this.res, 2.0, SR)
+    // Filter envelope: opens to 1500Hz, drops to 150Hz (PSY3 Rule 2)
+    const cutoffEnv = (BASS_SPEC.cutoffStart - BASS_SPEC.cutoffEnd) * Math.exp(-this.t / 0.03) + BASS_SPEC.cutoffEnd
+    const filtered = this.filter.process(sawOut, cutoffEnv, BASS_SPEC.res, 2.0, SR)
 
-    // ── Saturation with oversampling (prevents aliasing) ──
-    let mixed = this.sat.process(filtered, 2.5)
+    // ── Layer 3: CHARACTER — square through BP at 400Hz, stereo ──
+    const charOut = this.charSquare.process((this.freq * 2) / SR)
+    const charFiltered = this.charFilter.process(charOut, 400, 0.7, 1.0, SR) * BASS_SPEC.characterLevel
 
-    // ── HP at 100Hz — let the kick own the sub region (40-80Hz) ──
-    const hpA = (1 / SR) * 2 * Math.PI * 100
+    // ── Mix layers ──
+    let mixed = sub + filtered * BASS_SPEC.bodyLevel + charFiltered
+
+    // ── Saturation with oversampling ──
+    mixed = this.sat.process(mixed, BASS_SPEC.saturation)
+
+    // ── HP at 40Hz — let kick own the sub region ──
+    const hpA = (1 / SR) * 2 * Math.PI * BASS_SPEC.hpFreq
     this.hpState += (hpA * (mixed - this.hpState)) / (1 + hpA)
-    mixed = mixed - this.hpState * 0.9
+    mixed = mixed - this.hpState * 0.8
 
-    // ── Amplitude envelope: 0.5ms attack → sustain → 5ms release ──
+    // ── Amplitude envelope: pluck vs sustain ──
     const attackEnv = Math.min(1, this.t / 0.0005)
-    let ampEnv = attackEnv
+    let ampEnv: number
+    if (this.mode === 'pluck') {
+      // Pluck: fast decay, no sustain
+      ampEnv = attackEnv * Math.exp(-this.t / BASS_SPEC.pluckDecay)
+    } else {
+      // Sustain: attack → sustain level → release
+      const decayEnv = Math.exp(-this.t / 0.05)
+      ampEnv = attackEnv * (BASS_SPEC.sustainLevel + (1 - BASS_SPEC.sustainLevel) * decayEnv)
+    }
     if (this.releasing) {
-      ampEnv = attackEnv * Math.exp(-this.releaseT / 0.003)
+      ampEnv *= Math.exp(-this.releaseT / 0.003)
     }
 
     return [mixed * ampEnv * this.amp, false]
@@ -184,7 +215,8 @@ export class PsyBass {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// LEAD — FM + acid filter (richer, psychedelic)
+// LEAD — 4-layer: fundamental + octave + air + FM
+// PSY3 Rule 3: Band-limited oscillators, no harsh highs
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyLead {
@@ -197,26 +229,25 @@ export class PsyLead {
   releaseT = 0
   noteOffTime = 0
 
-  // Carrier + modulator for FM
+  // Layer 1: Fundamental (2 detuned saws)
+  saw1 = new BLSaw()
+  saw2 = new BLSaw()
+  // Layer 2: Octave-up (2 detuned saws)
+  octSaw1 = new BLSaw()
+  octSaw2 = new BLSaw()
+  // Layer 3: Air (noise through HP)
+  noise: PinkNoise
+  airHP = new OnePoleHP()
+  // Layer 4: FM (carrier + modulator)
   carPhase = 0
   modPhase = 0
-  modRatio = 2.0
-  modIndex = 150
-  // Saw layer for harmonics (mixed with FM carrier)
-  saw = new BLSaw()
-  // Sub oscillator (triangle, one octave down for weight)
-  subOsc = new BLTriangle()
-  // Filter
+  // Filter + saturation
   filter = new MoogLadder()
   sat = new OversampledSaturation()
-  cutoff = 1500
-  res = 0.7
-  filterEnvAmount = 3.0
-  // LFO
-  lfoRate = 1.2
-  lfoDepth = 0.5
 
-  constructor(_rng: Rng) {}
+  constructor(rng: Rng) {
+    this.noise = new PinkNoise(rng)
+  }
 
   trigger(freq: number, dur: number, amp: number, params?: {
     cutoff?: number; detune?: number; res?: number; lfoRate?: number; lfoDepth?: number
@@ -225,20 +256,24 @@ export class PsyLead {
     this.t = 0
     this.freq = freq
     this.dur = dur
-    this.amp = amp
+    this.amp = amp * LEAD_SPEC.gain
     this.releasing = false
     this.releaseT = 0
     this.noteOffTime = dur
-    this.cutoff = params?.cutoff ?? 1500
-    this.res = params?.res ?? 0.7
-    this.lfoRate = params?.lfoRate ?? 1.2
-    this.lfoDepth = params?.lfoDepth ?? 0.5
     this.carPhase = 0
     this.modPhase = 0
-    this.saw.reset()
-    this.saw.setFreq(freq)
-    this.subOsc.reset()
-    this.subOsc.setFreq(freq * 0.5)
+    // Fundamental saws (±12 cents)
+    this.saw1.reset()
+    this.saw1.setFreq(freq * Math.pow(2, -LEAD_SPEC.detune / 1200))
+    this.saw2.reset()
+    this.saw2.setFreq(freq * Math.pow(2, LEAD_SPEC.detune / 1200))
+    // Octave saws (±7 cents, octave up)
+    this.octSaw1.reset()
+    this.octSaw1.setFreq(freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200))
+    this.octSaw2.reset()
+    this.octSaw2.setFreq(freq * 2 * Math.pow(2, LEAD_SPEC.octaveDetune / 1200))
+    this.noise.reset()
+    this.airHP.reset()
     this.filter.reset()
     this.sat.reset()
   }
@@ -257,45 +292,42 @@ export class PsyLead {
       if (this.releaseT > 0.05) { this.active = false; return [0, true] }
     }
 
-    // ── FM carrier: sine modulated by sine ──
-    // modIndex grows during attack for "buzzy" onset, then decays
     const attackEnv = Math.min(1, this.t / 0.003)
-    const modEnv = Math.exp(-this.t / 0.08) // mod depth decays over 80ms
-    const currentModIndex = this.modIndex * (0.3 + 0.7 * modEnv)
 
-    // Modulator: sine at freq * modRatio
-    this.modPhase += (this.freq * this.modRatio) / SR
+    // ── Layer 1: Fundamental — 2 detuned saws ──
+    const fundSig = (this.saw1.process(this.freq * Math.pow(2, -LEAD_SPEC.detune / 1200) / SR) +
+                    this.saw2.process(this.freq * Math.pow(2, LEAD_SPEC.detune / 1200) / SR)) * 0.5
+
+    // ── Layer 2: Octave-up — 2 detuned saws, adds brightness ──
+    const octSig = (this.octSaw1.process(this.freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200) / SR) +
+                   this.octSaw2.process(this.freq * 2 * Math.pow(2, LEAD_SPEC.octaveDetune / 1200) / SR)) * 0.5 * LEAD_SPEC.octaveLevel
+
+    // ── Layer 3: Air — noise through HP, adds "sheen" ──
+    const n = this.noise.next()
+    const airSig = this.airHP.process(n, 8000, SR) * LEAD_SPEC.airLevel * Math.exp(-this.t / LEAD_SPEC.airDecay)
+
+    // ── Layer 4: FM — carrier + modulator for harmonic richness ──
+    const modEnv = Math.exp(-this.t / 0.08)
+    const currentModIndex = LEAD_SPEC.fmIndex * (0.3 + 0.7 * modEnv)
+    this.modPhase += (this.freq * LEAD_SPEC.fmRatio) / SR
     if (this.modPhase >= 1) this.modPhase -= 1
     const modSig = Math.sin(2 * Math.PI * this.modPhase) * currentModIndex
-
-    // Carrier: sine at freq + FM modulation
     this.carPhase += (this.freq + modSig) / SR
     if (this.carPhase >= 1) this.carPhase -= 1
-    const carSig = Math.sin(2 * Math.PI * this.carPhase)
+    const fmSig = Math.sin(2 * Math.PI * this.carPhase) * LEAD_SPEC.fmLevel
 
-    // ── Sub oscillator: triangle one octave down for weight ──
-    const subSig = this.subOsc.process(this.freq * 0.5 / SR) * 0.3
+    // ── Mix all layers ──
+    let signal = fundSig + octSig + airSig + fmSig
 
-    // ── Saw layer for harmonics ──
-    const sawSig = this.saw.process(this.freq / SR) * 0.4
+    // ── Acid filter: envelope + dual LFO ──
+    const filterEnv = Math.exp(-this.t / LEAD_SPEC.filterEnvDecay) * LEAD_SPEC.filterEnvAmount
+    const lfo1 = Math.sin(2 * Math.PI * LEAD_SPEC.lfoRate * this.t) * LEAD_SPEC.lfoDepth
+    const lfo2 = Math.sin(2 * Math.PI * 5.5 * this.t) * 0.15 // shimmer LFO
+    const cutoff = Math.max(200, LEAD_SPEC.cutoff * (1 + filterEnv + lfo1 + lfo2))
+    const filtered = this.filter.process(signal, cutoff, LEAD_SPEC.res, 1.5, SR)
 
-    // ── Mix carrier + saw + sub ──
-    let signal = carSig * 0.5 + sawSig + subSig
-
-    // ── Acid filter envelope: deep sweep for timbral movement ──
-    // The filter opens wide on attack (cutoff * 4) and sweeps down over 150ms.
-    // Combined with high resonance, this creates the "talking" acid sweep.
-    const filterEnv = Math.exp(-this.t / 0.15) * this.filterEnvAmount
-    // Dual LFO: slow (0.7Hz) for filter, fast (5.5Hz) for shimmer
-    const lfo1 = Math.sin(2 * Math.PI * this.lfoRate * this.t) * this.lfoDepth
-    const lfo2 = Math.sin(2 * Math.PI * 5.5 * this.t) * 0.15
-    const cutoff = Math.max(200, this.cutoff * (1 + filterEnv + lfo1 + lfo2))
-    // FM index also modulated by LFO for living harmonics
-    const fmMod = 1 + Math.sin(2 * Math.PI * 0.3 * this.t) * 0.3
-    const filtered = this.filter.process(signal * fmMod, cutoff, this.res, 1.5, SR)
-
-    // ── Hard saturation with oversampling (prevents aliasing) ──
-    let out = this.sat.process(filtered, 2.0)
+    // ── Saturation with oversampling ──
+    let out = this.sat.process(filtered, LEAD_SPEC.saturation)
 
     // ── Amp envelope ──
     let ampEnv = attackEnv

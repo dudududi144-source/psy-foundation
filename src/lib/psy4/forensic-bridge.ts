@@ -28,9 +28,10 @@ import { MultibandCompressor } from './multiband'
 import { StereoWidener } from './ms-processor'
 import { measureLUFS, lufsToGainOffset } from './loudness'
 import { TruePeakLimiter } from './limiter'
+import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, HAT_SPEC, SNARE_SPEC, BUS_GAINS, MASTER_SPEC } from './voice-specs'
 
 const SR = 44100
-const TARGET_LUFS = -11.0
+const TARGET_LUFS = MASTER_SPEC.targetLufs
 
 // ── WAV decoder ──
 
@@ -103,22 +104,22 @@ export interface RenderConfig {
 }
 
 export const DEFAULT_RENDER_CONFIG: RenderConfig = {
-  kickFundamental: 40,
-  kickDecay: 0.11,
-  bassDecay: 0.06,
-  bassGain: 0.5,
-  leadCutoff: 4500,
-  leadGain: 1.0,
-  leadResonance: 0.5,
-  hatGain: 0.8,
-  openHatGain: 0.4,
-  snareGain: 0.6,
+  kickFundamental: KICK_SPEC.fundamental,
+  kickDecay: KICK_SPEC.subDecay,
+  bassDecay: BASS_SPEC.pluckDecay,
+  bassGain: BASS_SPEC.bodyLevel,
+  leadCutoff: LEAD_SPEC.cutoff,
+  leadGain: LEAD_SPEC.gain,
+  leadResonance: LEAD_SPEC.res,
+  hatGain: HAT_SPEC.gain,
+  openHatGain: HAT_SPEC.gain * 0.8,
+  snareGain: SNARE_SPEC.gain,
   shakerGain: 1.0,
   subBassGain: 1.0,
-  padGain: 1.0,
-  duckAmount: 0.75,
-  targetLufs: TARGET_LUFS,
-  stereoWidth: 1.2,
+  padGain: PAD_SPEC.gain,
+  duckAmount: BASS_SPEC.sidechainDepth,
+  targetLufs: MASTER_SPEC.targetLufs,
+  stereoWidth: MASTER_SPEC.stereoWidth,
 }
 
 // ── Render ──
@@ -220,13 +221,13 @@ export async function renderFoundationSection(
     }
   }
 
-  // ── Mix bus (stereo) — glue compression per bus ──
-  const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 1.2 })
-  const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: 1.2 })
-  const bassBusL = new BusProcessor({ hpFreq: 120, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: 0.35 })
-  const bassBusR = new BusProcessor({ hpFreq: 120, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: 0.35 })
-  const musicBusL = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: 1.1 })
-  const musicBusR = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: 1.1 })
+  // ── Mix bus (stereo) — glue compression per bus (from BUS_GAINS) ──
+  const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: BUS_GAINS.drum })
+  const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: BUS_GAINS.drum })
+  const bassBusL = new BusProcessor({ hpFreq: BASS_SPEC.hpFreq + 80, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: BUS_GAINS.bass })
+  const bassBusR = new BusProcessor({ hpFreq: BASS_SPEC.hpFreq + 80, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: BUS_GAINS.bass })
+  const musicBusL = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: BUS_GAINS.music })
+  const musicBusR = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: BUS_GAINS.music })
 
   const masterGlueL = new MasterChain()
   const masterGlueR = new MasterChain()
