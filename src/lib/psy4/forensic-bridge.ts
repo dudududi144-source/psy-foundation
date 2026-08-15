@@ -21,7 +21,7 @@ import type { ComposedSection } from '../../foundation/music'
 import { Rng } from './forensic/prng'
 import { fastTanh } from './forensic/dsp'
 import { BusProcessor, MasterChain } from './forensic/mixing'
-import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact, PsyAcid } from './psy-voices'
+import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact, PsyAcid, PsyTexture } from './psy-voices'
 import { ChannelFX } from './channel-fx'
 import { CHANNEL_PRESETS } from './channel-presets'
 import { MultibandCompressor } from './multiband'
@@ -173,6 +173,7 @@ export async function renderFoundationSection(
   const risers = [new PsyRiser(rng)]
   const impacts = [new PsyImpact(rng)]
   const acids = [new PsyAcid(rng), new PsyAcid(rng)]
+  const textures = [new PsyTexture(rng)]
 
   // ── Per-type ChannelFX instances (one per voice type, shared across pool) ──
   const fxKick = new ChannelFX(CHANNEL_PRESETS.kick, SR)
@@ -314,11 +315,16 @@ export async function renderFoundationSection(
         }
       }
     } else {
-      // No lead from Foundation — generate a simple motif from bar 0
-      const motifNotes = [64, 67, 71, 67]
-      for (let i = 0; i < motifNotes.length; i++) {
+      // No lead from Foundation — AABA motif development
+      // A: original motif, A: repeat, B: contrast (higher), A': return with variation
+      const phrasePos = barIdx % 4
+      const motifA = [64, 67, 71, 67]        // E4 G4 B4 G4
+      const motifB = [76, 74, 71, 69]        // E5 D5 B4 A4 (contrast)
+      const motifAp = [64, 67, 71, 72]       // E4 G4 B4 C5 (variation)
+      const motif = phrasePos === 2 ? motifB : phrasePos === 3 ? motifAp : motifA
+      for (let i = 0; i < motif.length; i++) {
         const step = i * 2
-        events.push({ pos: barStart + step * samplesPerStep, type: 'lead', midi: motifNotes[i]!, vel: 0.5, dur: samplesPerStep })
+        events.push({ pos: barStart + step * samplesPerStep, type: 'lead', midi: motif[i]!, vel: 0.5, dur: samplesPerStep })
       }
     }
 
@@ -395,13 +401,20 @@ export async function renderFoundationSection(
     // Acid: plays in drop2/climax sections (phase 5-7)
     if (phase >= 5 && !isBreak) {
       const acidRootMidi = rootMidi + 24 // 2 octaves up
-      // Acid pattern: 16th notes with some rests
       for (let step = 0; step < 16; step++) {
         if (step % 4 === 0 || step % 4 === 2) {
           const acidMidi = acidRootMidi + (step % 8 === 0 ? 7 : step % 4 === 2 ? 5 : 0)
           events.push({ pos: barStart + step * samplesPerStep, type: 'acid', midi: acidMidi, vel: 0.4, dur: samplesPerStep })
         }
       }
+    }
+
+    // Texture: atmospheric bed in break + intro sections
+    if (isBreak || phase === 0) {
+      const rootFreq = 440 * Math.pow(2, (rootMidi - 69) / 12)
+      const thirdFreq = 440 * Math.pow(2, (rootMidi + 4 - 69) / 12)
+      const fifthFreq = 440 * Math.pow(2, (rootMidi + 7 - 69) / 12)
+      events.push({ pos: barStart, type: 'texture', vel: 0.2, dur: samplesPerBar, freqs: [rootFreq, thirdFreq, fifthFreq] })
     }
 
     // Ghost perc
@@ -491,6 +504,8 @@ export async function renderFoundationSection(
       } else if (ev.type === 'acid' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
         acids[0]!.trigger(freq, ev.dur / SR, ev.vel)
+      } else if (ev.type === 'texture' && ev.freqs) {
+        textures[0]!.trigger(ev.freqs, ev.dur / SR, ev.vel)
       } else if (ev.type === 'counter' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
         leads[(leadIdx + 2) % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: Math.floor(cfg.leadCutoff * 0.5), detune: 6, res: 0.3, lfoRate: 0.6, lfoDepth: 0.2 })
@@ -599,6 +614,11 @@ export async function renderFoundationSection(
     let acidMono = 0
     for (const v of acids) if (v.active) acidMono += v.render()[0]
     if (acidMono !== 0) { const [al, ar] = fxLead.process(acidMono); musicL += al; musicR += ar }
+
+    // Texture → fxPad → music bus (shares pad FX chain for atmospheric reverb)
+    let textureMono = 0
+    for (const v of textures) if (v.active) textureMono += v.render()[0]
+    if (textureMono !== 0) { const [tl, tr] = fxPad.process(textureMono); musicL += tl; musicR += tr }
 
     // ── Bus glue compression ──
     drumL = drumBusL.process(drumL, SR); drumR = drumBusR.process(drumR, SR)

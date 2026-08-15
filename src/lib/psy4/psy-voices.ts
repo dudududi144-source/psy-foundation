@@ -759,6 +759,99 @@ export class PsyAcid {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// TEXTURE — granular + morphing atmospheric bed
+// ═══════════════════════════════════════════════════════════════
+
+export class PsyTexture {
+  active = false
+  t = 0
+  amp = 0.15
+  releasing = false
+  releaseT = 0
+
+  // 4 detuned oscillators with random grain positions
+  oscs: BLSaw[]
+  grainPhases: number[]
+  // Noise bed
+  noise: PinkNoise
+  noiseBP = new MoogLadder()
+  // Filter
+  filter = new MoogLadder()
+  sat = new OversampledSaturation()
+
+  constructor(rng: Rng) {
+    this.oscs = [new BLSaw(), new BLSaw(), new BLSaw(), new BLSaw()]
+    this.grainPhases = [0, 0, 0, 0]
+    this.noise = new PinkNoise(rng)
+  }
+
+  trigger(freqs: number[], _dur: number, amp: number) {
+    this.active = true
+    this.t = 0
+    this.amp = amp * 0.15
+    this.releasing = false
+    this.releaseT = 0
+    // 4 oscillators with wide detune for granular texture
+    for (let i = 0; i < 4; i++) {
+      this.oscs[i]!.reset()
+      const baseFreq = freqs[i % freqs.length] ?? freqs[0] ?? 220
+      const detune = (i - 1.5) * 15 // -22.5 to +22.5 cents
+      this.oscs[i]!.setFreq(baseFreq * Math.pow(2, detune / 1200))
+      this.grainPhases[i] = Math.random() * 0.1 // random grain start
+    }
+    this.noise.reset()
+    this.noiseBP.reset()
+    this.filter.reset()
+    this.sat.reset()
+  }
+
+  noteOff() { this.releasing = true; this.releaseT = 0 }
+
+  render(): [number, boolean] {
+    if (!this.active) return [0, true]
+    this.t += 1 / SR
+    if (this.releasing) {
+      this.releaseT += 1 / SR
+      if (this.releaseT > 0.5) { this.active = false; return [0, true] }
+    }
+
+    // ── Layer 1: 4 detuned oscillators with grain movement ──
+    let oscSum = 0
+    for (let i = 0; i < 4; i++) {
+      // Slow grain position modulation (0.05-0.2Hz per osc)
+      const grainLfo = Math.sin(2 * Math.PI * (0.05 + i * 0.05) * this.t) * 0.3
+      const inc = this.oscs[i]!.freq / SR
+      this.grainPhases[i] = (this.grainPhases[i]! + inc * (1 + grainLfo * 0.1)) % 1
+      oscSum += this.oscs[i]!.process(inc)
+    }
+    oscSum /= 4
+
+    // ── Layer 2: Noise bed with slow bandpass sweep ──
+    const n = this.noise.next()
+    const noiseSweep = 400 + Math.sin(2 * Math.PI * 0.1 * this.t) * 300 // 100-700Hz
+    const noiseSig = this.noiseBP.process(n, noiseSweep, 0.5, 1.0, SR) * 0.3
+
+    // ── Mix ──
+    let signal = oscSum * 0.6 + noiseSig * 0.4
+
+    // ── Filter: slow morph (0.05Hz) ──
+    const morphLfo = Math.sin(2 * Math.PI * 0.05 * this.t) * 0.5
+    const cutoff = Math.max(200, 800 * (1 + morphLfo))
+    const filtered = this.filter.process(signal, cutoff, 0.3, 1.0, SR)
+
+    // ── Saturation ──
+    let out = this.sat.process(filtered, 1.2)
+
+    // ── Envelope: very slow attack + long release ──
+    const attackEnv = Math.min(1, this.t / 0.5) // 0.5s attack
+    let ampEnv = attackEnv
+    if (this.releasing) ampEnv = attackEnv * Math.exp(-this.releaseT / 0.3)
+
+    return [out * ampEnv * this.amp, false]
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // FX RISER — noise + saw sweep with pitch rise for tension build
 // ═══════════════════════════════════════════════════════════════
 
