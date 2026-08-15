@@ -34,9 +34,9 @@ export interface KickSpec {
 }
 
 export const KICK_SPEC: KickSpec = {
-  fundamental: 40,
-  subDecay: 0.18,
-  subLevel: 0.9,
+  fundamental: 38,
+  subDecay: 0.25,
+  subLevel: 1.0,
   midDecay: 0.05,
   midLevel: 0.5,
   midFreq: 150,
