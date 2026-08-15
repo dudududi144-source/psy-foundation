@@ -224,14 +224,14 @@ export interface HatSpec {
 
 export const HAT_SPEC: HatSpec = {
   metallicFreqs: [540, 800, 1080, 1360, 1700, 2400],
-  bpFreq: 10000,
+  bpFreq: 12000,
   bpRes: 0.5,
   hpFreq: 6000,
   closedDecay: 0.04,
   openDecay: 0.18,
   pitchVar: 0.02,
   panVar: 0.1,
-  gain: 0.3,
+  gain: 0.6,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -272,10 +272,10 @@ export interface BusGains {
 }
 
 export const BUS_GAINS: BusGains = {
-  drum: 1.2,
-  bass: 0.35,
-  music: 1.1,
-  fx: 0.5,
+  drum: 1.4,
+  bass: 0.22,
+  music: 1.3,
+  fx: 0.6,
 }
 
 // ═══════════════════════════════════════════════════════════════

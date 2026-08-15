@@ -79,7 +79,7 @@ export const CHANNEL_PRESETS: Record<VoiceType, ChannelFXConfig> = {
     width: 1.0,
   },
   hat: {
-    eq: { lowGainDb: -6, lowFreqHz: 500, highGainDb: 0, highFreqHz: 10000 },
+    eq: { lowGainDb: -6, lowFreqHz: 500, highGainDb: 4, highFreqHz: 10000 },
     delay: { timeMs: 187.5, feedback: 0.15, mix: 0.08, stereoOffsetMs: 8 },
     reverb: { roomSize: 0.3, decaySec: 0.8, damping: 0.9, mix: 0.05 },
     pan: 0.3,

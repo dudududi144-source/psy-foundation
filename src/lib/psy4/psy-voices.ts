@@ -395,7 +395,7 @@ export class PsyHat {
     metallic /= 6
 
     // Bandpass at ~10kHz for shimmer
-    const bpOut = this.bp.process(metallic, 10000, 0.5, 1.0, SR)
+    const bpOut = this.bp.process(metallic, 12000, 0.5, 1.0, SR)
     // Highpass at 6kHz to remove any low leakage
     const hpOut = this.hp.process(bpOut, 6000, SR)
 
