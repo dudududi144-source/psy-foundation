@@ -66,15 +66,16 @@ export class PsyKick {
     const pitchDecay = 0.012 // 12ms
     const currentFreq = (pitchStart - pitchEnd) * Math.exp(-t / pitchDecay) + pitchEnd
 
-    // ── Body: sine with pitch sweep (the "thump") ──
+    // ── Body: sine with pitch sweep, starting at peak (cosine phase) ──
+    // Starting at sin(π/2) = 1 gives instant maximum amplitude = punch
     this.phase += (2 * Math.PI * currentFreq) / SR
     const bodyEnv = Math.exp(-t / (this.decay * 0.5))
-    const body = Math.sin(this.phase) * bodyEnv * 1.0
+    const body = Math.sin(this.phase + Math.PI / 2) * bodyEnv * 1.2
 
-    // ── Sub: sine at fundamental, longer decay (the "weight") ──
+    // ── Sub: sine at fundamental, also starting at peak ──
     this.subPhase += (2 * Math.PI * f0) / SR
-    const subEnv = Math.exp(-t / (this.decay * 2.0)) // longer decay for more sub energy
-    const sub = Math.sin(this.subPhase) * subEnv * 1.0
+    const subEnv = Math.exp(-t / (this.decay * 2.0))
+    const sub = Math.sin(this.subPhase + Math.PI / 2) * subEnv * 1.2
 
     // ── Click: raw highpassed noise for instant attack (no filter smoothing) ──
     const n = this.noise.next()
@@ -88,7 +89,7 @@ export class PsyKick {
     let sample = this.sat.process(body + sub, 1.5)
     sample += click * 0.7
 
-    sample *= this.amp * 1.2
+    sample *= this.amp * 1.8
 
     return [sample, false]
   }
@@ -166,10 +167,10 @@ export class PsyBass {
     // ── Saturation with oversampling (prevents aliasing) ──
     let mixed = this.sat.process(filtered, 2.5)
 
-    // ── HP at 80Hz — let the kick own the sub region ──
-    const hpA = (1 / SR) * 2 * Math.PI * 80
+    // ── HP at 100Hz — let the kick own the sub region (40-80Hz) ──
+    const hpA = (1 / SR) * 2 * Math.PI * 100
     this.hpState += (hpA * (mixed - this.hpState)) / (1 + hpA)
-    mixed = mixed - this.hpState * 0.8
+    mixed = mixed - this.hpState * 0.9
 
     // ── Amplitude envelope: 0.5ms attack → sustain → 5ms release ──
     const attackEnv = Math.min(1, this.t / 0.0005)

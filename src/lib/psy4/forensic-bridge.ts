@@ -106,7 +106,7 @@ export const DEFAULT_RENDER_CONFIG: RenderConfig = {
   kickFundamental: 40,
   kickDecay: 0.11,
   bassDecay: 0.06,
-  bassGain: 1.0,
+  bassGain: 0.5,
   leadCutoff: 4500,
   leadGain: 1.0,
   leadResonance: 0.5,
