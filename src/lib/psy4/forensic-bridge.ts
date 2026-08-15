@@ -263,39 +263,50 @@ export async function renderFoundationSection(
       events.push({ pos: barStart + step * samplesPerStep, type: 'kick', vel: 0.8 + a * 0.2, dur: samplesPerStep })
     }
 
-    // Rolling 16th bass — with swing and dramatic velocity variation
+    // Rolling 16th bass — 8-bar phrase development
     const rootMidi = bar.bassNotes[0]?.midi ?? 40
     const fifthMidi = bar.bassNotes[2]?.midi ?? rootMidi
     const thirdMidi = bar.bassNotes[4]?.midi ?? rootMidi
-    const pattern = barIdx % 4
-    // Swing: delay odd 16th steps by ~15% of step duration for groove
+    // 8-bar phrase: bars 0-1 simple, 2-3 add movement, 4-5 full, 6-7 simplify (drop anticipation)
+    const phraseBar = barIdx % 8
     const swingAmount = Math.floor(samplesPerStep * 0.15)
     for (let step = 0; step < 16; step++) {
       const a = accent[step % accent.length] ?? 0.5
       let midi = rootMidi
-      if (pattern === 0) {
-        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : rootMidi
-      } else if (pattern === 1) {
-        midi = (step % 4 === 2) ? fifthMidi : rootMidi
-      } else if (pattern === 2) {
-        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 1) ? thirdMidi : (step % 4 === 2) ? fifthMidi : thirdMidi
-      } else {
-        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : (step % 4 === 3) ? rootMidi + 12 : rootMidi
-      }
-      // Dramatic velocity: downbeats strong, offbeats ghost notes
-      const isDownbeat = step % 4 === 0
-      const isOffbeat = step % 2 === 1
       let vel: number
-      if (isDownbeat) vel = 0.7 + a * 0.2
-      else if (isOffbeat) vel = 0.25 + a * 0.15 // ghost notes
-      else vel = 0.45 + a * 0.2
+      let dur: number
 
-      // Swing: delay odd steps
+      if (phraseBar < 2) {
+        // Bars 0-1: simple root-fifth pattern
+        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : rootMidi
+        vel = step % 4 === 0 ? 0.7 + a * 0.2 : 0.35 + a * 0.15
+        dur = step % 2 === 1 ? 0.6 : 0.85
+      } else if (phraseBar < 4) {
+        // Bars 2-3: add third movement
+        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 1) ? thirdMidi : (step % 4 === 2) ? fifthMidi : rootMidi
+        vel = step % 4 === 0 ? 0.7 + a * 0.2 : step % 2 === 1 ? 0.25 + a * 0.15 : 0.45 + a * 0.2
+        dur = step % 2 === 1 ? 0.6 : 0.85
+      } else if (phraseBar < 6) {
+        // Bars 4-5: full pattern with octave jumps
+        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : (step % 4 === 3) ? rootMidi + 12 : rootMidi
+        vel = step % 4 === 0 ? 0.75 + a * 0.2 : step % 2 === 1 ? 0.3 + a * 0.15 : 0.5 + a * 0.2
+        dur = step % 2 === 1 ? 0.65 : 0.85
+      } else {
+        // Bars 6-7: simplify (drop anticipation) — less notes, more space
+        if (step % 4 === 0 || step % 4 === 2) {
+          midi = (step % 4 === 0) ? rootMidi : fifthMidi
+          vel = 0.6 + a * 0.2
+          dur = 0.9
+        } else {
+          continue // skip — creates space before drop
+        }
+      }
+
       const swingOffset = step % 2 === 1 ? swingAmount : 0
       events.push({
         pos: barStart + step * samplesPerStep + swingOffset,
         type: 'bass', midi, vel,
-        dur: Math.floor(samplesPerStep * (isOffbeat ? 0.6 : 0.85))
+        dur: Math.floor(samplesPerStep * dur)
       })
     }
 
@@ -418,7 +429,7 @@ export async function renderFoundationSection(
     }
 
     // Ghost perc
-    const percSteps = pattern === 0 ? [7, 15] : pattern === 1 ? [5, 13] : pattern === 2 ? [3, 11] : [7, 11, 15]
+    const percSteps = phraseBar === 0 ? [7, 15] : phraseBar === 1 ? [5, 13] : phraseBar === 2 ? [3, 11] : [7, 11, 15]
     for (const ps of percSteps) {
       events.push({ pos: barStart + ps * samplesPerStep, type: 'perc', vel: 0.2, dur: samplesPerStep })
     }

@@ -452,21 +452,27 @@ export class PsySnare {
   // Two tone oscillators at 180Hz and 330Hz (snare body)
   tone1Phase = 0
   tone2Phase = 0
-  freq1 = 180
-  freq2 = 330
+  freq1 = SNARE_SPEC.tone1Freq
+  freq2 = SNARE_SPEC.tone2Freq
   // Bandpass for the noise component
   noiseBP = new MoogLadder()
   // Highpass for cleaning
   noiseHP = new OnePoleHP()
+  // Per-hit variation
+  private rng: Rng
+  private toneVar = 1.0
 
   constructor(rng: Rng) {
     this.noise = new PinkNoise(rng)
+    this.rng = rng
   }
 
   trigger(amp: number) {
     this.active = true
     this.t = 0
     this.amp = amp
+    // Per-hit variation: ±5% tone pitch
+    this.toneVar = 1.0 + (this.rng.range(-1, 1) * 0.05)
     this.tone1Phase = 0
     this.tone2Phase = 0
     this.noise.reset()
@@ -488,8 +494,8 @@ export class PsySnare {
     const noiseOut = hpOut * noiseEnv * 0.7
 
     // ── Tone component: 2 sines at 180+330Hz (the "body") ──
-    this.tone1Phase += (2 * Math.PI * this.freq1) / SR
-    this.tone2Phase += (2 * Math.PI * this.freq2) / SR
+    this.tone1Phase += (2 * Math.PI * this.freq1 * this.toneVar) / SR
+    this.tone2Phase += (2 * Math.PI * this.freq2 * this.toneVar) / SR
     // Tone has shorter decay (the "thwack")
     const toneEnv = Math.exp(-this.t / 0.05)
     const toneOut = (Math.sin(this.tone1Phase) * 0.5 + Math.sin(this.tone2Phase) * 0.4) * toneEnv * 0.4
