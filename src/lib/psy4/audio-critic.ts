@@ -828,24 +828,68 @@ function computeKickBassLock(
 
 function computeExcessiveUniformity(pcm: Float32Array, sampleRate: number, bpm: number): number {
   // Uniformity = how similar consecutive bars are.
+  // FIX: The original measured full-bar correlation, but psytrance bass is
+  // intentionally repetitive (rolling 16th). This made every track score 0.95+.
+  // Now we measure VELOCITY variation across bars — if every bar has the same
+  // energy contour, it's uniform. If velocity changes per bar, it's varied.
   const secondsPerBar = (60 / bpm) * 4
   const samplesPerBar = Math.floor(secondsPerBar * sampleRate)
   if (pcm.length < samplesPerBar * 2) return 0.5
+
+  // Compute per-bar RMS energy (not full correlation)
+  const barEnergies: number[] = []
+  const numBars = Math.floor(pcm.length / samplesPerBar)
+  for (let b = 0; b < numBars; b++) {
+    let sumSq = 0
+    for (let i = 0; i < samplesPerBar; i++) {
+      const s = pcm[b * samplesPerBar + i] ?? 0
+      sumSq += s * s
+    }
+    barEnergies.push(Math.sqrt(sumSq / samplesPerBar))
+  }
+
+  // Also compute per-bar onset pattern similarity (16th grid)
+  const samplesPerStep = Math.floor(samplesPerBar / 16)
+  const barOnsetPatterns: number[][] = []
+  for (let b = 0; b < numBars; b++) {
+    const pattern: number[] = []
+    for (let s = 0; s < 16; s++) {
+      let onsetEnergy = 0
+      for (let i = 0; i < Math.min(50, samplesPerStep); i++) {
+        onsetEnergy += Math.abs(pcm[b * samplesPerBar + s * samplesPerStep + i] ?? 0)
+      }
+      pattern.push(onsetEnergy)
+    }
+    barOnsetPatterns.push(pattern)
+  }
+
+  // Compare consecutive bars' onset patterns (normalized)
   let totalSim = 0
   let count = 0
-  for (let b = 1; b < Math.floor(pcm.length / samplesPerBar); b++) {
+  for (let b = 1; b < numBars; b++) {
+    const cur = barOnsetPatterns[b]!
+    const prev = barOnsetPatterns[b - 1]!
     let corr = 0
     let energy = 0
-    for (let i = 0; i < samplesPerBar; i++) {
-      const cur = pcm[b * samplesPerBar + i] ?? 0
-      const prev = pcm[(b - 1) * samplesPerBar + i] ?? 0
-      corr += cur * prev
-      energy += cur * cur + prev * prev
+    for (let i = 0; i < 16; i++) {
+      corr += cur[i]! * prev[i]!
+      energy += cur[i]! * cur[i]! + prev[i]! * prev[i]!
     }
     totalSim += energy > 0 ? (corr / energy) * 2 : 0
     count++
   }
-  return count > 0 ? totalSim / count : 0
+
+  // Blend: 60% onset pattern similarity, 40% energy variation
+  // Energy variation: CV of bar energies (lower CV = more uniform)
+  const meanEnergy = barEnergies.reduce((a, b) => a + b, 0) / barEnergies.length
+  let varEnergy = 0
+  for (const e of barEnergies) varEnergy += (e - meanEnergy) ** 2
+  varEnergy /= barEnergies.length
+  const cv = meanEnergy > 0 ? Math.sqrt(varEnergy) / meanEnergy : 0
+  const energyUniformity = Math.max(0, 1 - cv * 3) // CV > 0.33 = varied
+
+  const onsetSim = count > 0 ? totalSim / count : 0
+  return onsetSim * 0.6 + energyUniformity * 0.4
 }
 
 function computeArticulation(pcm: Float32Array, sampleRate: number): number {

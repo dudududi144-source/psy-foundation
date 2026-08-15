@@ -403,11 +403,16 @@ export async function renderFoundationSection(
       events.push({ pos: barStart, type: 'pad', vel: 0.12, dur: samplesPerBar * 2, freqs: [rootFreq, thirdFreq, fifthFreq] })
     }
 
-    // Shaker — enters at bar 2
+    // Shaker — enters at bar 2, with per-bar velocity variation
     if (playShaker) {
+      const shakerPhraseBar = barIdx % 8
+      const shakerVelBase = shakerPhraseBar < 2 ? 0.25 : shakerPhraseBar < 4 ? 0.3 : shakerPhraseBar < 6 ? 0.35 : 0.2
       for (let step = 0; step < 16; step++) {
         const isStrong = step % 4 === 0
-        events.push({ pos: barStart + step * samplesPerStep, type: 'shaker', vel: isStrong ? 0.3 : 0.15, dur: samplesPerStep })
+        // Add variation: skip some steps in certain bars for groove
+        if (shakerPhraseBar >= 4 && step === 7 && barIdx % 2 === 1) continue // ghost rest
+        const vel = isStrong ? shakerVelBase : shakerVelBase * 0.5
+        events.push({ pos: barStart + step * samplesPerStep, type: 'shaker', vel, dur: samplesPerStep })
       }
     }
 
@@ -465,11 +470,15 @@ export async function renderFoundationSection(
   // This creates a 8-bar tension/release cycle that improves the dynamic contour.
   function barEnergy(barIdx: number): number {
     const phase = barIdx % 8
-    if (phase === 4) return 0.65  // breakdown dip
-    if (phase === 5) return 0.80  // rebuild
-    if (phase === 6) return 0.95  // build
-    if (phase === 7) return 1.05  // climax
-    return 1.0                    // full energy
+    if (phase === 0) return 0.85  // intro — slightly quieter
+    if (phase === 1) return 0.90  // groove building
+    if (phase === 2) return 0.95  // build
+    if (phase === 3) return 1.0   // full
+    if (phase === 4) return 0.50  // breakdown dip — dramatic drop
+    if (phase === 5) return 0.70  // rebuild
+    if (phase === 6) return 0.90  // build
+    if (phase === 7) return 1.15  // climax — peak
+    return 1.0
   }
 
   for (let i = 0; i < totalSamples; i++) {
