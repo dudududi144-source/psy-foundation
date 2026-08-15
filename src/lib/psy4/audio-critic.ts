@@ -612,21 +612,26 @@ function computePunch(pcm: Float32Array, onsets: number[], sampleRate: number): 
 
 function computeSpectralMovement(spectra: number[][]): number {
   if (spectra.length < 2) return 0
+  // Focus on the lead band (500-5000Hz) where timbral movement happens.
+  // The bass/kick bins are constant and dilute the measurement.
+  const sr = 44100
+  const fftSize = 2048
+  const lowBin = Math.floor((500 * fftSize) / sr)
+  const highBin = Math.ceil((5000 * fftSize) / sr)
   let totalChange = 0
   for (let i = 1; i < spectra.length; i++) {
     const prev = spectra[i - 1] ?? []
     const cur = spectra[i] ?? []
     let change = 0
-    for (let j = 0; j < prev.length; j++) {
+    let count = 0
+    for (let j = lowBin; j <= highBin && j < prev.length; j++) {
       change += Math.abs((cur[j] ?? 0) - (prev[j] ?? 0))
+      count++
     }
-    totalChange += change / prev.length
+    if (count > 0) totalChange += change / count
   }
-  // Scale by 300 (was 100) to account for the dilution from high-frequency constant
-  // bins (hats/cymbals noise) that are now visible with 512-bin spectra. The low/mid
-  // bins (kick/bass/lead) carry the musical movement; the high bins are noise-like and
-  // constant, diluting the average. The higher scaling factor compensates.
-  return Math.min(1, (totalChange / (spectra.length - 1)) * 300)
+  // Scale for lead-band-only movement
+  return Math.min(1, (totalChange / (spectra.length - 1)) * 500)
 }
 
 function computeKickBassSeparation(

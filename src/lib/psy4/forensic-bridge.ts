@@ -241,18 +241,18 @@ export async function renderFoundationSection(
     const barIdx = barRemap.get(bar.barIndex) ?? 0
 
     // Arrangement: which voices play in this bar
-    // 8-bar phrase: intro(0-1) → build(2-3) → full(4-5) → break(6) → drop(7)
+    // 8-bar phrase: groove(0-1) → build(2-3) → full(4-5) → break(6) → drop(7)
     const phase = barIdx % 8
     const playKick = true
     const playBass = true
-    const playHats = phase >= 2      // hats enter at bar 2
-    const playLead = phase >= 3      // lead enters at bar 3
-    const playCounter = phase >= 4   // counter at bar 4
-    const playPad = phase >= 2 && phase !== 6  // pad except break
-    const playSnare = phase >= 4     // snare at full
-    const playShaker = phase >= 2    // shaker at build
+    const playHats = true              // hats from bar 0 (keep energy)
+    const playLead = phase >= 2        // lead enters at bar 2
+    const playCounter = phase >= 3     // counter at bar 3
+    const playPad = phase >= 1 && phase !== 6  // pad from bar 1, except break
+    const playSnare = phase >= 2       // snare from bar 2
+    const playShaker = true            // shaker from bar 0 (driving pulse)
     const playFX = phase === 6 || phase === 7  // riser/impact at break/drop
-    const isBreak = phase === 6      // break bar: drop lead, keep percussion
+    const isBreak = phase === 6        // break bar: drop lead, keep percussion
 
     // Four-on-the-floor kick
     for (const step of [0, 4, 8, 12]) {
