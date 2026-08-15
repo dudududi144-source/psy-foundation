@@ -324,8 +324,8 @@ export const MASTER_SPEC: MasterSpec = {
   satMix: 0.15,
   stereoWidth: 1.3,
   monoBelowHz: 120,
-  ceiling: 0.98,
-  targetLufs: -9,
+  ceiling: 0.89,
+  targetLufs: -11,
 }
 
 // ═══════════════════════════════════════════════════════════════
