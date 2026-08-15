@@ -27,6 +27,8 @@ export interface ChannelFXConfig {
     lowFreqHz: number     // low shelf corner frequency
     highGainDb: number    // high shelf gain in dB
     highFreqHz: number    // high shelf corner frequency
+    midGainDb?: number    // mid peaking gain (0 = off)
+    midFreqHz?: number    // mid peak frequency
   }
   delay: {
     timeMs: number        // delay time in ms (0 = off)
@@ -65,7 +67,7 @@ class BiquadShelf {
   private z2 = 0
 
   constructor(
-    kind: 'low' | 'high',
+    kind: 'low' | 'high' | 'peak',
     freqHz: number,
     gainDb: number,
     sampleRate: number,
@@ -75,7 +77,7 @@ class BiquadShelf {
   }
 
   setCoeffs(
-    kind: 'low' | 'high',
+    kind: 'low' | 'high' | 'peak',
     freqHz: number,
     gainDb: number,
     sampleRate: number,
@@ -85,13 +87,24 @@ class BiquadShelf {
     const w0 = (2 * Math.PI * freqHz) / sampleRate
     const cosw0 = Math.cos(w0)
     const sinw0 = Math.sin(w0)
-    // RBJ shelf slope factor — alpha controls the skirt width
-    const alpha = (sinw0 / 2) * Math.sqrt((A + 1 / A) * (1 / slope - 1) + 2)
 
     let b0: number, b1: number, b2: number
     let a0: number, a1: number, a2: number
 
-    if (kind === 'low') {
+    if (kind === 'peak') {
+      // Peaking filter — RBJ cookbook, Q controls bandwidth
+      const Q = slope
+      const peakAlpha = sinw0 / (2 * Q)
+      b0 = 1 + peakAlpha * A
+      b1 = -2 * cosw0
+      b2 = 1 - peakAlpha * A
+      a0 = 1 + peakAlpha / A
+      a1 = -2 * cosw0
+      a2 = 1 - peakAlpha / A
+    } else {
+      // Shelf alpha (for low and high)
+      const alpha = (sinw0 / 2) * Math.sqrt((A + 1 / A) * (1 / slope - 1) + 2)
+      if (kind === 'low') {
       // Low shelf: boosts/cuts frequencies below freqHz
       b0 = A * ((A + 1) - (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha)
       b1 = 2 * A * ((A - 1) - (A + 1) * cosw0)
@@ -108,6 +121,7 @@ class BiquadShelf {
       a1 = 2 * ((A - 1) - (A + 1) * cosw0)
       a2 = (A + 1) - (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha
     }
+    } // end else (shelf)
 
     // Normalize by a0 so the filter is expressed with a0 = 1
     this.b0 = b0 / a0
@@ -276,6 +290,7 @@ export class ChannelFX {
   // EQ
   private readonly lowShelf: BiquadShelf
   private readonly highShelf: BiquadShelf
+  private readonly midPeak: BiquadShelf | null
 
   // Delay (ping-pong)
   private readonly delayBufSize: number
@@ -308,6 +323,12 @@ export class ChannelFX {
     // ── EQ ────────────────────────────────────────────────────────────────
     this.lowShelf = new BiquadShelf('low', config.eq.lowFreqHz, config.eq.lowGainDb, sampleRate)
     this.highShelf = new BiquadShelf('high', config.eq.highFreqHz, config.eq.highGainDb, sampleRate)
+    // Mid peak filter (optional — for 3-4kHz "boxiness" cut)
+    if (config.eq.midGainDb && config.eq.midGainDb !== 0 && config.eq.midFreqHz) {
+      this.midPeak = new BiquadShelf('peak', config.eq.midFreqHz, config.eq.midGainDb, sampleRate, 1.5)
+    } else {
+      this.midPeak = null
+    }
 
     // ── Delay ─────────────────────────────────────────────────────────────
     // Max 2 seconds = 88200 samples @ 44.1kHz. Covers any musical delay time
@@ -365,6 +386,7 @@ export class ChannelFX {
 
     // 1) EQ (mono) — low shelf then high shelf
     let sig = this.lowShelf.process(monoIn)
+    if (this.midPeak) sig = this.midPeak.process(sig)
     sig = this.highShelf.process(sig)
 
     // 2) Delay (creates stereo via ping-pong)
@@ -434,6 +456,7 @@ export class ChannelFX {
   reset(): void {
     this.lowShelf.reset()
     this.highShelf.reset()
+    if (this.midPeak) this.midPeak.reset()
     this.delayBufL.fill(0)
     this.delayBufR.fill(0)
     this.delayWriteIdx = 0
