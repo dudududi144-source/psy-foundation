@@ -21,7 +21,7 @@ import type { ComposedSection } from '../../foundation/music'
 import { Rng } from './forensic/prng'
 import { fastTanh } from './forensic/dsp'
 import { BusProcessor, MasterChain } from './forensic/mixing'
-import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact } from './psy-voices'
+import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact, PsyAcid } from './psy-voices'
 import { ChannelFX } from './channel-fx'
 import { CHANNEL_PRESETS } from './channel-presets'
 import { MultibandCompressor } from './multiband'
@@ -172,6 +172,7 @@ export async function renderFoundationSection(
   const shakers = [new PsyShaker(rng), new PsyShaker(rng)]
   const risers = [new PsyRiser(rng)]
   const impacts = [new PsyImpact(rng)]
+  const acids = [new PsyAcid(rng), new PsyAcid(rng)]
 
   // ── Per-type ChannelFX instances (one per voice type, shared across pool) ──
   const fxKick = new ChannelFX(CHANNEL_PRESETS.kick, SR)
@@ -391,6 +392,18 @@ export async function renderFoundationSection(
       events.push({ pos: barStart + samplesPerBar, type: 'impact', vel: 0.4, dur: samplesPerStep })
     }
 
+    // Acid: plays in drop2/climax sections (phase 5-7)
+    if (phase >= 5 && !isBreak) {
+      const acidRootMidi = rootMidi + 24 // 2 octaves up
+      // Acid pattern: 16th notes with some rests
+      for (let step = 0; step < 16; step++) {
+        if (step % 4 === 0 || step % 4 === 2) {
+          const acidMidi = acidRootMidi + (step % 8 === 0 ? 7 : step % 4 === 2 ? 5 : 0)
+          events.push({ pos: barStart + step * samplesPerStep, type: 'acid', midi: acidMidi, vel: 0.4, dur: samplesPerStep })
+        }
+      }
+    }
+
     // Ghost perc
     const percSteps = pattern === 0 ? [7, 15] : pattern === 1 ? [5, 13] : pattern === 2 ? [3, 11] : [7, 11, 15]
     for (const ps of percSteps) {
@@ -475,6 +488,9 @@ export async function renderFoundationSection(
         risers[0]!.trigger(ev.dur / SR, ev.vel)
       } else if (ev.type === 'impact') {
         impacts[0]!.trigger(ev.vel)
+      } else if (ev.type === 'acid' && ev.midi !== undefined) {
+        const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
+        acids[0]!.trigger(freq, ev.dur / SR, ev.vel)
       } else if (ev.type === 'counter' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
         leads[(leadIdx + 2) % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: Math.floor(cfg.leadCutoff * 0.5), detune: 6, res: 0.3, lfoRate: 0.6, lfoDepth: 0.2 })
@@ -578,6 +594,11 @@ export async function renderFoundationSection(
     let impactMono = 0
     for (const v of impacts) if (v.active) impactMono += v.render()[0]
     if (impactMono !== 0) { const [il, ir] = fxImpact.process(impactMono); bassL += il; bassR += ir }
+
+    // Acid → fxLead → music bus (shares lead FX chain)
+    let acidMono = 0
+    for (const v of acids) if (v.active) acidMono += v.render()[0]
+    if (acidMono !== 0) { const [al, ar] = fxLead.process(acidMono); musicL += al; musicR += ar }
 
     // ── Bus glue compression ──
     drumL = drumBusL.process(drumL, SR); drumR = drumBusR.process(drumR, SR)

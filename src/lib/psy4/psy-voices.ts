@@ -534,39 +534,55 @@ export class PsySubBass {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PAD — sustained chord with slow filter sweep
+// PAD — 5-layer: 3 osc + chorus + shimmer (PSY3 style)
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyPad {
   active = false
   t = 0
-  saws: BLSaw[]
-  filter = new MoogLadder()
-  amp = 0.12
+  amp = PAD_SPEC.gain
   releasing = false
   releaseT = 0
-  cutoff = 600
 
-  constructor(rng: Rng) {
-    // 3 detuned saws with wider spread for chorus effect
-    this.saws = [new BLSaw(), new BLSaw(), new BLSaw()]
-    void rng
+  // Layer 1-3: 3 detuned oscillators (2 saws + 1 triangle octave-up)
+  saws: BLSaw[]
+  triOct: BLTriangle
+  // Layer 4: Chorus (delayed detuned copy)
+  chorusBuf: Float32Array
+  chorusPos = 0
+  chorusDelay = 882 // 20ms at 44100
+  // Layer 5: Shimmer (octave-up via rate modulation)
+  shimmerPhase = 0
+  // Filter + saturation
+  filter = new MoogLadder()
+  sat = new OversampledSaturation()
+
+  constructor(_rng: Rng) {
+    this.saws = [new BLSaw(), new BLSaw()]
+    this.triOct = new BLTriangle()
+    this.chorusBuf = new Float32Array(this.chorusDelay)
   }
 
   trigger(freqs: number[], _dur: number, amp: number) {
     this.active = true
     this.t = 0
-    this.amp = amp
+    this.amp = amp * PAD_SPEC.gain
     this.releasing = false
     this.releaseT = 0
-    // Detune the 3 oscillators: -7, 0, +7 cents
-    for (let i = 0; i < 3; i++) {
-      this.saws[i]!.reset()
-      const baseFreq = freqs[i] ?? freqs[0] ?? 220
-      const detune = (i - 1) * 7 // -7, 0, +7 cents
-      this.saws[i]!.setFreq(baseFreq * Math.pow(2, detune / 1200))
-    }
+    // 2 saws detuned ±7 cents
+    this.saws[0]!.reset()
+    this.saws[0]!.setFreq(freqs[0]! * Math.pow(2, -PAD_SPEC.detune / 1200))
+    this.saws[1]!.reset()
+    this.saws[1]!.setFreq(freqs[1] ?? freqs[0]! * Math.pow(2, PAD_SPEC.detune / 1200))
+    // Triangle octave-up
+    this.triOct.reset()
+    this.triOct.setFreq((freqs[2] ?? freqs[0]!) * 2)
+    // Reset chorus buffer
+    this.chorusBuf.fill(0)
+    this.chorusPos = 0
+    this.shimmerPhase = 0
     this.filter.reset()
+    this.sat.reset()
   }
 
   noteOff() { this.releasing = true; this.releaseT = 0 }
@@ -576,24 +592,48 @@ export class PsyPad {
     this.t += 1 / SR
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > 0.4) { this.active = false; return [0, true] }
+      if (this.releaseT > PAD_SPEC.release) { this.active = false; return [0, true] }
     }
-    let signal = 0
-    for (let i = 0; i < 3; i++) {
-      const f = this.saws[i]!.freq
-      signal += this.saws[i]!.process(f / SR)
-    }
-    signal /= 3
-    // Slow filter sweep: 0.15Hz LFO for evolving texture
-    const lfo1 = Math.sin(2 * Math.PI * 0.15 * this.t) * 0.5
-    const lfo2 = Math.sin(2 * Math.PI * 0.23 * this.t) * 0.2 // slight phase offset
-    const cutoff = Math.max(200, this.cutoff * (1 + lfo1 + lfo2))
-    const filtered = this.filter.process(signal, cutoff, 0.3, 1.0, SR)
-    // Long attack (0.3s) for pad swell
-    const attackEnv = Math.min(1, this.t / 0.3)
+
+    // ── Layers 1-2: Detuned saws ──
+    const saw1 = this.saws[0]!.process(this.saws[0]!.freq / SR)
+    const saw2 = this.saws[1]!.process(this.saws[1]!.freq / SR)
+    const sawSig = (saw1 + saw2) * 0.35
+
+    // ── Layer 3: Triangle octave-up ──
+    const triSig = this.triOct.process(this.triOct.freq / SR) * 0.2
+
+    // ── Layer 4: Chorus — delayed detuned copy with LFO ──
+    const inputSig = sawSig + triSig
+    const chorusLfo = Math.sin(2 * Math.PI * PAD_SPEC.chorusRate * this.t) * PAD_SPEC.chorusDepth
+    const chorusReadPos = (this.chorusPos - Math.floor(this.chorusDelay * (1 + chorusLfo * 0.1)) + this.chorusDelay) % this.chorusDelay
+    const chorusSig = this.chorusBuf[chorusReadPos]! * 0.3
+    this.chorusBuf[this.chorusPos] = inputSig
+    this.chorusPos = (this.chorusPos + 1) % this.chorusDelay
+
+    // ── Layer 5: Shimmer — octave-up via doubled phase ──
+    this.shimmerPhase += (this.triOct.freq * 2) / SR // 2x rate = octave up
+    if (this.shimmerPhase >= 1) this.shimmerPhase -= 1
+    const shimmerSig = (2 * Math.abs(2 * this.shimmerPhase - 1) - 1) * PAD_SPEC.shimmerLevel * 0.3
+
+    // ── Mix all layers ──
+    let signal = inputSig + chorusSig + shimmerSig
+
+    // ── Filter: slow sweep with dual LFO ──
+    const lfo1 = Math.sin(2 * Math.PI * PAD_SPEC.filterLfoRate * this.t) * PAD_SPEC.filterLfoDepth
+    const lfo2 = Math.sin(2 * Math.PI * 0.23 * this.t) * 0.2
+    const cutoff = Math.max(200, PAD_SPEC.cutoff * (1 + lfo1 + lfo2))
+    const filtered = this.filter.process(signal, cutoff, PAD_SPEC.res, 1.0, SR)
+
+    // ── Subtle saturation ──
+    let out = this.sat.process(filtered, PAD_SPEC.saturation)
+
+    // ── Envelope: long attack + release ──
+    const attackEnv = Math.min(1, this.t / PAD_SPEC.attack)
     let ampEnv = attackEnv
     if (this.releasing) ampEnv = attackEnv * Math.exp(-this.releaseT / 0.15)
-    return [filtered * ampEnv * this.amp, false]
+
+    return [out * ampEnv * this.amp, false]
   }
 }
 
@@ -635,6 +675,78 @@ export class PsyShaker {
     const tailEnv = Math.exp(-this.t / 0.03)
     const env = bodyEnv * 0.7 + tailEnv * 0.3
     return [hpOut * env * this.amp * 2.0, false]
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACID — bidirectional filter LFO (303-style)
+// ═══════════════════════════════════════════════════════════════
+
+export class PsyAcid {
+  active = false
+  t = 0
+  freq = 220
+  amp = ACID_SPEC.gain
+  releasing = false
+  releaseT = 0
+
+  square = new BLSquare()
+  filter = new MoogLadder()
+  sat = new OversampledSaturation()
+  hp = new OnePoleHP()
+
+  constructor(_rng: Rng) {}
+
+  trigger(freq: number, dur: number, amp: number) {
+    this.active = true
+    this.t = 0
+    this.freq = freq
+    this.amp = amp * ACID_SPEC.gain
+    this.releasing = false
+    this.releaseT = 0
+    this.square.reset()
+    this.square.setFreq(freq)
+    this.filter.reset()
+    this.sat.reset()
+    this.hp.reset()
+  }
+
+  noteOff() {
+    this.releasing = true
+    this.releaseT = 0
+  }
+
+  render(): [number, boolean] {
+    if (!this.active) return [0, true]
+    this.t += 1 / SR
+    if (this.releasing) {
+      this.releaseT += 1 / SR
+      if (this.releaseT > 0.1) { this.active = false; return [0, true] }
+    }
+
+    // ── Square oscillator ──
+    const osc = this.square.process(this.freq / SR)
+
+    // ── Bidirectional filter LFO (up-down, not one-directional) ──
+    // This is the key difference from lead: cutoff goes UP and DOWN
+    const lfo = Math.sin(2 * Math.PI * ACID_SPEC.lfoRate * this.t) * ACID_SPEC.lfoDepth
+    const env = Math.exp(-this.t / ACID_SPEC.envDecay) * ACID_SPEC.envAmount
+    // Cutoff modulates bidirectionally: base ± (lfo * range) + env
+    const cutoff = Math.max(200, ACID_SPEC.cutoff * (1 + lfo + env))
+    const filtered = this.filter.process(osc, cutoff, ACID_SPEC.res, 1.5, SR)
+
+    // ── Heavy distortion ──
+    let out = this.sat.process(filtered, ACID_SPEC.distortion)
+
+    // ── HP to clean low end ──
+    out = this.hp.process(out, ACID_SPEC.hpFreq, SR)
+
+    // ── Amp envelope ──
+    const attackEnv = Math.min(1, this.t / 0.002)
+    let ampEnv = attackEnv
+    if (this.releasing) ampEnv = attackEnv * Math.exp(-this.releaseT / 0.05)
+
+    return [out * ampEnv * this.amp, false]
   }
 }
 
