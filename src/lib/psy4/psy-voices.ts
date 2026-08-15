@@ -664,13 +664,21 @@ export class PsyShaker {
   bp = new MoogLadder()
   // Highpass for cleanup
   hp = new OnePoleHP()
+  // Per-hit variation
+  private rng: Rng
+  private bpFreqVar = 7000
 
-  constructor(rng: Rng) { this.noise = new PinkNoise(rng) }
+  constructor(rng: Rng) {
+    this.noise = new PinkNoise(rng)
+    this.rng = rng
+  }
 
   trigger(amp: number) {
     this.active = true
     this.t = 0
     this.amp = amp
+    // Per-hit variation: ±200Hz bandpass center
+    this.bpFreqVar = 7000 + (this.rng.range(-1, 1) * 200)
     this.noise.reset()
     this.bp.reset()
     this.hp.reset()
@@ -681,8 +689,8 @@ export class PsyShaker {
     this.t += 1 / SR
     if (this.t > 0.06) { this.active = false; return [0, true] }
     const n = this.noise.next()
-    // Bandpass at 7kHz with resonance for "shaker" character
-    const bpOut = this.bp.process(n, 7000, 0.4, 1.0, SR)
+    // Bandpass with per-hit frequency variation
+    const bpOut = this.bp.process(n, this.bpFreqVar, 0.4, 1.0, SR)
     const hpOut = this.hp.process(bpOut, 4000, SR)
     // Two-stage envelope: fast body + slow tail
     const bodyEnv = Math.exp(-this.t / 0.008)
