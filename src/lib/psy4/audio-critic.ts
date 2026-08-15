@@ -168,7 +168,20 @@ export function critiqueAudio(
   const harmonicClarity = computeHarmonicClarity(avgSpectrum, sampleRate, fftSize)
 
   // ── Timbre analysis ──
-  const brightness = Math.min(1, spectralCentroid / 5000)
+  // Brightness: centroid of the NON-BASS spectrum (above 250Hz)
+  // This prevents bass dominance from making the mix sound "dark"
+  // when the lead/hats are actually bright.
+  let brightWeighted = 0
+  let brightTotal = 0
+  const brightLowBin = Math.floor((250 * fftSize) / sampleRate)
+  for (let i = brightLowBin; i < avgSpectrum.length; i++) {
+    const freq = (i * sampleRate) / fftSize
+    const mag = avgSpectrum[i] ?? 0
+    brightWeighted += freq * mag
+    brightTotal += mag
+  }
+  const brightCentroid = brightTotal > 0 ? brightWeighted / brightTotal : 0
+  const brightness = Math.min(1, brightCentroid / 5000)
   const roughness = computeRoughness(avgSpectrum, sampleRate, fftSize)
   const noisiness = computeNoisiness(avgSpectrum, sampleRate, fftSize)
   // Modulation depth: measures how much the spectral centroid changes over time.
