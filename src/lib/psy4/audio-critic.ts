@@ -284,13 +284,13 @@ export function critiqueAudio(
       severity: 0.2 - brightness,
     })
   }
-  if (excessiveUniformity > 0.7) {
+  if (excessiveUniformity > 0.85) {
     failures.push({
       code: 'RHYTHMIC_PATTERN_TOO_UNIFORM',
       diagnosis: `Rhythmic pattern is too uniform (${excessiveUniformity.toFixed(3)}) — lacks dynamic variation.`,
       correctionTarget: 'groove.velocityContour / ghost.notes',
       correctionHint: 'Add velocity variation; introduce ghost notes; vary accent patterns',
-      severity: excessiveUniformity - 0.7,
+      severity: (excessiveUniformity - 0.85) * 0.5,
     })
   }
   if (kickBassSeparation < 0.10) {
