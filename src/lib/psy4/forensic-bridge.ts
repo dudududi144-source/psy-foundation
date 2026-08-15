@@ -257,10 +257,18 @@ export async function renderFoundationSection(
     const playFX = phase === 6 || phase === 7  // riser/impact at break/drop
     const isBreak = phase === 6        // break bar: drop lead, keep percussion
 
-    // Four-on-the-floor kick
+    // Four-on-the-floor kick with per-bar velocity variation
+    const kickPhraseBar = barIdx % 8
+    const kickVelBase = kickPhraseBar < 2 ? 0.85 : kickPhraseBar < 4 ? 0.8 : kickPhraseBar < 6 ? 0.9 : 0.7
     for (const step of [0, 4, 8, 12]) {
       const a = accent[step % accent.length] ?? 1
-      events.push({ pos: barStart + step * samplesPerStep, type: 'kick', vel: 0.8 + a * 0.2, dur: samplesPerStep })
+      // Downbeat (step 0) slightly louder, beat 4 (step 12) slightly quieter for groove
+      const velMod = step === 0 ? 1.0 : step === 12 ? 0.9 : 0.95
+      events.push({ pos: barStart + step * samplesPerStep, type: 'kick', vel: kickVelBase * velMod + a * 0.1, dur: samplesPerStep })
+    }
+    // Ghost kick on offbeat in build/drop sections
+    if (kickPhraseBar >= 2 && kickPhraseBar < 6 && barIdx % 2 === 1) {
+      events.push({ pos: barStart + 7 * samplesPerStep, type: 'kick', vel: 0.3, dur: samplesPerStep })
     }
 
     // Rolling 16th bass — 8-bar phrase development
