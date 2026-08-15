@@ -630,8 +630,8 @@ function computeSpectralMovement(spectra: number[][]): number {
     }
     if (count > 0) totalChange += change / count
   }
-  // Scale for lead-band-only movement
-  return Math.min(1, (totalChange / (spectra.length - 1)) * 500)
+  // Scale for lead-band-only movement — higher scaling for richer filter movement
+  return Math.min(1, (totalChange / (spectra.length - 1)) * 5000)
 }
 
 function computeKickBassSeparation(
