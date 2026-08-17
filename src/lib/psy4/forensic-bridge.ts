@@ -29,6 +29,8 @@ import { StereoWidener } from './ms-processor'
 import { measureLUFS, lufsToGainOffset } from './loudness'
 import { TruePeakLimiter } from './limiter'
 import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, HAT_SPEC, SNARE_SPEC, BUS_GAINS, MASTER_SPEC } from './voice-specs'
+import { mulberry32, jitterVelocity, driftTime } from './humanizer'
+import { buildProgression, PSYTRANCE_PROGRESSIONS, type Chord } from './harmony'
 
 const SR = 44100
 const TARGET_LUFS = MASTER_SPEC.targetLufs
@@ -396,11 +398,16 @@ export async function renderFoundationSection(
     events.push({ pos: barStart, type: 'subbass', midi: rootMidi, vel: 0.25, dur: samplesPerBar })
 
     // Pad — enters at bar 2, drops during break
+    // Uses harmony engine for chord progression (from PSYSTAR)
     if (playPad && barIdx % 2 === 0) {
-      const rootFreq = 440 * Math.pow(2, (rootMidi - 69) / 12)
-      const thirdFreq = 440 * Math.pow(2, (rootMidi + 4 - 69) / 12)
-      const fifthFreq = 440 * Math.pow(2, (rootMidi + 7 - 69) / 12)
-      events.push({ pos: barStart, type: 'pad', vel: 0.12, dur: samplesPerBar * 2, freqs: [rootFreq, thirdFreq, fifthFreq] })
+      // Build progression from psy-dominant pattern
+      const progDegrees = PSYTRANCE_PROGRESSIONS['psy-dominant']!
+      const chordIdx = Math.floor(barIdx / 2) % progDegrees.length
+      const chordRoot = rootMidi - 24 // 2 octaves down for pad
+      const progression = buildProgression(chordRoot, 'phrygianDominant', progDegrees)
+      const chord = progression[chordIdx]!
+      const freqs = chord.notes.map((midi: number) => 440 * Math.pow(2, (midi - 69) / 12))
+      events.push({ pos: barStart, type: 'pad', vel: 0.12, dur: samplesPerBar * 2, freqs })
     }
 
     // Shaker — enters at bar 2, with per-bar velocity variation
@@ -448,6 +455,22 @@ export async function renderFoundationSection(
     }
   }
 
+  events.sort((a, b) => a.pos - b.pos)
+
+  // ── Apply humanization (from PSYSTAR humanizer) ──
+  // Subtle velocity jitter + timing drift for human feel
+  const humanRng = mulberry32(42)
+  const humanAmount = 0.3 // subtle (0..1)
+  for (const ev of events) {
+    // Velocity jitter (not on kick — kick needs consistency)
+    if (ev.type !== 'kick' && ev.vel > 0) {
+      ev.vel = jitterVelocity(ev.vel, humanAmount, humanRng)
+    }
+    // Timing drift (±18ms max, in samples)
+    const driftSamples = Math.floor(driftTime(humanAmount, humanRng) * SR)
+    ev.pos = Math.max(0, ev.pos + driftSamples)
+  }
+  // Re-sort after drift
   events.sort((a, b) => a.pos - b.pos)
 
   // ── Render loop ──
