@@ -13,7 +13,7 @@
  * All voices are sample-accurate, deterministic, and produce commercial-grade sound.
  */
 
-import { fastTanh, MoogLadder, BLSaw, BLSquare, BLTriangle, OnePoleHP, PinkNoise, OversampledSaturation, polyBlep } from './forensic/dsp'
+import { fastTanh, MoogLadder, ZDFSVF, BLSaw, BLSquare, BLTriangle, OnePoleHP, PinkNoise, OversampledSaturation, polyBlep } from './forensic/dsp'
 import { Rng } from './forensic/prng'
 import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, ACID_SPEC, HAT_SPEC, SNARE_SPEC } from './voice-specs'
 
@@ -242,7 +242,7 @@ export class PsyLead {
   carPhase = 0
   modPhase = 0
   // Filter + saturation
-  filter = new MoogLadder()
+  filter = new ZDFSVF()
   sat = new OversampledSaturation()
 
   constructor(rng: Rng) {
@@ -324,7 +324,7 @@ export class PsyLead {
     const lfo1 = Math.sin(2 * Math.PI * LEAD_SPEC.lfoRate * this.t) * LEAD_SPEC.lfoDepth
     const lfo2 = Math.sin(2 * Math.PI * 5.5 * this.t) * 0.15 // shimmer LFO
     const cutoff = Math.max(200, LEAD_SPEC.cutoff * (1 + filterEnv + lfo1 + lfo2))
-    const filtered = this.filter.process(signal, cutoff, LEAD_SPEC.res, 1.5, SR)
+    const filtered = this.filter.process(signal, cutoff, LEAD_SPEC.res, SR, 0)
 
     // ── Saturation with oversampling ──
     let out = this.sat.process(filtered, LEAD_SPEC.saturation)
@@ -568,7 +568,7 @@ export class PsyPad {
   // Layer 5: Shimmer (octave-up via rate modulation)
   shimmerPhase = 0
   // Filter + saturation
-  filter = new MoogLadder()
+  filter = new ZDFSVF()
   sat = new OversampledSaturation()
 
   constructor(_rng: Rng) {
@@ -637,7 +637,7 @@ export class PsyPad {
     const lfo1 = Math.sin(2 * Math.PI * PAD_SPEC.filterLfoRate * this.t) * PAD_SPEC.filterLfoDepth
     const lfo2 = Math.sin(2 * Math.PI * 0.23 * this.t) * 0.2
     const cutoff = Math.max(200, PAD_SPEC.cutoff * (1 + lfo1 + lfo2))
-    const filtered = this.filter.process(signal, cutoff, PAD_SPEC.res, 1.0, SR)
+    const filtered = this.filter.process(signal, cutoff, PAD_SPEC.res, SR, 0)
 
     // ── Subtle saturation ──
     let out = this.sat.process(filtered, PAD_SPEC.saturation)
@@ -713,7 +713,7 @@ export class PsyAcid {
   releaseT = 0
 
   square = new BLSquare()
-  filter = new MoogLadder()
+  filter = new ZDFSVF()
   sat = new OversampledSaturation()
   hp = new OnePoleHP()
 
@@ -755,7 +755,7 @@ export class PsyAcid {
     const env = Math.exp(-this.t / ACID_SPEC.envDecay) * ACID_SPEC.envAmount
     // Cutoff modulates bidirectionally: base ± (lfo * range) + env
     const cutoff = Math.max(200, ACID_SPEC.cutoff * (1 + lfo + env))
-    const filtered = this.filter.process(osc, cutoff, ACID_SPEC.res, 1.5, SR)
+    const filtered = this.filter.process(osc, cutoff, ACID_SPEC.res, SR, 0)
 
     // ── Heavy distortion ──
     let out = this.sat.process(filtered, ACID_SPEC.distortion)
@@ -790,7 +790,7 @@ export class PsyTexture {
   noise: PinkNoise
   noiseBP = new MoogLadder()
   // Filter
-  filter = new MoogLadder()
+  filter = new ZDFSVF()
   sat = new OversampledSaturation()
 
   constructor(rng: Rng) {
@@ -851,7 +851,7 @@ export class PsyTexture {
     // ── Filter: slow morph (0.05Hz) ──
     const morphLfo = Math.sin(2 * Math.PI * 0.05 * this.t) * 0.5
     const cutoff = Math.max(200, 800 * (1 + morphLfo))
-    const filtered = this.filter.process(signal, cutoff, 0.3, 1.0, SR)
+    const filtered = this.filter.process(signal, cutoff, 0.3, SR, 0)
 
     // ── Saturation ──
     let out = this.sat.process(filtered, 1.2)

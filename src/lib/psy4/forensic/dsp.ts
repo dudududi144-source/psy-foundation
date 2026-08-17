@@ -81,8 +81,90 @@ export class MoogLadder {
     this.s3 += g * (fastTanh(this.s2) - fastTanh(this.s3));
 
     // No division — the output is the raw filter output.
-    // The previous version divided by (1 + res*0.5) which killed the gain.
     return this.s3;
+  }
+}
+
+// ─── ZDF State-Variable Filter (Simper/Zavalishin topology) ────────────────
+// Ported from PsySynthPro. This is the standard filter in professional
+// softsynths (Serum, Massive, Vital). Zero-delay feedback eliminates
+// the aliasing and instability of naive feedback topologies.
+//
+// Supports lowpass, bandpass, and highpass outputs simultaneously.
+
+export class ZDFSVF {
+  private ic1eq = 0;
+  private ic2eq = 0;
+  private smoothFc = 0;
+  private lastCutoff = -1;
+
+  reset(): void {
+    this.ic1eq = 0;
+    this.ic2eq = 0;
+    this.smoothFc = 0;
+    this.lastCutoff = -1;
+  }
+
+  /**
+   * Process one sample through the ZDF SVF.
+   * @param x Input sample
+   * @param cutoff Cutoff frequency in Hz
+   * @param res Resonance (0..1, where 1 = self-oscillation)
+   * @param sr Sample rate
+   * @param type 0=lowpass, 1=bandpass, 2=highpass
+   * @returns Filtered sample
+   */
+  process(x: number, cutoff: number, res: number, sr: number, type: number = 0): number {
+    // Smooth cutoff changes to avoid zipper noise
+    if (Math.abs(cutoff - this.lastCutoff) > 0.5) {
+      this.smoothFc = this.smoothFc === 0 ? cutoff : this.smoothFc + (cutoff - this.smoothFc) * 0.0015;
+      this.lastCutoff = cutoff;
+    } else {
+      this.smoothFc = cutoff;
+    }
+
+    const fc = Math.min(0.49, this.smoothFc / sr);
+    const g = Math.tan(Math.PI * fc);
+    // k = resonance damping. res 0..1 maps to k 2..0.02
+    // PsySynthPro uses res 0..10, we normalize to 0..1
+    const resNorm = Math.min(1, Math.max(0, res));
+    const k = Math.max(0.02, 2 - resNorm * 2);
+
+    const a1 = 1 / (1 + g * (g + k));
+    const a2 = g * a1;
+    const a3 = g * a2;
+
+    const v3 = x - this.ic2eq;
+    const v1 = a1 * this.ic1eq + a2 * v3;
+    const v2 = this.ic2eq + a2 * this.ic1eq + a3 * v3;
+
+    this.ic1eq = 2 * v1 - this.ic1eq;
+    this.ic2eq = 2 * v2 - this.ic2eq;
+
+    // Output selection
+    if (type === 0) return v2;        // lowpass
+    if (type === 1) return v1;        // bandpass
+    return x - k * v1 - v2;           // highpass
+  }
+
+  /** Get all 3 outputs simultaneously (LP, BP, HP) */
+  processAll(x: number, cutoff: number, res: number, sr: number): [number, number, number] {
+    const fc = Math.min(0.49, cutoff / sr);
+    const g = Math.tan(Math.PI * fc);
+    const k = Math.max(0.02, 2 - res * 2);
+
+    const a1 = 1 / (1 + g * (g + k));
+    const a2 = g * a1;
+    const a3 = g * a2;
+
+    const v3 = x - this.ic2eq;
+    const v1 = a1 * this.ic1eq + a2 * v3;
+    const v2 = this.ic2eq + a2 * this.ic1eq + a3 * v3;
+
+    this.ic1eq = 2 * v1 - this.ic1eq;
+    this.ic2eq = 2 * v2 - this.ic2eq;
+
+    return [v2, v1, x - k * v1 - v2]; // [LP, BP, HP]
   }
 }
 
