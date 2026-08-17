@@ -677,8 +677,8 @@ Work Log:
 - All 221 tests pass across 10 packages. typecheck clean. lint clean.
 - Git committed (3bfe61a).
 - GITHUB PUSH:
-  - Token was in /home/z/my-project/upload/push and i will revove.env (file had "github" label on line 3, actual ghp_ token on line 4, 40 chars).
-  - Extracted ONLY the ghp_ line via grep, loaded into env var GIT_TOKEN.
+  - Token was in /home/z/my-project/upload/push and i will revove.env (file had "github" label on line 3, actual ghp_[REDACTED] token on line 4, 40 chars).
+  - Extracted ONLY the ghp_[REDACTED] line via grep, loaded into env var GIT_TOKEN.
   - NEVER echoed the token value. NEVER wrote it to any file in the repo.
   - Used git credential helper that reads from env var: `!f() { echo "username=x-access-token"; echo "password=$GIT_TOKEN"; }; f`
   - Remote URL is CLEAN (no token embedded): https://github.com/dudududi144-source/psy-foundation.git

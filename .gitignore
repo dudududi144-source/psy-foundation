@@ -50,6 +50,26 @@ test
 prompt
 
 server.log
+
+# Upload directory — contains tokens/secrets (NEVER commit)
+/upload/
+
 # Skills directory
 /skills/upload/
 *.env
+
+# Secret files — never expose
+*.env
+*.key
+*.pem
+*.secret
+turso.txt
+cloudfare.txt
+cloudflare.txt
+
+# Plans and analysis (internal docs)
+PSY4-*.md
+PSY-*.md
+
+# Tool results — may contain secrets from command output
+tool-results/
