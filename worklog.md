@@ -1267,3 +1267,33 @@ Stage Summary:
 - 38 score components, 0 failures. Worst remaining: kickBassSep 0.12, tensionRelease 0.21, specMovement 0.24.
 - Deterministic (SHA-256 identical). lint clean. Agent Browser verified.
 - Target 0.75 not fully reached (0.71 achieved, 0.04 gap). Remaining gap requires deeper DSP work: real spectral valley creation, lead articulation improvement, pattern variation for reduced uniformity.
+
+---
+Task ID: PSY4-V7.1-FINAL
+Agent: main
+Task: Full system integration — ZDF, harmony, humanizer, reference analyzer, knowledge hub, UI
+
+Work Log:
+- v6.0: ZDF State-Variable Filter from PsySynthPro (VLM 9/10 filter quality)
+- v6.1: Choke groups + velocity-to-timbre from PSYDRUM (VLM 9/10 drum clarity)
+- v6.2: Repo cleanup — removed 5403 lines dead code (47% of codebase)
+- v6.3: PsyDevice consumer — foundation shim + RenderDevice
+- v6.4: README + proper repo structure
+- v6.5: Harmony engine + Humanizer modules (ported from PSYSTAR)
+- v6.6: Integrated harmony progression + humanizer into renderer (VLM 8/10 musicality)
+- v6.7: Reference Analyzer — analyzeReference + compareProfiles
+- v6.8: Knowledge Hub — 11 docs, 1478 lines
+- v6.9: UI pipeline diagram updated to v6.8
+- v7.0: API returns reference profile + harmony info + version
+- v7.1: UI displays reference profile (cyan) + harmony progression (violet)
+
+Stage Summary:
+- 27 TypeScript files in psy4, 11 knowledge docs
+- 13 voices with ZDF SVF (lead/pad/acid/texture) + Moog (bass/kick)
+- Choke groups, velocity-to-timbre, harmony progression, humanizer
+- Full master chain: HP → multiband → glue → sat 15% → M/S → LUFS → limiter
+- Reference analyzer with BPM/centroid/band/dynamics extraction
+- PsyDevice consumer (RenderDevice) for family integration
+- Knowledge hub with 9 sound design rules from PSY3
+- VLM: Musicality 8/10, Human Feel 7/10, Professionalism 9/10
+- 0 dead code, 0 secrets, deterministic
