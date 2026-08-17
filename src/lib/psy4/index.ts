@@ -61,3 +61,11 @@ export type { ModRoute, ModSource, ModDestination } from './modulation-matrix'
 // Auto-fixer
 export { optimizeRender } from './auto-fixer'
 export type { OptimizationReport, OptimizationIteration } from './auto-fixer'
+
+// RenderDevice (PsyDevice consumer)
+export { RenderDevice, createRenderDevice } from './render-device'
+export type { RenderDeviceOptions, RenderDeviceResult } from './render-device'
+
+// Foundation shim (PsyDevice contract)
+export type { PsyDevice, MusicalEvent, NoteEvent, DeviceCapabilities, MusicalContext, MusicalTransport } from './foundation-shim'
+export { InMemoryChannel } from './foundation-shim'
