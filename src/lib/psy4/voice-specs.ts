@@ -70,18 +70,18 @@ export interface BassSpec {
 
 export const BASS_SPEC: BassSpec = {
   mode: 'pluck',
-  subLevel: 0.5,
-  bodyLevel: 0.7,
-  characterLevel: 0.2,
-  cutoffStart: 1500,
+  subLevel: 0.4,
+  bodyLevel: 0.6,
+  characterLevel: 0.15,
+  cutoffStart: 1200,
   cutoffEnd: 150,
   res: 0.3,
-  pluckDecay: 0.06,
-  sustainLevel: 0.7,
-  sustainRelease: 0.005,
-  hpFreq: 40,
-  saturation: 2.5,
-  sidechainDepth: 0.7,
+  pluckDecay: 0.05,
+  sustainLevel: 0.6,
+  sustainRelease: 0.004,
+  hpFreq: 45,
+  saturation: 2.0,
+  sidechainDepth: 0.75,
 }
 
 // ═══════════════════════════════════════════════════════════════
