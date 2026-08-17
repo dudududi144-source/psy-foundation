@@ -333,21 +333,33 @@ export default function Home() {
 
         {/* Pipeline */}
         <section>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-3">Pipeline (v3)</h2>
+          <h2 className="text-lg font-semibold text-zinc-100 mb-3">Pipeline (v6.8)</h2>
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto">
             <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre">{`Foundation CompositionEngine (WHAT — frozen)
   └── RawScore Serializer
         ↓
-Forensic Bridge v3 (HOW)
-  ├── 14 Voice Pools (Kick/Bass/Sub/Lead/Counter/Hat/OpenHat/Snare/Clap/Perc/Shaker/Pad/Riser/Impact)
-  ├── Per-Type ChannelFX (EQ shelves + ping-pong delay + Schroeder reverb + pan + Haas width)
+Forensic Bridge v6.8 (HOW)
+  ├── Harmony Engine (8 scales, 7 progressions, from PSYSTAR)
+  ├── Humanizer (mulberry32 PRNG, velocity jitter, timing drift, from PSYSTAR)
+  ├── 13 Voice Pools with ZDF SVF (from PsySynthPro)
+  │   ├── Kick (3-layer, velocity-to-timbre, from PSYDRUM)
+  │   ├── Bass (3-layer, pluck/sustain, Moog for warmth)
+  │   ├── Lead (4-layer: fund+octave+air+FM, ZDF SVF)
+  │   ├── Pad (5-layer: 3osc+chorus+shimmer, ZDF SVF)
+  │   ├── Acid (bidirectional filter LFO, ZDF SVF)
+  │   ├── Texture (granular, 4 osc + noise bed)
+  │   ├── Hat (metallic 6-osc, choke groups, from PSYDRUM)
+  │   ├── Snare (TR-808, 2 tone + filtered noise)
+  │   └── Shaker, Sub, Riser, Impact, Sample
+  ├── Per-Type ChannelFX (EQ shelves + mid-band peak + delay + reverb + pan + width)
+  ├── Choke Groups (open hat chokes closed, from PSYDRUM)
   ├── 3-Bus Glue (drum/bass/music: HP + comp + drive)
-  ├── Multiband Compressor (LR4 @ 200Hz/2000Hz, 3-band)
-  ├── StereoWidener (M/S, width 1.5)
-  ├── LUFS Targeting (-9 LUFS, ITU-R BS.1770-4)
-  └── TruePeakLimiter (4x Catmull-Rom, -1 dBTP brickwall)
+  ├── Master Chain: HP(25Hz) → Multiband(LR4) → Glue → Sat(15%) → M/S(mono<120Hz) → LUFS(-11) → Limiter(0.89)
+  ├── AudioCritic (8 areas, 12 failure codes, 38 metrics)
+  ├── Reference Analyzer (BPM, spectral, dynamics, comparison)
+  └── RenderDevice (PsyDevice consumer, from foundation-shim)
         ↓
-Stereo PCM 44100Hz → WAV + AudioCritic (38 metrics, 12 failure codes)`}</pre>
+Stereo PCM 44100Hz → WAV + AudioCritic + ReferenceProfile`}</pre>
           </div>
         </section>
       </main>
@@ -356,7 +368,7 @@ Stereo PCM 44100Hz → WAV + AudioCritic (38 metrics, 12 failure codes)`}</pre>
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
           <span className="font-mono text-zinc-500">github.com/dudududi144-source/psy-foundation</span>
           <span>·</span>
-          <span>v3 · per-channel FX · multiband · LUFS · limiter · auto-fixer</span>
+          <span>v6.8 · ZDF SVF · harmony · humanizer · choke · velocity-to-timbre · reference analyzer · PsyDevice</span>
           <span className="ml-auto">deterministic · 32 bars · 14 channels</span>
         </div>
       </footer>
