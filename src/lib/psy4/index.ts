@@ -69,3 +69,11 @@ export type { RenderDeviceOptions, RenderDeviceResult } from './render-device'
 // Foundation shim (PsyDevice contract)
 export type { PsyDevice, MusicalEvent, NoteEvent, DeviceCapabilities, MusicalContext, MusicalTransport } from './foundation-shim'
 export { InMemoryChannel } from './foundation-shim'
+
+// Harmony engine (ported from PSYSTAR)
+export { SCALE_INTERVALS, CHORD_INTERVALS, PSYTRANCE_PROGRESSIONS, buildScale, buildScaleSpanning, buildChord, buildChordNamed, diatonicChord, buildProgression, midiToNoteName, midiToFreq, freqToMidi, snapToScale } from './harmony'
+export type { ScaleType, ChordType, Chord } from './harmony'
+
+// Humanizer (ported from PSYSTAR)
+export { mulberry32, jitterVelocity, driftTime, shouldSkip, humanizeEvents } from './humanizer'
+export type { HumanizableEvent } from './humanizer'
