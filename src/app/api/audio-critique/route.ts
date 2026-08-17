@@ -3,17 +3,14 @@ import { CompositionEngine } from '@/foundation/music'
 import { createIdentityA } from '@/foundation/music'
 import { renderFoundationSection, DEFAULT_RENDER_CONFIG } from '@/lib/psy4/forensic-bridge'
 import { critiqueAudio } from '@/lib/psy4/audio-critic'
+import { analyzeReference } from '@/lib/psy4/reference-analyzer'
+import { PSYTRANCE_PROGRESSIONS, buildProgression, midiToNoteName } from '@/lib/psy4/harmony'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Best config found by auto-fixer v3 (score 0.7102, 0 failures on 32 bars)
-const BEST_CONFIG = {
-  ...DEFAULT_RENDER_CONFIG,
-  bassGain: 0.8,
-  subBassGain: 0.6,
-  padGain: 0.7,
-}
+// Best config (v6.8 — ZDF SVF + harmony + humanizer)
+const BEST_CONFIG = DEFAULT_RENDER_CONFIG
 
 export async function GET(req: NextRequest) {
   const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
@@ -45,7 +42,6 @@ export async function GET(req: NextRequest) {
   try {
     result = await renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
   } catch (e) {
-    // If samples fail, retry without samples
     console.error('Render failed, retrying without samples:', (e as Error).message)
     result = await renderFoundationSection(section, { useSamples: false, bpm: 145, config: BEST_CONFIG })
   }
@@ -57,6 +53,13 @@ export async function GET(req: NextRequest) {
   }
 
   const critique = critiqueAudio(mono, result.sampleRate, 145, 16)
+
+  // Reference profile (new in v6.7)
+  const analysis = analyzeReference(result.samplesL, result.samplesR, result.sampleRate)
+
+  // Harmony info (new in v6.6)
+  const progression = buildProgression(40, 'phrygianDominant', PSYTRANCE_PROGRESSIONS['psy-dominant']!)
+  const chordNames = progression.map(c => c.name)
 
   return NextResponse.json({
     overallScore: critique.overallScore,
@@ -98,5 +101,22 @@ export async function GET(req: NextRequest) {
       monoCompatibility: result.monoCompatibility,
       gainReductionDb: result.gainReductionDb,
     },
+    reference: {
+      bpm: analysis.profile.bpm,
+      spectralCentroid: Math.round(analysis.profile.spectralCentroid),
+      bassEnergy: analysis.profile.bassEnergy,
+      midEnergy: analysis.profile.midEnergy,
+      highEnergy: analysis.profile.highEnergy,
+      airEnergy: analysis.profile.airEnergy,
+      crestFactor: analysis.profile.crestFactor,
+      dynamicRange: analysis.profile.dynamicRange,
+      lowMidMud: analysis.profile.lowMidMud,
+    },
+    harmony: {
+      scale: 'phrygianDominant',
+      progression: chordNames,
+      rootNote: midiToNoteName(40),
+    },
+    version: 'v6.8',
   })
 }
