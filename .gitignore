@@ -73,3 +73,16 @@ PSY-*.md
 
 # Tool results — may contain secrets from command output
 tool-results/
+
+# Build artifacts
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# Tool results (may contain secrets)
+tool-results/
+
+# Dev artifacts
+dev.log
+dev.out.log
+server.log
