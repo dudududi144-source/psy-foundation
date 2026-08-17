@@ -77,3 +77,7 @@ export type { ScaleType, ChordType, Chord } from './harmony'
 // Humanizer (ported from PSYSTAR)
 export { mulberry32, jitterVelocity, driftTime, shouldSkip, humanizeEvents } from './humanizer'
 export type { HumanizableEvent } from './humanizer'
+
+// Reference analyzer (from PSYSTAR style_clone concept)
+export { analyzeReference, compareProfiles } from './reference-analyzer'
+export type { ReferenceProfile, RenderComparison, AnalysisResult } from './reference-analyzer'
