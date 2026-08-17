@@ -37,6 +37,23 @@ interface CritiqueData {
     monoCompatibility?: number
     gainReductionDb?: number
   }
+  reference?: {
+    bpm: number
+    spectralCentroid: number
+    bassEnergy: number
+    midEnergy: number
+    highEnergy: number
+    airEnergy: number
+    crestFactor: number
+    dynamicRange: number
+    lowMidMud: number
+  }
+  harmony?: {
+    scale: string
+    progression: string[]
+    rootNote: string
+  }
+  version?: string
 }
 
 interface OptIteration {
@@ -327,6 +344,50 @@ export default function Home() {
               <div className="text-xs uppercase tracking-wider text-zinc-500">Gain Reduction</div>
               <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.gainReductionDb?.toFixed(1)}</div>
               <div className="mt-0.5 text-xs text-zinc-500">dB (limiter)</div>
+            </div>
+          </section>
+        )}
+
+        {/* Reference Profile + Harmony */}
+        {critique?.reference && (
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+              <div className="text-xs uppercase tracking-wider text-cyan-400">Centroid</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.reference.spectralCentroid}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">Hz brightness</div>
+            </div>
+            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+              <div className="text-xs uppercase tracking-wider text-cyan-400">Bass Ratio</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{(critique.reference.bassEnergy * 100).toFixed(0)}%</div>
+              <div className="mt-0.5 text-xs text-zinc-500">20-250Hz</div>
+            </div>
+            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+              <div className="text-xs uppercase tracking-wider text-cyan-400">High Ratio</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{(critique.reference.highEnergy * 100).toFixed(0)}%</div>
+              <div className="mt-0.5 text-xs text-zinc-500">2-12kHz</div>
+            </div>
+            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+              <div className="text-xs uppercase tracking-wider text-cyan-400">Crest Factor</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.reference.crestFactor.toFixed(2)}</div>
+              <div className="mt-0.5 text-xs text-zinc-500">peak/RMS</div>
+            </div>
+          </section>
+        )}
+
+        {/* Harmony Info */}
+        {critique?.harmony && (
+          <section className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-xs uppercase tracking-wider text-violet-400">Harmony</span>
+              <span className="text-sm text-zinc-300 font-mono">{critique.harmony.scale}</span>
+              <span className="text-xs text-zinc-500">root: {critique.harmony.rootNote}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              {critique.harmony.progression.map((chord, i) => (
+                <span key={i} className="px-3 py-1 rounded bg-violet-500/20 text-violet-200 font-mono">
+                  {chord}
+                </span>
+              ))}
             </div>
           </section>
         )}
