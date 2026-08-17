@@ -505,6 +505,10 @@ export async function renderFoundationSection(
         if (hatSample) hatSample.trigger(ev.vel)
         else { hats[hatIdx % 4]!.trigger(ev.vel, false); hatIdx++ }
       } else if (ev.type === 'openhat') {
+        // Choke group: open hat chokes all closed hats (PSYDRUM pattern)
+        for (const h of hats) {
+          if (h.active && !h.open) h.active = false
+        }
         hats[(hatIdx + 2) % 4]!.trigger(ev.vel, true)
       } else if (ev.type === 'clap' && clapSample) {
         clapSample.trigger(ev.vel)

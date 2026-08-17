@@ -82,11 +82,14 @@ export class PsyKick {
     const mid = midTri * midEnv * KICK_SPEC.midLevel
 
     // ── Layer 3: CLICK — noise HP, 0.002s decay (90x shorter than sub) ──
+    // Velocity-to-timbre: louder hits = brighter (more click), PSYDRUM pattern
     const n = this.noise.next()
     const clickEnv = Math.exp(-t / KICK_SPEC.clickDecay)
     const hpOut = n - this.clickHPState
     this.clickHPState = this.clickHPState + 0.95 * (n - this.clickHPState)
-    const click = hpOut * clickEnv * KICK_SPEC.clickLevel
+    // Velocity modulates click level: 0.5x at vel=0, 1.5x at vel=1
+    const velToTimbre = 0.5 + this.amp * 1.0
+    const click = hpOut * clickEnv * KICK_SPEC.clickLevel * velToTimbre
 
     // ── Saturate sub + mid together (cohesive punch) ──
     let sample = this.sat.process(sub + mid, KICK_SPEC.saturation)
