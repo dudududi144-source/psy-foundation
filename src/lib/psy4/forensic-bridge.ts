@@ -31,6 +31,7 @@ import { TruePeakLimiter } from './limiter'
 import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, HAT_SPEC, SNARE_SPEC, BUS_GAINS, MASTER_SPEC } from './voice-specs'
 import { mulberry32, jitterVelocity, driftTime } from './humanizer'
 import { buildProgression, PSYTRANCE_PROGRESSIONS, type Chord } from './harmony'
+import { ModulationMatrix } from './modulation-matrix'
 
 const SR = 44100
 const TARGET_LUFS = MASTER_SPEC.targetLufs
@@ -177,6 +178,15 @@ export async function renderFoundationSection(
   const acids = [new PsyAcid(rng), new PsyAcid(rng)]
   const textures = [new PsyTexture(rng)]
 
+  // ── Modulation Matrix (wired into Lead + Acid voices) ──
+  // createDefault() sets up 7 routes: LFO1/2/3 → cutoff/fmIndex, velocity → cutoff,
+  // macro1 (SPACE) → delaySend, macro2 (ENERGY) → drive, macro3 (TENSION) → resonance.
+  // The matrix tick is called once per sample in the render loop below.
+  // Per-bar macro updates (SPACE/ENERGY/TENSION contour) are also applied in the loop.
+  const modMatrix = ModulationMatrix.createDefault()
+  for (const lead of leads) lead.setModulationMatrix(modMatrix)
+  for (const acid of acids) acid.setModulationMatrix(modMatrix)
+
   // ── Per-type ChannelFX instances (one per voice type, shared across pool) ──
   const fxKick = new ChannelFX(CHANNEL_PRESETS.kick, SR)
   const fxBass = new ChannelFX(CHANNEL_PRESETS.bass, SR)
@@ -262,15 +272,24 @@ export async function renderFoundationSection(
     // Four-on-the-floor kick with per-bar velocity variation
     const kickPhraseBar = barIdx % 8
     const kickVelBase = kickPhraseBar < 2 ? 0.85 : kickPhraseBar < 4 ? 0.8 : kickPhraseBar < 6 ? 0.9 : 0.7
+    // Step 8 alternates 1.0/0.75 per bar — creates syncopated kick variation
+    // that reduces rhythmic uniformity (RHYTHMIC_PATTERN_TOO_UNIFORM).
+    const step8VelMod = barIdx % 2 === 0 ? 1.0 : 0.75
     for (const step of [0, 4, 8, 12]) {
       const a = accent[step % accent.length] ?? 1
       // Downbeat (step 0) slightly louder, beat 4 (step 12) slightly quieter for groove
-      const velMod = step === 0 ? 1.0 : step === 12 ? 0.9 : 0.95
+      const velMod = step === 0 ? 1.0 : step === 8 ? step8VelMod : step === 12 ? 0.9 : 0.95
       events.push({ pos: barStart + step * samplesPerStep, type: 'kick', vel: kickVelBase * velMod + a * 0.1, dur: samplesPerStep })
     }
     // Ghost kick on offbeat in build/drop sections
     if (kickPhraseBar >= 2 && kickPhraseBar < 6 && barIdx % 2 === 1) {
       events.push({ pos: barStart + 7 * samplesPerStep, type: 'kick', vel: 0.3, dur: samplesPerStep })
+    }
+
+    // Ghost snare on step 6 of odd non-drop bars — adds rhythmic interest
+    // (reduces RHYTHMIC_PATTERN_TOO_UNIFORM). Skipped on the climax (phase 7).
+    if (playSnare && barIdx % 2 === 1 && phase !== 7) {
+      events.push({ pos: barStart + 6 * samplesPerStep, type: 'snare', vel: 0.25, dur: samplesPerStep })
     }
 
     // Rolling 16th bass — 8-bar phrase development
@@ -410,11 +429,25 @@ export async function renderFoundationSection(
       events.push({ pos: barStart, type: 'pad', vel: 0.12, dur: samplesPerBar * 2, freqs })
     }
 
-    // Shaker — enters at bar 2, with per-bar velocity variation
+    // Shaker — enters at bar 2, with per-bar velocity variation + 4-bar rest map
     if (playShaker) {
       const shakerPhraseBar = barIdx % 8
       const shakerVelBase = shakerPhraseBar < 2 ? 0.25 : shakerPhraseBar < 4 ? 0.3 : shakerPhraseBar < 6 ? 0.35 : 0.2
+      // 4-bar phrase rest map — adds variation across the phrase so the
+      // shaker isn't on every 16th step. Reduces RHYTHMIC_PATTERN_TOO_UNIFORM.
+      //   Bar 0: no rests
+      //   Bar 1: rest on step 6
+      //   Bar 2: rest on step 11
+      //   Bar 3: rest on steps 6, 14
+      const restPhrase = barIdx % 4
+      const restSteps = new Set<number>(
+        restPhrase === 1 ? [6] :
+        restPhrase === 2 ? [11] :
+        restPhrase === 3 ? [6, 14] :
+        []
+      )
       for (let step = 0; step < 16; step++) {
+        if (restSteps.has(step)) continue // skip rest steps
         const isStrong = step % 4 === 0
         // Add variation: skip some steps in certain bars for groove
         if (shakerPhraseBar >= 4 && step === 7 && barIdx % 2 === 1) continue // ghost rest
@@ -507,6 +540,25 @@ export async function renderFoundationSection(
   for (let i = 0; i < totalSamples; i++) {
     const currentBar = Math.floor(i / samplesPerBar)
     const energyMul = barEnergy(currentBar)
+
+    // ── Modulation matrix: tick ONCE per sample (advances all LFO phases) ──
+    modMatrix.tick(SR)
+
+    // ── Per-bar macro updates (SPACE/ENERGY/TENSION contour) ──
+    // Applied at the top of each bar based on bar position in the 8-bar phrase.
+    // SPACE (macro1): builds 0.2 → 0.9 over the phrase (delay send increases)
+    // ENERGY (macro2): dips in break (bar 4), otherwise builds
+    // TENSION (macro3): builds 0.3 → 1.0 (resonance increases toward drop)
+    if (i % samplesPerBar === 0) {
+      const barPos = currentBar % 8
+      const space = 0.2 + (barPos / 7) * 0.7
+      const energy = barPos === 4 ? 0.3 : 0.5 + (barPos / 7) * 0.4
+      const tension = 0.3 + (barPos / 7) * 0.7
+      modMatrix.setMacro('macro1', space)
+      modMatrix.setMacro('macro2', energy)
+      modMatrix.setMacro('macro3', tension)
+    }
+
     while (evIdx < events.length && events[evIdx]!.pos <= i) {
       const ev = events[evIdx]!
       if (ev.type === 'kick') {

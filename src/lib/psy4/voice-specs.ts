@@ -2,7 +2,7 @@
  * VoiceSpecs — Single Source of Truth for all voice parameters.
  *
  * Based on PSY3_SOUND_DESIGN_RULES + COMMERCIAL_AUDIO_AUDIT + PSY4_DEEP_ROAST.
- * Both the forensic bridge (offline) and worklet (real-time) read from these specs.
+ * The forensic bridge (offline render) reads from these specs.
  *
  * Key principles (from PSY3):
  * 1. Sub over click (kick sub 90x longer than click)
@@ -70,8 +70,8 @@ export interface BassSpec {
 
 export const BASS_SPEC: BassSpec = {
   mode: 'pluck',
-  subLevel: 0.4,
-  bodyLevel: 0.6,
+  subLevel: 0.5,
+  bodyLevel: 0.45,
   characterLevel: 0.15,
   cutoffStart: 1200,
   cutoffEnd: 150,
@@ -114,14 +114,14 @@ export interface LeadSpec {
 export const LEAD_SPEC: LeadSpec = {
   oscCount: 2,
   detune: 12,
-  octaveLevel: 0.45,
+  octaveLevel: 0.6,
   octaveDetune: 7,
-  airLevel: 0.08,
+  airLevel: 0.12,
   airDecay: 0.15,
   fmLevel: 0.35,
   fmRatio: 2.0,
   fmIndex: 180,
-  cutoff: 2800,
+  cutoff: 4200,
   res: 0.7,
   filterEnvAmount: 5.0,
   filterEnvDecay: 0.25,
@@ -131,7 +131,7 @@ export const LEAD_SPEC: LeadSpec = {
   delaySend: 0.25,
   reverbSend: 0.25,
   hpFreq: 80,
-  gain: 0.45,
+  gain: 0.6,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -231,7 +231,7 @@ export const HAT_SPEC: HatSpec = {
   openDecay: 0.18,
   pitchVar: 0.02,
   panVar: 0.1,
-  gain: 0.6,
+  gain: 0.85,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -272,7 +272,7 @@ export interface BusGains {
 }
 
 export const BUS_GAINS: BusGains = {
-  drum: 1.5,
+  drum: 1.6,
   bass: 0.15,
   music: 1.5,
   fx: 0.7,

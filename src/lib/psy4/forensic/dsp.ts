@@ -192,6 +192,62 @@ export class OnePoleHP {
   }
 }
 
+// ─── LR4 Highpass (24 dB/oct, 4th-order Linkwitz-Riley) ──────────────────────
+// Two cascaded 2nd-order Butterworth HP sections (Q=0.707 each).
+// Standard RBJ biquad HP, Direct Form II Transposed.
+// Deterministic: no allocation per sample.
+
+export class LR4Highpass {
+  // Section 1 state (DF II Transposed)
+  private s1_1 = 0;
+  private s2_1 = 0;
+  // Section 2 state
+  private s1_2 = 0;
+  private s2_2 = 0;
+  // Coefficients
+  private b0 = 0; private b1 = 0; private b2 = 0;
+  private a1 = 0; private a2 = 0;
+  private lastCutoff = -1;
+
+  reset(): void {
+    this.s1_1 = 0; this.s2_1 = 0;
+    this.s1_2 = 0; this.s2_2 = 0;
+  }
+
+  /** Recompute coefficients for the given cutoff (Butterworth Q=0.707). */
+  private setCoeffs(cutoff: number, sr: number): void {
+    const omega = (2 * Math.PI * cutoff) / sr;
+    const cosOmega = Math.cos(omega);
+    const sinOmega = Math.sin(omega);
+    const q = 0.7071067811865476; // 1/sqrt(2) — Butterworth
+    const alpha = sinOmega / (2 * q);
+    const a0 = 1 + alpha;
+    // RBJ highpass
+    this.b0 = ((1 + cosOmega) / 2) / a0;
+    this.b1 = (-(1 + cosOmega)) / a0;
+    this.b2 = ((1 + cosOmega) / 2) / a0;
+    this.a1 = (-2 * cosOmega) / a0;
+    this.a2 = (1 - alpha) / a0;
+    this.lastCutoff = cutoff;
+  }
+
+  /** Process one sample through both cascaded sections. */
+  process(x: number, cutoff: number, sr: number): number {
+    if (Math.abs(cutoff - this.lastCutoff) > 0.5) {
+      this.setCoeffs(cutoff, sr);
+    }
+    // Section 1 — DF II Transposed
+    let y1 = this.b0 * x + this.s1_1;
+    this.s1_1 = this.b1 * x - this.a1 * y1 + this.s2_1;
+    this.s2_1 = this.b2 * x - this.a2 * y1;
+    // Section 2 — DF II Transposed (cascaded)
+    let y2 = this.b0 * y1 + this.s1_2;
+    this.s1_2 = this.b1 * y1 - this.a1 * y2 + this.s2_2;
+    this.s2_2 = this.b2 * y1 - this.a2 * y2;
+    return y2;
+  }
+}
+
 // ─── Pink noise (deterministic via Rng) ────────────────────────────────────
 
 export class PinkNoise {

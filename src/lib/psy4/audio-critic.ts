@@ -220,43 +220,43 @@ export function critiqueAudio(
   const rhythmicInterest = Math.min(1, (1 - excessiveUniformity) * 0.6 + pocketConsistency * 0.4)
 
   // ── Diagnose failures ──
-  if (subMud > 0.6) {
+  if (subMud > 0.45) {
     failures.push({
       code: 'LOW_MID_MUD',
       diagnosis: `Low-mid energy is too high (${lowMidEnergy.toFixed(3)}), creating mud that masks kick and bass clarity.`,
       correctionTarget: 'bass.mid.cutoffHz',
       correctionHint: 'Lower the mid bass filter cutoff and reduce sub sustain',
-      severity: subMud,
+      severity: (subMud - 0.45) * 2,
     })
   }
-  if (kickClarity < 0.4) {
+  if (kickClarity < 0.55) {
     failures.push({
       code: 'KICK_TRANSIENT_MASKED',
       diagnosis: `Kick transient is not sharp enough (sharpness=${onsetSharpness.toFixed(3)}), likely masked by bass decay overlap.`,
       correctionTarget: 'kick.clickAmount / bass.decay',
       correctionHint: 'Increase click amount and brightness; shorten bass decay to leave space',
-      severity: 1 - kickClarity,
+      severity: (0.55 - kickClarity) * 2,
     })
   }
-  if (decayOverlap > 0.5) {
+  if (decayOverlap > 0.35) {
     failures.push({
       code: 'BASS_DECAY_TOO_LONG',
       diagnosis: `Bass decay overlaps ${decayOverlap.toFixed(2)} of the next kick onset — bass is smearing into the kick.`,
       correctionTarget: 'bass.decay / bass.release',
       correctionHint: 'Shorten bass decay to 0.06s or less; reduce sustain to 0',
-      severity: decayOverlap,
+      severity: (decayOverlap - 0.35) * 2,
     })
   }
-  if (punch < 0.3) {
+  if (punch < 0.5) {
     failures.push({
       code: 'WEAK_PUNCH',
       diagnosis: `Kick punch is weak (${punch.toFixed(3)}) — the body envelope isn't sharp enough.`,
       correctionTarget: 'kick.bodyDecay / kick.pitchDropTime',
       correctionHint: 'Shorten body decay to 0.12s; increase pitch drop speed',
-      severity: 1 - punch,
+      severity: (0.5 - punch) * 2,
     })
   }
-  if (spectralMovement < 0.15) {
+  if (spectralMovement < 0.25) {
     failures.push({
       code: 'NO_TIMBRAL_MOVEMENT',
       diagnosis: `Spectral movement is low (${spectralMovement.toFixed(3)}) — the sound is static across the section.`,
@@ -266,68 +266,68 @@ export function critiqueAudio(
       severity: 0.5 - spectralMovement,
     })
   }
-  if (brightness > 0.7) {
+  if (brightness > 0.65) {
     failures.push({
       code: 'LEAD_TOO_BRIGHT',
       diagnosis: `Lead is too bright (centroid=${spectralCentroid.toFixed(0)}Hz) — harshness in the high mids.`,
       correctionTarget: 'lead.cutoffHz / lead.resonance',
       correctionHint: 'Lower filter cutoff; reduce resonance; add warmer saturation',
-      severity: brightness - 0.7,
+      severity: brightness - 0.65,
     })
   }
-  if (brightness < 0.2 && highEndPresence < 0.05) {
+  if (brightness < 0.3 && highEndPresence < 0.08) {
     failures.push({
       code: 'HIGH_END_TOO_WEAK',
       diagnosis: `High-end energy is weak (${(highEndPresence * 100).toFixed(1)}%) — hats and lead are masked by low-mid energy.`,
       correctionTarget: 'hatGain / lead.cutoffHz',
       correctionHint: 'Raise hat gain; raise lead cutoff; introduce upper harmonic layer',
-      severity: 0.2 - brightness,
+      severity: 0.3 - brightness,
     })
   }
-  if (excessiveUniformity > 0.85) {
+  if (excessiveUniformity > 0.70) {
     failures.push({
       code: 'RHYTHMIC_PATTERN_TOO_UNIFORM',
       diagnosis: `Rhythmic pattern is too uniform (${excessiveUniformity.toFixed(3)}) — lacks dynamic variation.`,
       correctionTarget: 'groove.velocityContour / ghost.notes',
       correctionHint: 'Add velocity variation; introduce ghost notes; vary accent patterns',
-      severity: (excessiveUniformity - 0.85) * 0.5,
+      severity: (excessiveUniformity - 0.70) * 2,
     })
   }
-  if (kickBassSeparation < 0.10) {
+  if (kickBassSeparation < 0.20) {
     failures.push({
       code: 'KICK_BASS_PHASE_RISK',
       diagnosis: `Kick and bass are not spectrally separated (${kickBassSeparation.toFixed(3)}) — they occupy the same frequency range.`,
       correctionTarget: 'kick.pitchEnd / bass.sub.cutoffHz',
       correctionHint:
         'Lower kick sub frequency; raise bass sub cutoff; ensure kick is done before bass starts',
-      severity: 0.2 - kickBassSeparation,
+      severity: (0.20 - kickBassSeparation) * 3,
     })
   }
-  if (melodicClarity < 0.3) {
+  if (melodicClarity < 0.4) {
     failures.push({
       code: 'LEAD_TOO_STATIC',
       diagnosis: `Lead melodic clarity is low (${melodicClarity.toFixed(3)}) — the phrase lacks articulation and movement.`,
       correctionTarget: 'lead.attack / lead.filterEnvAmount',
       correctionHint: 'Shorten attack; increase filter envelope; add pitch movement',
-      severity: 0.3 - melodicClarity,
+      severity: 0.4 - melodicClarity,
     })
   }
-  if (masking > 0.6) {
+  if (masking > 0.5) {
     failures.push({
       code: 'LEAD_MASKING_BASS',
       diagnosis: `Masking detected (${masking.toFixed(3)}) — lead frequencies overlap with bass, reducing clarity.`,
       correctionTarget: 'lead.cutoffHz / bass.mid.cutoffHz',
       correctionHint: 'Raise lead cutoff above 2000Hz; lower bass mid cutoff below 800Hz',
-      severity: masking - 0.6,
+      severity: (masking - 0.5) * 2,
     })
   }
-  if (motifIdentity < 0.3) {
+  if (motifIdentity < 0.4) {
     failures.push({
       code: 'WEAK_MOTIF_IDENTITY',
       diagnosis: `Motif identity is weak (${motifIdentity.toFixed(3)}) — the listener cannot recognize a returning motif.`,
       correctionTarget: 'phraseMaterial.developmentHistory',
       correctionHint: 'Reduce variation amount; use CONTINUE more; callback to earlier motifs',
-      severity: 0.3 - motifIdentity,
+      severity: 0.4 - motifIdentity,
     })
   }
 
@@ -677,11 +677,13 @@ function computeKickBassSeparation(
 }
 
 function computeSubMud(spectrum: number[], sampleRate: number, fftSize: number): number {
-  const sub = bandEnergy(spectrum, sampleRate, fftSize, 20, 80)
-  const lowMid = bandEnergy(spectrum, sampleRate, fftSize, 250, 500)
-  // Mud = high sub + high lowMid relative to total.
-  const total = sub + lowMid + bandEnergy(spectrum, sampleRate, fftSize, 80, 250)
-  return total > 0 ? (sub + lowMid) / total : 0
+  // Real low-mid mud is the 200-500Hz region where bass body saw harmonics accumulate.
+  // Sub-80Hz energy is the low end itself, not mud.
+  const lowMid = bandEnergy(spectrum, sampleRate, fftSize, 200, 500)
+  const mid = bandEnergy(spectrum, sampleRate, fftSize, 500, 2000)
+  const high = bandEnergy(spectrum, sampleRate, fftSize, 2000, 12000)
+  const totalAbove = lowMid + mid + high
+  return totalAbove > 0 ? lowMid / totalAbove : 0
 }
 
 function computePhaseRisk(pcm: Float32Array, _sampleRate: number): number {

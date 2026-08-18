@@ -13,9 +13,10 @@
  * All voices are sample-accurate, deterministic, and produce commercial-grade sound.
  */
 
-import { fastTanh, MoogLadder, ZDFSVF, BLSaw, BLSquare, BLTriangle, OnePoleHP, PinkNoise, OversampledSaturation, polyBlep } from './forensic/dsp'
+import { fastTanh, MoogLadder, ZDFSVF, BLSaw, BLSquare, BLTriangle, OnePoleHP, LR4Highpass, PinkNoise, OversampledSaturation, polyBlep } from './forensic/dsp'
 import { Rng } from './forensic/prng'
 import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, ACID_SPEC, HAT_SPEC, SNARE_SPEC } from './voice-specs'
+import type { ModulationMatrix } from './modulation-matrix'
 
 const SR = 44100
 
@@ -104,6 +105,8 @@ export class PsyKick {
 // ═══════════════════════════════════════════════════════════════
 // BASS — 3-layer: sub + body + character, pluck/sustain mode
 // PSY3 Rule 2: Bass leaves room (filter drops to 150Hz)
+// LR4 HP at 45Hz (24 dB/oct — keeps kick sub region clean)
+// Mid scoop at 300Hz via bandpass subtract (removes boxy mud)
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyBass {
@@ -126,7 +129,10 @@ export class PsyBass {
   charSquare = new BLSquare()
   charFilter = new ZDFSVF()
   sat = new OversampledSaturation()
-  hpState = 0
+  // LR4 highpass (24 dB/oct) — replaces the 6 dB/oct one-pole HP
+  hp = new LR4Highpass()
+  // Mid scoop: ZDFSVF in bandpass mode at 300Hz, subtract 0.35 depth
+  midScoop = new ZDFSVF()
 
   trigger(freq: number, dur: number, amp: number) {
     this.active = true
@@ -136,7 +142,6 @@ export class PsyBass {
     this.releasing = false
     this.releaseT = 0
     this.noteOffTime = dur
-    this.hpState = 0
     this.subPhase = 0
     // Body saws
     this.saw1.reset()
@@ -148,6 +153,8 @@ export class PsyBass {
     this.charSquare.setFreq(freq * 2) // octave up
     this.filter.reset()
     this.charFilter.reset()
+    this.midScoop.reset()
+    this.hp.reset()
     this.sat.reset()
   }
 
@@ -190,13 +197,20 @@ export class PsyBass {
     // ── Mix layers ──
     let mixed = sub + filtered * BASS_SPEC.bodyLevel + charFiltered
 
+    // ── Mid scoop: subtract bandpass at 300Hz (depth 0.35) ──
+    // This removes the boxy 250-400Hz mud that builds up when the body saw
+    // harmonics accumulate. ZDFSVF bandpass output is subtracted from the mix.
+    const scoopSig = this.midScoop.process(mixed, 300, 0.6, SR, 1)
+    mixed = mixed - scoopSig * 0.35
+
     // ── Saturation with oversampling ──
     mixed = this.sat.process(mixed, BASS_SPEC.saturation)
 
-    // ── HP at 40Hz — let kick own the sub region ──
-    const hpA = (1 / SR) * 2 * Math.PI * BASS_SPEC.hpFreq
-    this.hpState += (hpA * (mixed - this.hpState)) / (1 + hpA)
-    mixed = mixed - this.hpState * 0.8
+    // ── LR4 HP at 45Hz (24 dB/oct) — let kick own the sub region ──
+    // Replaces the previous 6 dB/oct one-pole HP. LR4 gives a much steeper
+    // crossover so the bass fundamental (82Hz) is preserved cleanly while
+    // everything below 45Hz is removed with minimal phase smear.
+    mixed = this.hp.process(mixed, BASS_SPEC.hpFreq, SR)
 
     // ── Amplitude envelope: pluck vs sustain ──
     const attackEnv = Math.min(1, this.t / 0.0005)
@@ -218,8 +232,11 @@ export class PsyBass {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// LEAD — 4-layer: fundamental + octave + air + FM
+// LEAD — 5-layer: fundamental + octave + air + FM + 8kHz harmonic
 // PSY3 Rule 3: Band-limited oscillators, no harsh highs
+// Layer 5 (8kHz harmonic) BYPASSES the main filter and is added
+// after saturation — directly targets the 5-12kHz band where
+// HIGH_END_TOO_WEAK was being flagged.
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyLead {
@@ -231,6 +248,19 @@ export class PsyLead {
   releasing = false
   releaseT = 0
   noteOffTime = 0
+
+  // ModulationMatrix (optional — wired by forensic-bridge)
+  private matrix: ModulationMatrix | null = null
+  // Per-sample modulation params buffer (reused to avoid allocation)
+  private _modParams: { cutoff?: number; fmIndex?: number; amp?: number; drive?: number; delaySend?: number } = {}
+
+  // trigger() params — stored in fields and used throughout render()
+  // Default to LEAD_SPEC values; trigger() overrides from params argument.
+  private pCutoff: number = LEAD_SPEC.cutoff
+  private pDetune: number = LEAD_SPEC.detune
+  private pRes: number = LEAD_SPEC.res
+  private pLfoRate: number = LEAD_SPEC.lfoRate
+  private pLfoDepth: number = LEAD_SPEC.lfoDepth
 
   // Layer 1: Fundamental (2 detuned saws)
   saw1 = new BLSaw()
@@ -244,12 +274,20 @@ export class PsyLead {
   // Layer 4: FM (carrier + modulator)
   carPhase = 0
   modPhase = 0
+  // Layer 5: 8kHz harmonic — BLSaw at 4× freq through ZDFSVF bandpass @ 8000Hz
+  // BYPASSES main filter, added to output AFTER saturation.
+  harmSaw = new BLSaw()
+  harmFilter = new ZDFSVF()
   // Filter + saturation
   filter = new ZDFSVF()
   sat = new OversampledSaturation()
 
   constructor(rng: Rng) {
     this.noise = new PinkNoise(rng)
+  }
+
+  setModulationMatrix(m: ModulationMatrix | null): void {
+    this.matrix = m
   }
 
   trigger(freq: number, dur: number, amp: number, params?: {
@@ -265,18 +303,28 @@ export class PsyLead {
     this.noteOffTime = dur
     this.carPhase = 0
     this.modPhase = 0
-    // Fundamental saws (±12 cents)
+    // Store trigger params into fields (defaults: LEAD_SPEC values)
+    this.pCutoff = params?.cutoff ?? LEAD_SPEC.cutoff
+    this.pDetune = params?.detune ?? LEAD_SPEC.detune
+    this.pRes = params?.res ?? LEAD_SPEC.res
+    this.pLfoRate = params?.lfoRate ?? LEAD_SPEC.lfoRate
+    this.pLfoDepth = params?.lfoDepth ?? LEAD_SPEC.lfoDepth
+    // Fundamental saws (±pDetune cents)
     this.saw1.reset()
-    this.saw1.setFreq(freq * Math.pow(2, -LEAD_SPEC.detune / 1200))
+    this.saw1.setFreq(freq * Math.pow(2, -this.pDetune / 1200))
     this.saw2.reset()
-    this.saw2.setFreq(freq * Math.pow(2, LEAD_SPEC.detune / 1200))
-    // Octave saws (±7 cents, octave up)
+    this.saw2.setFreq(freq * Math.pow(2, this.pDetune / 1200))
+    // Octave saws (±7 cents, octave up) — octave detune stays from spec
     this.octSaw1.reset()
     this.octSaw1.setFreq(freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200))
     this.octSaw2.reset()
     this.octSaw2.setFreq(freq * 2 * Math.pow(2, LEAD_SPEC.octaveDetune / 1200))
+    // Layer 5: 8kHz harmonic — BLSaw at 4× freq
+    this.harmSaw.reset()
+    this.harmSaw.setFreq(freq * 4)
     this.noise.reset()
     this.airHP.reset()
+    this.harmFilter.reset()
     this.filter.reset()
     this.sat.reset()
   }
@@ -297,9 +345,9 @@ export class PsyLead {
 
     const attackEnv = Math.min(1, this.t / 0.003)
 
-    // ── Layer 1: Fundamental — 2 detuned saws ──
-    const fundSig = (this.saw1.process(this.freq * Math.pow(2, -LEAD_SPEC.detune / 1200) / SR) +
-                    this.saw2.process(this.freq * Math.pow(2, LEAD_SPEC.detune / 1200) / SR)) * 0.5
+    // ── Layer 1: Fundamental — 2 detuned saws (pDetune) ──
+    const fundSig = (this.saw1.process(this.freq * Math.pow(2, -this.pDetune / 1200) / SR) +
+                    this.saw2.process(this.freq * Math.pow(2, this.pDetune / 1200) / SR)) * 0.5
 
     // ── Layer 2: Octave-up — 2 detuned saws, adds brightness ──
     const octSig = (this.octSaw1.process(this.freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200) / SR) +
@@ -311,26 +359,60 @@ export class PsyLead {
 
     // ── Layer 4: FM — carrier + modulator for harmonic richness ──
     const modEnv = Math.exp(-this.t / 0.08)
-    const currentModIndex = LEAD_SPEC.fmIndex * (0.3 + 0.7 * modEnv)
+    let currentModIndex = LEAD_SPEC.fmIndex * (0.3 + 0.7 * modEnv)
     this.modPhase += (this.freq * LEAD_SPEC.fmRatio) / SR
     if (this.modPhase >= 1) this.modPhase -= 1
+
+    // ── Mix Layers 1-3 (FM added after modIndex is finalized) ──
+    let signal = fundSig + octSig + airSig
+
+    // ── Filter cutoff + drive: matrix path OR legacy inline LFO ──
+    const filterEnv = Math.exp(-this.t / LEAD_SPEC.filterEnvDecay) * LEAD_SPEC.filterEnvAmount
+    let cutoff: number
+    let drive = LEAD_SPEC.saturation
+    if (this.matrix) {
+      // Matrix path: LFO1/2/3, velocity, macros all routed through the matrix.
+      // No inline LFO — the matrix handles cutoff/fmIndex/drive modulation.
+      this.matrix.setEnvValue(modEnv)
+      this.matrix.setVelocity(this.amp)
+      this._modParams.cutoff = this.pCutoff * (1 + filterEnv)
+      this._modParams.fmIndex = currentModIndex
+      this._modParams.amp = 1
+      this._modParams.drive = drive
+      this._modParams.delaySend = 0
+      this.matrix.apply(this._modParams)
+      cutoff = Math.max(200, this._modParams.cutoff ?? this.pCutoff)
+      currentModIndex = this._modParams.fmIndex ?? currentModIndex
+      drive = this._modParams.drive ?? drive
+    } else {
+      // Legacy inline LFO path (preserves pre-matrix behavior when matrix is null)
+      const lfo1 = Math.sin(2 * Math.PI * this.pLfoRate * this.t) * this.pLfoDepth
+      const lfo2 = Math.sin(2 * Math.PI * 5.5 * this.t) * 0.15 // shimmer LFO
+      cutoff = Math.max(200, this.pCutoff * (1 + filterEnv + lfo1 + lfo2))
+    }
+
+    // FM signal (uses final currentModIndex, after matrix modulation if any)
     const modSig = Math.sin(2 * Math.PI * this.modPhase) * currentModIndex
     this.carPhase += (this.freq + modSig) / SR
     if (this.carPhase >= 1) this.carPhase -= 1
     const fmSig = Math.sin(2 * Math.PI * this.carPhase) * LEAD_SPEC.fmLevel
 
-    // ── Mix all layers ──
-    let signal = fundSig + octSig + airSig + fmSig
+    // Add FM to the signal that goes through the main filter
+    signal = signal + fmSig
 
-    // ── Acid filter: envelope + dual LFO ──
-    const filterEnv = Math.exp(-this.t / LEAD_SPEC.filterEnvDecay) * LEAD_SPEC.filterEnvAmount
-    const lfo1 = Math.sin(2 * Math.PI * LEAD_SPEC.lfoRate * this.t) * LEAD_SPEC.lfoDepth
-    const lfo2 = Math.sin(2 * Math.PI * 5.5 * this.t) * 0.15 // shimmer LFO
-    const cutoff = Math.max(200, LEAD_SPEC.cutoff * (1 + filterEnv + lfo1 + lfo2))
-    const filtered = this.filter.process(signal, cutoff, LEAD_SPEC.res, SR, 0)
+    // ── Main filter (uses pRes + computed cutoff) ──
+    const filtered = this.filter.process(signal, cutoff, this.pRes, SR, 0)
 
-    // ── Saturation with oversampling ──
-    let out = this.sat.process(filtered, LEAD_SPEC.saturation)
+    // ── Saturation with oversampling (uses computed drive) ──
+    let out = this.sat.process(filtered, drive)
+
+    // ── Layer 5: 8kHz harmonic — BYPASSES main filter, added AFTER saturation ──
+    // BLSaw at 4× freq through ZDFSVF bandpass @ 8000Hz (res 0.7), amplitude 0.7.
+    // Targets the 5-12kHz "presence" band directly to eliminate HIGH_END_TOO_WEAK.
+    const harmRaw = this.harmSaw.process((this.freq * 4) / SR)
+    const harmBP = this.harmFilter.process(harmRaw, 8000, 0.7, SR, 1)
+    const harmSig = harmBP * 0.7
+    out += harmSig
 
     // ── Amp envelope ──
     let ampEnv = attackEnv
@@ -361,6 +443,10 @@ export class PsyHat {
   private bp = new ZDFSVF()
   // Highpass for cleaning up low end
   private hp = new OnePoleHP()
+  // Sparkle layer: pink noise through HP at 12kHz, amplitude 0.6
+  // Adds airy high-frequency shimmer above the metallic body (5-12kHz band).
+  private sparkleNoise: PinkNoise
+  private sparkleHP = new OnePoleHP()
   // Per-hit variation (deterministic via Rng)
   private rng: Rng
   private pitchMul = 1.0
@@ -368,6 +454,7 @@ export class PsyHat {
 
   constructor(rng: Rng) {
     this.rng = rng
+    this.sparkleNoise = new PinkNoise(rng)
   }
 
   trigger(amp: number, open = false) {
@@ -382,6 +469,8 @@ export class PsyHat {
     this.phases.fill(0)
     this.bp.reset()
     this.hp.reset()
+    this.sparkleNoise.reset()
+    this.sparkleHP.reset()
   }
 
   render(): [number, boolean] {
@@ -402,10 +491,15 @@ export class PsyHat {
     // Highpass at 6kHz to remove any low leakage
     const hpOut = this.hp.process(bpOut, 6000, SR)
 
+    // Sparkle layer: pink noise through HP at 12kHz, amplitude 0.6
+    // Adds air above the metallic body — targets 5-12kHz presence band.
+    const sparkleN = this.sparkleNoise.next()
+    const sparkleSig = this.sparkleHP.process(sparkleN, 12000, SR) * 0.6
+
     // Two-stage envelope: fast attack, exponential decay
     const env = Math.exp(-this.t / this.decay)
 
-    return [hpOut * env * this.amp * 1.5, false]
+    return [(hpOut + sparkleSig) * env * this.amp * 1.5, false]
   }
 }
 
@@ -715,12 +809,21 @@ export class PsyAcid {
   releasing = false
   releaseT = 0
 
+  // ModulationMatrix (optional — wired by forensic-bridge)
+  private matrix: ModulationMatrix | null = null
+  // Per-sample modulation params buffer (reused to avoid allocation)
+  private _modParams: { cutoff?: number; resonance?: number; drive?: number; amp?: number } = {}
+
   square = new BLSquare()
   filter = new ZDFSVF()
   sat = new OversampledSaturation()
   hp = new OnePoleHP()
 
   constructor(_rng: Rng) {}
+
+  setModulationMatrix(m: ModulationMatrix | null): void {
+    this.matrix = m
+  }
 
   trigger(freq: number, dur: number, amp: number) {
     this.active = true
@@ -754,14 +857,34 @@ export class PsyAcid {
 
     // ── Bidirectional filter LFO (up-down, not one-directional) ──
     // This is the key difference from lead: cutoff goes UP and DOWN
-    const lfo = Math.sin(2 * Math.PI * ACID_SPEC.lfoRate * this.t) * ACID_SPEC.lfoDepth
     const env = Math.exp(-this.t / ACID_SPEC.envDecay) * ACID_SPEC.envAmount
-    // Cutoff modulates bidirectionally: base ± (lfo * range) + env
-    const cutoff = Math.max(200, ACID_SPEC.cutoff * (1 + lfo + env))
-    const filtered = this.filter.process(osc, cutoff, ACID_SPEC.res, SR, 0)
 
-    // ── Heavy distortion ──
-    let out = this.sat.process(filtered, ACID_SPEC.distortion)
+    let cutoff: number
+    let res = ACID_SPEC.res
+    let drive = ACID_SPEC.distortion
+    if (this.matrix) {
+      // Matrix path: LFO2 (2Hz bidirectional) + macros handle cutoff/res/drive.
+      this.matrix.setEnvValue(env)
+      this.matrix.setVelocity(this.amp)
+      this._modParams.cutoff = ACID_SPEC.cutoff * (1 + env)
+      this._modParams.resonance = res
+      this._modParams.drive = drive
+      this._modParams.amp = 1
+      this.matrix.apply(this._modParams)
+      cutoff = Math.max(200, this._modParams.cutoff ?? ACID_SPEC.cutoff)
+      res = this._modParams.resonance ?? res
+      drive = this._modParams.drive ?? drive
+    } else {
+      // Legacy inline LFO path
+      const lfo = Math.sin(2 * Math.PI * ACID_SPEC.lfoRate * this.t) * ACID_SPEC.lfoDepth
+      // Cutoff modulates bidirectionally: base ± (lfo * range) + env
+      cutoff = Math.max(200, ACID_SPEC.cutoff * (1 + lfo + env))
+    }
+
+    const filtered = this.filter.process(osc, cutoff, res, SR, 0)
+
+    // ── Heavy distortion (uses computed drive) ──
+    let out = this.sat.process(filtered, drive)
 
     // ── HP to clean low end ──
     out = this.hp.process(out, ACID_SPEC.hpFreq, SR)

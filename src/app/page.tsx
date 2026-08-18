@@ -38,7 +38,7 @@ interface CritiqueData {
     monoCompatibility?: number
     gainReductionDb?: number
   }
-  reference?: {
+  renderProfile?: {
     bpm: number
     spectralCentroid: number
     bassEnergy: number
@@ -133,7 +133,7 @@ export default function Home() {
     setOptimizing(true)
     setOptReport(null)
     try {
-      const res = await fetch(`/api/optimize?seed=${seed}&bars=8&iterations=8&target=0.75`)
+      const res = await fetch(`/api/optimize?seed=${seed}&bars=8&iterations=16&target=0.75`)
       if (res.ok) {
         const data = await res.json() as OptReport
         setOptReport(data)
@@ -160,27 +160,27 @@ export default function Home() {
       background: DESIGN.gradients.background,
       fontFamily: DESIGN.fonts.sans,
     }}>
-      <header className="border-b border-zinc-800/50 backdrop-blur sticky top-0 z-10" style={{ background: 'rgba(13, 15, 20, 0.8)' }}>
+      <header className="border-b border-zinc-800/50 backdrop-blur sticky top-0 z-10" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-4">
           <h1 className="text-lg font-bold text-zinc-50" style={{ fontFamily: DESIGN.fonts.mono }}>psy-foundation</h1>
-          <span className="text-xs text-zinc-500">v7.5 · ZDF SVF · harmony · humanizer · choke · 0 failures</span>
+          <span className="text-xs text-zinc-500">v8.1 · ZDF SVF · ModulationMatrix · 5-layer lead · LR4 bass · 16 iters</span>
           {critique?.version && <span className="text-xs text-cyan-500/60" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.version}</span>}
-          <span className="ml-auto text-xs text-zinc-600">{critique ? `${(critique.overallScore * 100).toFixed(0)}/100` : ''}</span>
+          <span className="ml-auto text-xs text-zinc-600" style={{ fontFamily: DESIGN.fonts.mono }}>{critique ? `${(critique.overallScore * 100).toFixed(0)}/100` : ''}</span>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 space-y-6">
         {/* Render controls */}
-        <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5">
+        <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Render Engine v7.5</span>
+            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: DESIGN.fonts.mono }}>Render Engine v8.1</span>
             {critique && (
               <span className={`ml-auto text-2xl font-bold tabular-nums ${scoreColor}`}>
                 {(critique.overallScore * 100).toFixed(0)}/100
               </span>
             )}
           </div>
-          <p className="text-xs text-emerald-300/80 mb-4">
+          <p className="text-xs text-emerald-300/80 mb-4" style={{ fontFamily: DESIGN.fonts.mono }}>
             RawScore → 14 voices × ChannelFX (EQ+delay+reverb+pan+width) → 3-bus glue → Multiband (LR4) → StereoWidener (M/S) → LUFS (-9) → TruePeakLimiter (-1 dBTP)
           </p>
           <div className="flex flex-wrap items-center gap-4 mb-4">
@@ -226,19 +226,19 @@ export default function Home() {
         </section>
 
         {/* Auto-Optimize */}
-        <section className="rounded-lg border border-violet-500/40 bg-violet-500/10 p-5">
+        <section className="rounded-lg border border-violet-500/40 bg-violet-500/10 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-violet-200">Auto-Fixer (Stage 9)</span>
+            <span className="text-base font-semibold text-violet-200" style={{ fontFamily: DESIGN.fonts.mono }}>Auto-Fixer v8.1 (Stage 9)</span>
             <button
               onClick={runOptimize}
               disabled={optimizing}
               className="ml-auto inline-flex items-center gap-2 rounded-md bg-violet-500 px-3 py-1.5 text-xs font-semibold text-violet-950 hover:bg-violet-400 disabled:opacity-50 transition-colors"
             >
-              {optimizing ? 'Optimizing...' : 'Run Auto-Optimize (8 iters)'}
+              {optimizing ? 'Optimizing...' : 'Run Auto-Optimize (16 iters)'}
             </button>
           </div>
-          <p className="text-xs text-violet-300/80 mb-3">
-            Closed-loop: render → critique → diagnose → vary DSP parameters (hatGain, leadCutoff, bassGain, duckAmount, stereoWidth...) → re-render. Targets failure codes with targeted corrections.
+          <p className="text-xs text-violet-300/80 mb-3" style={{ fontFamily: DESIGN.fonts.mono }}>
+            Closed-loop: render → critique → diagnose → vary DSP parameters (hatGain, leadCutoff, bassGain, duckAmount, stereoWidth...) → re-render. 16 plans + 2 adaptive passes with severity-scaled corrections.
           </p>
           {optReport && (
             <div className="space-y-3">
@@ -269,21 +269,21 @@ export default function Home() {
 
         {/* AudioCritic Results */}
         {critiqueLoading && (
-          <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
-            <p className="text-sm text-zinc-500 animate-pulse">Analyzing audio quality...</p>
+          <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5" style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}>
+            <p className="text-sm text-zinc-500 animate-pulse" style={{ fontFamily: DESIGN.fonts.mono }}>Analyzing audio quality...</p>
           </section>
         )}
 
         {critique && (
           <>
-            <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+            <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5" style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}>
               <div className="flex items-baseline gap-3 mb-4">
-                <h2 className="text-lg font-semibold text-zinc-100">AudioCritic</h2>
+                <h2 className="text-lg font-semibold text-zinc-100" style={{ fontFamily: DESIGN.fonts.mono }}>AudioCritic</h2>
                 <span className={`text-3xl font-bold tabular-nums ${scoreColor}`}>
                   {(critique.overallScore * 100).toFixed(0)}
                 </span>
                 <span className="text-sm text-zinc-500">/ 100</span>
-                <span className="ml-auto text-xs text-zinc-600">
+                <span className="ml-auto text-xs text-zinc-600" style={{ fontFamily: DESIGN.fonts.mono }}>
                   {critique.failures.length} failures · {critique.renderInfo.stereo ? 'stereo' : 'mono'} · {critique.renderInfo.samples ? 'samples' : 'synth'}
                 </span>
               </div>
@@ -330,66 +330,72 @@ export default function Home() {
         {/* Master chain metrics */}
         {critique?.renderInfo.lufs !== undefined && (
           <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">LUFS</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.lufs.toFixed(1)}</div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
+              <div className="text-xs uppercase tracking-wider text-zinc-500" style={{ fontFamily: DESIGN.fonts.mono }}>LUFS</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.renderInfo.lufs.toFixed(1)}</div>
               <div className="mt-0.5 text-xs text-zinc-500">target -9</div>
             </div>
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">True Peak</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.truePeakDb?.toFixed(1)}</div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
+              <div className="text-xs uppercase tracking-wider text-zinc-500" style={{ fontFamily: DESIGN.fonts.mono }}>True Peak</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.renderInfo.truePeakDb?.toFixed(1)}</div>
               <div className="mt-0.5 text-xs text-zinc-500">dBTP (limit -1)</div>
             </div>
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">Stereo Width</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.stereoWidth?.toFixed(2)}</div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
+              <div className="text-xs uppercase tracking-wider text-zinc-500" style={{ fontFamily: DESIGN.fonts.mono }}>Stereo Width</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.renderInfo.stereoWidth?.toFixed(2)}</div>
               <div className="mt-0.5 text-xs text-zinc-500">M/S ratio</div>
             </div>
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-              <div className="text-xs uppercase tracking-wider text-zinc-500">Gain Reduction</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.renderInfo.gainReductionDb?.toFixed(1)}</div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
+              <div className="text-xs uppercase tracking-wider text-zinc-500" style={{ fontFamily: DESIGN.fonts.mono }}>Gain Reduction</div>
+              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.renderInfo.gainReductionDb?.toFixed(1)}</div>
               <div className="mt-0.5 text-xs text-zinc-500">dB (limiter)</div>
             </div>
           </section>
         )}
 
-        {/* Reference Profile + Harmony */}
-        {critique?.reference && (
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
-              <div className="text-xs uppercase tracking-wider text-cyan-400">Centroid</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.reference.spectralCentroid}</div>
-              <div className="mt-0.5 text-xs text-zinc-500">Hz brightness</div>
+        {/* Render Profile + Harmony */}
+        {critique?.renderProfile && (
+          <section className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-5" style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}>
+            <div className="flex items-baseline gap-3 mb-3">
+              <h2 className="text-lg font-semibold text-cyan-300" style={{ fontFamily: DESIGN.fonts.mono }}>Render Profile</h2>
+              <span className="text-xs text-zinc-500" style={{ fontFamily: DESIGN.fonts.mono }}>measured on render output · not a real reference</span>
             </div>
-            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
-              <div className="text-xs uppercase tracking-wider text-cyan-400">Bass Ratio</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{(critique.reference.bassEnergy * 100).toFixed(0)}%</div>
-              <div className="mt-0.5 text-xs text-zinc-500">20-250Hz</div>
-            </div>
-            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
-              <div className="text-xs uppercase tracking-wider text-cyan-400">High Ratio</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{(critique.reference.highEnergy * 100).toFixed(0)}%</div>
-              <div className="mt-0.5 text-xs text-zinc-500">2-12kHz</div>
-            </div>
-            <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
-              <div className="text-xs uppercase tracking-wider text-cyan-400">Crest Factor</div>
-              <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums">{critique.reference.crestFactor.toFixed(2)}</div>
-              <div className="mt-0.5 text-xs text-zinc-500">peak/RMS</div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+                <div className="text-xs uppercase tracking-wider text-cyan-400" style={{ fontFamily: DESIGN.fonts.mono }}>Centroid</div>
+                <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.renderProfile.spectralCentroid}</div>
+                <div className="mt-0.5 text-xs text-zinc-500">Hz brightness</div>
+              </div>
+              <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+                <div className="text-xs uppercase tracking-wider text-cyan-400" style={{ fontFamily: DESIGN.fonts.mono }}>Bass Ratio</div>
+                <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums" style={{ fontFamily: DESIGN.fonts.mono }}>{(critique.renderProfile.bassEnergy * 100).toFixed(0)}%</div>
+                <div className="mt-0.5 text-xs text-zinc-500">20-250Hz</div>
+              </div>
+              <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+                <div className="text-xs uppercase tracking-wider text-cyan-400" style={{ fontFamily: DESIGN.fonts.mono }}>High Ratio</div>
+                <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums" style={{ fontFamily: DESIGN.fonts.mono }}>{(critique.renderProfile.highEnergy * 100).toFixed(0)}%</div>
+                <div className="mt-0.5 text-xs text-zinc-500">2-12kHz</div>
+              </div>
+              <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-4">
+                <div className="text-xs uppercase tracking-wider text-cyan-400" style={{ fontFamily: DESIGN.fonts.mono }}>Crest Factor</div>
+                <div className="mt-1 text-2xl font-semibold text-zinc-100 tabular-nums" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.renderProfile.crestFactor.toFixed(2)}</div>
+                <div className="mt-0.5 text-xs text-zinc-500">peak/RMS</div>
+              </div>
             </div>
           </section>
         )}
 
         {/* Harmony Info */}
         {critique?.harmony && (
-          <section className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-4">
+          <section className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-4" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-xs uppercase tracking-wider text-violet-400">Harmony</span>
-              <span className="text-sm text-zinc-300 font-mono">{critique.harmony.scale}</span>
-              <span className="text-xs text-zinc-500">root: {critique.harmony.rootNote}</span>
+              <span className="text-xs uppercase tracking-wider text-violet-400" style={{ fontFamily: DESIGN.fonts.mono }}>Harmony</span>
+              <span className="text-sm text-zinc-300 font-mono" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.harmony.scale}</span>
+              <span className="text-xs text-zinc-500" style={{ fontFamily: DESIGN.fonts.mono }}>root: {critique.harmony.rootNote}</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               {critique.harmony.progression.map((chord, i) => (
-                <span key={i} className="px-3 py-1 rounded bg-violet-500/20 text-violet-200 font-mono">
+                <span key={i} className="px-3 py-1 rounded bg-violet-500/20 text-violet-200" style={{ fontFamily: DESIGN.fonts.mono }}>
                   {chord}
                 </span>
               ))}
@@ -397,45 +403,78 @@ export default function Home() {
           </section>
         )}
 
+        {/* Voice Strip — 12 voice chips colored by DESIGN.voiceColors tokens */}
+        <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
+          <div className="flex items-baseline gap-3 mb-3">
+            <h2 className="text-lg font-semibold text-zinc-100" style={{ fontFamily: DESIGN.fonts.mono }}>Voice Strip</h2>
+            <span className="text-xs text-zinc-500" style={{ fontFamily: DESIGN.fonts.mono }}>12 voice types · color-coded by mix role</span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+            {([
+              ['kick', 'Kick'],
+              ['bass', 'Bass'],
+              ['lead', 'Lead'],
+              ['pad', 'Pad'],
+              ['acid', 'Acid'],
+              ['texture', 'Texture'],
+              ['hat', 'Hat'],
+              ['snare', 'Snare'],
+              ['shaker', 'Shaker'],
+              ['sub', 'Sub'],
+              ['riser', 'Riser'],
+              ['impact', 'Impact'],
+            ] as const).map(([key, label]) => {
+              const c = DESIGN.voiceColors[key]
+              return (
+                <div key={key} className={`rounded-md border ${c.border} ${c.bg} px-2 py-2 text-center`}>
+                  <div className={`text-xs font-semibold ${c.text}`} style={{ fontFamily: DESIGN.fonts.mono }}>{label}</div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
         {/* Pipeline */}
         <section>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-3">Pipeline (v6.8)</h2>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto">
-            <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre">{`Foundation CompositionEngine (WHAT — frozen)
+          <h2 className="text-lg font-semibold text-zinc-100 mb-3" style={{ fontFamily: DESIGN.fonts.mono }}>Pipeline (v8.1)</h2>
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto" style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}>
+            <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre" style={{ fontFamily: DESIGN.fonts.mono }}>{`Foundation CompositionEngine (WHAT — frozen)
   └── RawScore Serializer
         ↓
-Forensic Bridge v6.8 (HOW)
+Forensic Bridge v8.1 (HOW)
   ├── Harmony Engine (8 scales, 7 progressions, from PSYSTAR)
   ├── Humanizer (mulberry32 PRNG, velocity jitter, timing drift, from PSYSTAR)
+  ├── ModulationMatrix (LFO1/2/3 + velocity + 3 macros → cutoff/fmIndex/drive/res)
+  │   ticked once per sample; macros updated per-bar (SPACE/ENERGY/TENSION contour)
   ├── 13 Voice Pools with ZDF SVF (from PsySynthPro)
   │   ├── Kick (3-layer, velocity-to-timbre, from PSYDRUM)
-  │   ├── Bass (3-layer, pluck/sustain, Moog for warmth)
-  │   ├── Lead (4-layer: fund+octave+air+FM, ZDF SVF)
+  │   ├── Bass (3-layer, pluck/sustain, Moog body + LR4 HP@45Hz + 300Hz mid scoop)
+  │   ├── Lead (5-layer: fund+octave+air+FM+8kHz harmonic, matrix-modulated)
   │   ├── Pad (5-layer: 3osc+chorus+shimmer, ZDF SVF)
-  │   ├── Acid (bidirectional filter LFO, ZDF SVF)
+  │   ├── Acid (bidirectional filter LFO, matrix-modulated)
   │   ├── Texture (granular, 4 osc + noise bed)
-  │   ├── Hat (metallic 6-osc, choke groups, from PSYDRUM)
+  │   ├── Hat (metallic 6-osc + sparkle layer @ 12kHz, choke groups, from PSYDRUM)
   │   ├── Snare (TR-808, 2 tone + filtered noise)
   │   └── Shaker, Sub, Riser, Impact, Sample
   ├── Per-Type ChannelFX (EQ shelves + mid-band peak + delay + reverb + pan + width)
   ├── Choke Groups (open hat chokes closed, from PSYDRUM)
   ├── 3-Bus Glue (drum/bass/music: HP + comp + drive)
   ├── Master Chain: HP(25Hz) → Multiband(LR4) → Glue → Sat(15%) → M/S(mono<120Hz) → LUFS(-11) → Limiter(0.89)
-  ├── AudioCritic (8 areas, 12 failure codes, 38 metrics)
-  ├── Reference Analyzer (BPM, spectral, dynamics, comparison)
+  ├── AudioCritic (8 areas, 12 failure codes, 38 metrics, pro-grade thresholds)
+  ├── Render Profile Analyzer (BPM, spectral, dynamics — measured on render output)
   └── RenderDevice (PsyDevice consumer, from foundation-shim)
         ↓
-Stereo PCM 44100Hz → WAV + AudioCritic + ReferenceProfile`}</pre>
+Stereo PCM 44100Hz → WAV + AudioCritic + RenderProfile`}</pre>
           </div>
         </section>
       </main>
 
-      <footer className="mt-auto border-t border-zinc-800 bg-zinc-950">
+      <footer className="mt-auto border-t border-zinc-800" style={{ background: DESIGN.gradients.chassis }}>
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
-          <span className="font-mono text-zinc-500">github.com/dudududi144-source/psy-foundation</span>
+          <span style={{ fontFamily: DESIGN.fonts.mono }} className="text-zinc-500">github.com/dudududi144-source/psy-foundation</span>
           <span>·</span>
-          <span>v7.5 · ZDF SVF · harmony · humanizer · choke · 0 failures · commercial-ready</span>
-          <span className="ml-auto">deterministic · 88 bars · 13 voices · PsyDevice</span>
+          <span style={{ fontFamily: DESIGN.fonts.mono }}>v8.1 · ZDF SVF · ModulationMatrix · 5-layer lead · LR4 bass · pro thresholds</span>
+          <span className="ml-auto" style={{ fontFamily: DESIGN.fonts.mono }}>deterministic · 88 bars · 13 voices · PsyDevice</span>
         </div>
       </footer>
     </div>

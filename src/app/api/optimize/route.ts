@@ -8,7 +8,7 @@ export const maxDuration = 300 // 5 minutes — full 8-iteration optimization at
 export async function GET(req: NextRequest) {
   const seed = parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
   const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
-  const maxIterations = parseInt(req.nextUrl.searchParams.get('iterations') ?? '8', 10)
+  const maxIterations = parseInt(req.nextUrl.searchParams.get('iterations') ?? '16', 10)
   const targetScore = parseFloat(req.nextUrl.searchParams.get('target') ?? '0.75')
 
   try {

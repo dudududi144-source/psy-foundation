@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
       monoCompatibility: result.monoCompatibility,
       gainReductionDb: result.gainReductionDb,
     },
-    reference: {
+    renderProfile: {
       bpm: analysis.profile.bpm,
       spectralCentroid: Math.round(analysis.profile.spectralCentroid),
       bassEnergy: analysis.profile.bassEnergy,
@@ -117,6 +117,6 @@ export async function GET(req: NextRequest) {
       progression: chordNames,
       rootNote: midiToNoteName(40),
     },
-    version: 'v6.8',
+    version: 'v8.1',
   })
 }
