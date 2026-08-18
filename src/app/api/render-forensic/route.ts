@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CompositionEngine } from '@/foundation/music'
 import { createIdentityA } from '@/foundation/music'
 import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG, type RenderResult } from '@/lib/psy4/forensic-bridge'
-import { encodeAiff, encodeFlacPlaceholder, getMimeType, getFileExtension, type ExportFormat } from '@/lib/psy4/multi-export'
+import { encodeAiff, encodeFlacPlaceholder, getMimeType, type ExportFormat } from '@/lib/psy4/multi-export'
+import { FACTORY_PRESETS } from '@/lib/psy4/preset-manager'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,6 +30,26 @@ export async function GET(req: NextRequest) {
   // Multi-format export: ?format=wav|aiff|flac (default: wav)
   const formatParam = req.nextUrl.searchParams.get('format') ?? 'wav'
   const format: ExportFormat = VALID_FORMATS.has(formatParam) ? (formatParam as ExportFormat) : 'wav'
+
+  // Preset support: ?preset=Full-On+Lead applies preset params to render config
+  const presetName = req.nextUrl.searchParams.get('preset')
+  let renderConfig = { ...BEST_CONFIG }
+  if (presetName) {
+    const preset = FACTORY_PRESETS.find(p => p.name === presetName)
+    if (preset) {
+      // Map preset params to RenderConfig overrides
+      const overrides: Record<string, number> = {}
+      if (preset.params.cutoff !== undefined) overrides.leadCutoff = preset.params.cutoff
+      if (preset.params.gain !== undefined) overrides.leadGain = preset.params.gain
+      if (preset.params.res !== undefined) overrides.leadResonance = preset.params.res
+      if (preset.params.fundamental !== undefined) overrides.kickFundamental = preset.params.fundamental
+      if (preset.params.subDecay !== undefined) overrides.kickDecay = preset.params.subDecay
+      if (preset.params.bodyLevel !== undefined) overrides.bassGain = preset.params.bodyLevel
+      if (preset.params.targetLufs !== undefined) overrides.targetLufs = preset.params.targetLufs
+      if (preset.params.stereoWidth !== undefined) overrides.stereoWidth = preset.params.stereoWidth
+      renderConfig = { ...renderConfig, ...overrides }
+    }
+  }
 
   const ctx = {
     tonic: 4,
@@ -58,7 +79,7 @@ export async function GET(req: NextRequest) {
     result = await renderFoundationSection(section, {
       useSamples,
       bpm: 145,
-      config: BEST_CONFIG,
+      config: renderConfig,
       stems: stem !== null,
     })
   } catch (e) {
@@ -66,7 +87,7 @@ export async function GET(req: NextRequest) {
     result = await renderFoundationSection(section, {
       useSamples: false,
       bpm: 145,
-      config: BEST_CONFIG,
+      config: renderConfig,
       stems: stem !== null,
     })
   }

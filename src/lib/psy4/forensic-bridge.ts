@@ -22,6 +22,9 @@ import { Rng } from './forensic/prng'
 import { fastTanh } from './forensic/dsp'
 import { BusProcessor, MasterChain } from './forensic/mixing'
 import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact, PsyAcid, PsyTexture } from './psy-voices'
+import { Wavetable } from './wavetable'
+import { WaveguideString } from './physical/waveguide-string'
+import type { AutomationEngine } from './automation'
 import { ChannelFX } from './channel-fx'
 import { CHANNEL_PRESETS } from './channel-presets'
 import { MultibandCompressor, LR4Crossover } from './multiband'
@@ -152,9 +155,10 @@ export interface RenderResult {
 
 export async function renderFoundationSection(
   section: ComposedSection,
-  options: { useSamples?: boolean; bpm?: number; config?: Partial<RenderConfig>; stems?: boolean } = {}
+  options: { useSamples?: boolean; bpm?: number; config?: Partial<RenderConfig>; stems?: boolean; automation?: AutomationEngine } = {}
 ): Promise<RenderResult> {
   const cfg: RenderConfig = { ...DEFAULT_RENDER_CONFIG, ...options.config }
+  const automation = options.automation ?? null
   const rawScore = serializeRawScore(section)
   const bpm = options.bpm ?? 145
   const targetLufs = cfg.targetLufs
@@ -199,6 +203,16 @@ export async function renderFoundationSection(
   const impacts = [new PsyImpact(rng)]
   const acids = [new PsyAcid(rng), new PsyAcid(rng)]
   const textures = [new PsyTexture(rng)]
+
+  // ── Connect synthesis engines to voices (Phase 2 integration) ──
+  // Wavetable → Lead: replaces the dual-saw fundamental with a morphable wavetable
+  const leadWavetable = Wavetable.createMulti()  // 6 morphable tables
+  leadWavetable.setPosition(0.4)  // start between saw and psyLead
+  for (const lead of leads) lead.setWavetable(leadWavetable)
+
+  // Waveguide → Bass: adds Karplus-Strong string decay to the bass voice
+  const bassWaveguide = new WaveguideString()
+  for (const bass of basses) bass.setWaveguide(bassWaveguide)
 
   // ── Modulation Matrix (wired into Lead + Acid voices) ──
   // createDefault() sets up 7 routes: LFO1/2/3 → cutoff/fmIndex, velocity → cutoff,
@@ -599,6 +613,17 @@ export async function renderFoundationSection(
   for (let i = 0; i < totalSamples; i++) {
     const currentBar = Math.floor(i / samplesPerBar)
     const energyMul = barEnergy(currentBar)
+    const currentTime = i / SR  // seconds — for automation
+
+    // ── Automation: override config params from AutomationEngine ──
+    // If automation is connected, read automated values at this time.
+    // This allows DAW-style parameter curves to control the render.
+    if (automation) {
+      if (automation.isAutomated('leadCutoff')) cfg.leadCutoff = automation.getValue('leadCutoff', currentTime)
+      if (automation.isAutomated('leadGain')) cfg.leadGain = automation.getValue('leadGain', currentTime)
+      if (automation.isAutomated('stereoWidth')) cfg.stereoWidth = automation.getValue('stereoWidth', currentTime)
+      if (automation.isAutomated('targetLufs')) cfg.targetLufs = automation.getValue('targetLufs', currentTime)
+    }
 
     // ── Modulation matrix: tick ONCE per sample (advances all LFO phases) ──
     modMatrix.tick(SR)
