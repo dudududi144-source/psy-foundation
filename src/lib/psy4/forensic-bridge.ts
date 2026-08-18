@@ -24,7 +24,7 @@ import { BusProcessor, MasterChain } from './forensic/mixing'
 import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact, PsyAcid, PsyTexture } from './psy-voices'
 import { ChannelFX } from './channel-fx'
 import { CHANNEL_PRESETS } from './channel-presets'
-import { MultibandCompressor } from './multiband'
+import { MultibandCompressor, LR4Crossover } from './multiband'
 import { StereoWidener } from './ms-processor'
 import { measureLUFS, lufsToGainOffset } from './loudness'
 import { TruePeakLimiter } from './limiter'
@@ -139,11 +139,20 @@ export interface RenderResult {
   stereoWidth: number
   monoCompatibility: number
   gainReductionDb: number
+  /** Per-bus stem outputs (post-bus-glue, pre-master-chain). Present only when stems=true. */
+  stems?: {
+    drumL: Float32Array
+    drumR: Float32Array
+    bassL: Float32Array
+    bassR: Float32Array
+    musicL: Float32Array
+    musicR: Float32Array
+  }
 }
 
 export async function renderFoundationSection(
   section: ComposedSection,
-  options: { useSamples?: boolean; bpm?: number; config?: Partial<RenderConfig> } = {}
+  options: { useSamples?: boolean; bpm?: number; config?: Partial<RenderConfig>; stems?: boolean } = {}
 ): Promise<RenderResult> {
   const cfg: RenderConfig = { ...DEFAULT_RENDER_CONFIG, ...options.config }
   const rawScore = serializeRawScore(section)
@@ -162,6 +171,19 @@ export async function renderFoundationSection(
 
   const samplesL = new Float32Array(totalSamples)
   const samplesR = new Float32Array(totalSamples)
+
+  // ── Stems capture (post-bus-glue, pre-master-chain) ──
+  // When stems=true we allocate six parallel stereo buffers — one per bus — and
+  // store the post-bus-glue signal in the render loop below. Mastering engineers
+  // can then process each bus independently and recombine externally.
+  const stemsEnabled = options.stems ?? false
+  const stemsDrumL = stemsEnabled ? new Float32Array(totalSamples) : null
+  const stemsDrumR = stemsEnabled ? new Float32Array(totalSamples) : null
+  const stemsBassL = stemsEnabled ? new Float32Array(totalSamples) : null
+  const stemsBassR = stemsEnabled ? new Float32Array(totalSamples) : null
+  const stemsMusicL = stemsEnabled ? new Float32Array(totalSamples) : null
+  const stemsMusicR = stemsEnabled ? new Float32Array(totalSamples) : null
+
   const rng = new Rng(42)
 
   // ── Voice pools ──
@@ -245,6 +267,14 @@ export async function renderFoundationSection(
 
   const masterGlueL = new MasterChain()
   const masterGlueR = new MasterChain()
+
+  // ── Bass crossover for dynamic EQ sidechain ──
+  // Splits the bass signal into low (<120Hz) and high (>120Hz) bands so that
+  // only the conflicting low band is ducked on kick hits — the high band
+  // (bass harmonics, pluck attack) passes through unaffected. This preserves
+  // bass clarity and groove while still preventing kick/bass collision.
+  // LR4 = 24 dB/oct Linkwitz-Riley (phase-matched, sums to unity magnitude).
+  const bassXover = new LR4Crossover(120, SR)
 
   // ── Events ──
   interface Ev { pos: number; type: string; midi?: number; freqs?: number[]; vel: number; dur: number }
@@ -665,9 +695,19 @@ export async function renderFoundationSection(
     if (kickMono !== 0) { const [kl, kr] = fxKick.process(kickMono); drumL += kl; drumR += kr }
 
     // Bass (with sidechain) → fxBass → bass bus
+    // Dynamic EQ sidechain: split bass into low (<120Hz) and high (>120Hz) bands.
+    // Only the low band — where kick/bass collision actually happens — is ducked
+    // on kick hits. The high band (harmonics, pluck attack) passes through
+    // unaffected, preserving bass clarity and groove. Replaces the previous
+    // whole-bass duck (`bassMono * duckEnv * cfg.bassGain`).
     let bassMono = 0
     if (activeBass?.active) bassMono += activeBass.render()[0]
-    if (bassMono !== 0) { const [bl, br] = fxBass.process(bassMono * duckEnv * cfg.bassGain); bassL += bl; bassR += br }
+    if (bassMono !== 0) {
+      const [bassLow, bassHigh] = bassXover.process(bassMono)
+      const bassDucked = bassLow * duckEnv + bassHigh
+      const [bl, br] = fxBass.process(bassDucked * cfg.bassGain)
+      bassL += bl; bassR += br
+    }
 
     // Sub-bass → fxSubBass → bass bus
     let subMono = 0
@@ -761,6 +801,18 @@ export async function renderFoundationSection(
     bassL = bassBusL.process(bassL, SR); bassR = bassBusR.process(bassR, SR)
     musicL = musicBusL.process(musicL, SR); musicR = musicBusR.process(musicR, SR)
 
+    // ── Stems capture ── (post-bus-glue, pre-master-chain, with energy contour
+    // applied so summing all three stems == the signal entering the master chain).
+    // Mastering engineers can process each bus independently and recombine.
+    if (stemsEnabled && stemsDrumL && stemsDrumR && stemsBassL && stemsBassR && stemsMusicL && stemsMusicR) {
+      stemsDrumL[i] = drumL * energyMul
+      stemsDrumR[i] = drumR * energyMul
+      stemsBassL[i] = bassL * energyMul
+      stemsBassR[i] = bassR * energyMul
+      stemsMusicL[i] = musicL * energyMul
+      stemsMusicR[i] = musicR * energyMul
+    }
+
     // ── Master sum + glue ── (apply energy contour for tension/release)
     let mixL = (drumL + bassL + musicL) * energyMul
     let mixR = (drumR + bassR + musicR) * energyMul
@@ -786,6 +838,45 @@ export async function renderFoundationSection(
     hpState[1] += (hpA * (samplesR[i]! - hpState[1])) / (1 + hpA)
     samplesL[i] = samplesL[i]! - hpState[0]
     samplesR[i] = samplesR[i]! - hpState[1]
+  }
+
+  // 0b. M/S processing (professional psytrance master chain)
+  //   M = (L+R)/2   S = (L-R)/2
+  //   Low frequencies (below 120Hz) must be MONO — clubs have mono subs and
+  //   any stereo content below ~120Hz causes phase cancellation on the dance
+  //   floor. We extract the low-frequency content of S with a one-pole LP at
+  //   120Hz and subtract it from S (S -= LP(S)), forcing low-end mono.
+  //   High frequencies are widened by +30% (S += 0.3 * HP(S)@3kHz) for a
+  //   bigger, more expensive-sounding stereo image.
+  //   Converts back via L' = M + S, R' = M - S (preserves the M/S gain stage).
+  const msMonoFreq = 120
+  const msHighFreq = 3000
+  const msWiden = 1.3
+  const msA = (1 / SR) * 2 * Math.PI * msMonoFreq
+  const msMonoLpCoef = msA / (1 + msA)
+  const msB = (1 / SR) * 2 * Math.PI * msHighFreq
+  const msHighLpCoef = msB / (1 + msB)
+  let msLowState = 0   // LP state: low-frequency content of S
+  let msHighState = 0  // LP state: low-passed S used to derive one-pole HP
+  for (let i = 0; i < totalSamples; i++) {
+    const l = samplesL[i]!
+    const r = samplesR[i]!
+    const mid = (l + r) * 0.5
+    let side = (l - r) * 0.5
+
+    // Mono below 120Hz: extract low-freq side content, subtract from S.
+    msLowState += msMonoLpCoef * (side - msLowState)
+    side -= msLowState
+
+    // High-shelf boost on S: extract high-freq side content (one-pole HP
+    // = side - LP(side)) and add a boosted copy back. Result: S unchanged
+    // below 3kHz, S * msWiden above 3kHz.
+    msHighState += msHighLpCoef * (side - msHighState)
+    const sideHigh = side - msHighState
+    side += (msWiden - 1) * sideHigh
+
+    samplesL[i] = mid + side
+    samplesR[i] = mid - side
   }
 
   // 1. Multiband compressor (3-band, LR4 crossovers)
@@ -864,6 +955,13 @@ export async function renderFoundationSection(
     stereoWidth,
     monoCompatibility: monoCompat,
     gainReductionDb: limiter.getMaxGainReductionDb(),
+    stems: stemsEnabled && stemsDrumL && stemsDrumR && stemsBassL && stemsBassR && stemsMusicL && stemsMusicR
+      ? {
+          drumL: stemsDrumL, drumR: stemsDrumR,
+          bassL: stemsBassL, bassR: stemsBassR,
+          musicL: stemsMusicL, musicR: stemsMusicR,
+        }
+      : undefined,
   }
 }
 

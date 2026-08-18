@@ -163,7 +163,7 @@ export default function Home() {
       <header className="border-b border-zinc-800/50 backdrop-blur sticky top-0 z-10" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-4">
           <h1 className="text-lg font-bold text-zinc-50" style={{ fontFamily: DESIGN.fonts.mono }}>psy-foundation</h1>
-          <span className="text-xs text-zinc-500">v8.1 · ZDF SVF · ModulationMatrix · 5-layer lead · LR4 bass · 16 iters</span>
+          <span className="text-xs text-zinc-500">v8.2 · ZDF SVF · ModulationMatrix · 5-layer lead · LR4 bass · M/S master · dyn-EQ sidechain · stems · 16 iters</span>
           {critique?.version && <span className="text-xs text-cyan-500/60" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.version}</span>}
           <span className="ml-auto text-xs text-zinc-600" style={{ fontFamily: DESIGN.fonts.mono }}>{critique ? `${(critique.overallScore * 100).toFixed(0)}/100` : ''}</span>
         </div>
@@ -173,7 +173,7 @@ export default function Home() {
         {/* Render controls */}
         <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: DESIGN.fonts.mono }}>Render Engine v8.1</span>
+            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: DESIGN.fonts.mono }}>Render Engine v8.2</span>
             {critique && (
               <span className={`ml-auto text-2xl font-bold tabular-nums ${scoreColor}`}>
                 {(critique.overallScore * 100).toFixed(0)}/100
@@ -221,6 +221,27 @@ export default function Home() {
                   <span> · LUFS {critique.renderInfo.lufs.toFixed(1)} · Peak {critique.renderInfo.truePeakDb?.toFixed(1)}dB · Width {critique.renderInfo.stereoWidth?.toFixed(2)}</span>
                 )}
               </p>
+              <p className="mt-2 text-xs text-zinc-500 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="text-zinc-400" style={{ fontFamily: DESIGN.fonts.mono }}>Stems (mastering-ready):</span>
+                <a
+                  href={`/api/render-forensic?bars=${bars}&seed=${seed}&samples=${useSamples}&stem=drum`}
+                  download={`psy4-stem-drum-bars${bars}-seed${seed}.wav`}
+                  className="text-cyan-400 hover:underline"
+                  title="Download the drum bus (post-bus-glue, pre-master) as a stereo WAV"
+                >Download Drum Stem</a>
+                <a
+                  href={`/api/render-forensic?bars=${bars}&seed=${seed}&samples=${useSamples}&stem=bass`}
+                  download={`psy4-stem-bass-bars${bars}-seed${seed}.wav`}
+                  className="text-cyan-400 hover:underline"
+                  title="Download the bass bus (post-bus-glue, pre-master) as a stereo WAV"
+                >Download Bass Stem</a>
+                <a
+                  href={`/api/render-forensic?bars=${bars}&seed=${seed}&samples=${useSamples}&stem=music`}
+                  download={`psy4-stem-music-bars${bars}-seed${seed}.wav`}
+                  className="text-cyan-400 hover:underline"
+                  title="Download the music bus (post-bus-glue, pre-master) as a stereo WAV"
+                >Download Music Stem</a>
+              </p>
             </div>
           )}
         </section>
@@ -228,7 +249,7 @@ export default function Home() {
         {/* Auto-Optimize */}
         <section className="rounded-lg border border-violet-500/40 bg-violet-500/10 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-violet-200" style={{ fontFamily: DESIGN.fonts.mono }}>Auto-Fixer v8.1 (Stage 9)</span>
+            <span className="text-base font-semibold text-violet-200" style={{ fontFamily: DESIGN.fonts.mono }}>Auto-Fixer v8.2 (Stage 9)</span>
             <button
               onClick={runOptimize}
               disabled={optimizing}
@@ -436,12 +457,12 @@ export default function Home() {
 
         {/* Pipeline */}
         <section>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-3" style={{ fontFamily: DESIGN.fonts.mono }}>Pipeline (v8.1)</h2>
+          <h2 className="text-lg font-semibold text-zinc-100 mb-3" style={{ fontFamily: DESIGN.fonts.mono }}>Pipeline (v8.2)</h2>
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto" style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}>
             <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre" style={{ fontFamily: DESIGN.fonts.mono }}>{`Foundation CompositionEngine (WHAT — frozen)
   └── RawScore Serializer
         ↓
-Forensic Bridge v8.1 (HOW)
+Forensic Bridge v8.2 (HOW)
   ├── Harmony Engine (8 scales, 7 progressions, from PSYSTAR)
   ├── Humanizer (mulberry32 PRNG, velocity jitter, timing drift, from PSYSTAR)
   ├── ModulationMatrix (LFO1/2/3 + velocity + 3 macros → cutoff/fmIndex/drive/res)
@@ -459,7 +480,9 @@ Forensic Bridge v8.1 (HOW)
   ├── Per-Type ChannelFX (EQ shelves + mid-band peak + delay + reverb + pan + width)
   ├── Choke Groups (open hat chokes closed, from PSYDRUM)
   ├── 3-Bus Glue (drum/bass/music: HP + comp + drive)
-  ├── Master Chain: HP(25Hz) → Multiband(LR4) → Glue → Sat(15%) → M/S(mono<120Hz) → LUFS(-11) → Limiter(0.89)
+  ├── Master Chain: HP(25Hz) → M/S(mono<120Hz, widen highs ×1.3) → Multiband(LR4) → Glue → Sat(15%) → StereoWidener(M/S) → LUFS(-11) → Limiter(0.89)
+  ├── Bass Dynamic EQ Sidechain (LR4 @ 120Hz — only low band ducked on kick hits)
+  ├── Stems Export (?stem=drum|bass|music — per-bus WAV for mastering workflow)
   ├── AudioCritic (8 areas, 12 failure codes, 38 metrics, pro-grade thresholds)
   ├── Render Profile Analyzer (BPM, spectral, dynamics — measured on render output)
   └── RenderDevice (PsyDevice consumer, from foundation-shim)
@@ -473,7 +496,7 @@ Stereo PCM 44100Hz → WAV + AudioCritic + RenderProfile`}</pre>
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
           <span style={{ fontFamily: DESIGN.fonts.mono }} className="text-zinc-500">github.com/dudududi144-source/psy-foundation</span>
           <span>·</span>
-          <span style={{ fontFamily: DESIGN.fonts.mono }}>v8.1 · ZDF SVF · ModulationMatrix · 5-layer lead · LR4 bass · pro thresholds</span>
+          <span style={{ fontFamily: DESIGN.fonts.mono }}>v8.2 · ZDF SVF · ModulationMatrix · M/S master · dyn-EQ sidechain · stems export</span>
           <span className="ml-auto" style={{ fontFamily: DESIGN.fonts.mono }}>deterministic · 88 bars · 13 voices · PsyDevice</span>
         </div>
       </footer>
