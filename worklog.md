@@ -1401,3 +1401,47 @@ Stage Summary:
 - 5-layer lead with 8kHz harmonic eliminates HIGH_END_TOO_WEAK
 - LR4 HP (24 dB/oct) + mid scoop eliminates LOW_MID_MUD
 - Hat velocity contour + ghost notes + kick drop eliminates RHYTHMIC_PATTERN_TOO_UNIFORM
+
+---
+Task ID: PSY4-COMPETITIVE-ANALYSIS
+Agent: main
+Task: Research state of the art and identify breakthrough opportunities
+
+Work Log:
+- Performed 11 web searches comparing PSY4 to 2025 state of the art:
+  1. AI music generation (Stable Audio 2.0, MusicGen, RAVE)
+  2. Psytrance production techniques (sidechain, mastering)
+  3. Differentiable DSP (DDSP — Google Magenta, 770 citations)
+  4. Wavetable synthesis (Serum, Vital — spectral warping)
+  5. Physical modeling (waveguide, FDTD, differentiable modal synthesis)
+  6. Commercial synth architecture (Virus, Iridium, Moog One)
+  7. Sidechain techniques (dynamic EQ vs compressor)
+  8. Granular synthesis (SuperCollider, grain clouds)
+  9. Neural style transfer (RAVE, timbre transfer)
+  10. AI arrangement (structural segmentation)
+  11. DDSP details (harmonic oscillators + filtered noise)
+- Wrote docs/COMPETITIVE_GAP_ANALYSIS.md (350+ lines)
+- Identified 7 major gap areas with implementation plans:
+  1. Wavetable synthesis (biggest — closes Serum/Vital gap)
+  2. Granular synthesis (real grain clouds, not named-only)
+  3. Differentiable DSP / neural synthesis (DDSP — learns from audio)
+  4. Physical modeling (waveguide strings, FDTD plates)
+  5. Neural style transfer (RAVE — "clone reference" feature)
+  6. AI arrangement (learned structure, not hardcoded 88-bar)
+  7. Stems export (immediate mastering workflow compatibility)
+- Identified 4 commercial product opportunities:
+  A. PSY4 Pro — Reference Cloning Service (RAVE style transfer)
+  B. PSY4 Stems — Mastering-Ready Export
+  C. PSY4 Live — Real-time Performance (AudioWorklet)
+  D. PSY4 Family — Sibling Integration (PSYDRUM, PSYSynth, PSYSTAR)
+- Created 4-phase roadmap:
+  Phase 1: Quick wins (stems, M/S, dynamic EQ sidechain) — 1-2 days
+  Phase 2: Synthesis upgrades (wavetable, granular, physical modeling) — 3-5 days
+  Phase 3: Neural frontier (DDSP, RAVE) — 1-2 weeks
+  Phase 4: AI arrangement — 1 week
+
+Stage Summary:
+- PSY4 v8.1 is solid (0 failures, 0.6322 score) but has 7 major gaps to 2025 state of art
+- Biggest breakthroughs: wavetable synthesis, DDSP/neural synthesis, RAVE style transfer
+- Commercial path: reference cloning service (RAVE) + stems export
+- Full analysis in docs/COMPETITIVE_GAP_ANALYSIS.md
