@@ -229,6 +229,10 @@ export default function Home() {
               <p className="mt-2 text-xs text-zinc-500">
                 <a href={audioUrl} download="psy4-forensic.wav" className="text-emerald-400 hover:underline">Download WAV</a>
                 {' · '}
+                <a href={`/api/render-forensic?bars=${bars}&seed=${seed}&samples=${useSamples}&format=aiff`} download="psy4-forensic.aiff" className="text-cyan-400 hover:underline">AIFF</a>
+                {' · '}
+                <a href={`/api/render-forensic?bars=${bars}&seed=${seed}&samples=${useSamples}&format=flac`} download="psy4-forensic.flac" className="text-violet-400 hover:underline">FLAC</a>
+                {' · '}
                 <span>Stereo 44.1kHz · {critique?.renderInfo.events ?? 0} events · {critique?.renderInfo.durationSec.toFixed(1) ?? '—'}s</span>
                 {critique?.renderInfo.lufs !== undefined && (
                   <span> · LUFS {critique.renderInfo.lufs.toFixed(1)} · Peak {critique.renderInfo.truePeakDb?.toFixed(1)}dB · Width {critique.renderInfo.stereoWidth?.toFixed(2)}</span>
@@ -393,6 +397,13 @@ export default function Home() {
                   className="flex-1 accent-cyan-500"
                 />
               </div>
+              {/* Real-time spectrum analyzer */}
+              {audioReady && (
+                <div className="mt-3">
+                  <div className="text-xs text-cyan-300 mb-1">Spectrum Analyzer</div>
+                  <SpectrumAnalyzerLazy audioEngine={audioEngineRef.current} width={560} height={120} />
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -754,3 +765,9 @@ Stereo PCM 44100Hz → WAV + AudioCritic + RenderProfile`}</pre>
     </div>
   )
 }
+
+// Lazy-loaded SpectrumAnalyzer (client-only, dynamic import)
+import { lazy, Suspense } from 'react'
+const SpectrumAnalyzerLazy = lazy(() =>
+  import('@/components/spectrum-analyzer').then(m => ({ default: m.SpectrumAnalyzer }))
+)

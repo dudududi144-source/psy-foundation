@@ -117,6 +117,6 @@ export async function GET(req: NextRequest) {
       progression: chordNames,
       rootNote: midiToNoteName(40),
     },
-    version: 'v8.7',
+    version: 'v8.8',
   })
 }

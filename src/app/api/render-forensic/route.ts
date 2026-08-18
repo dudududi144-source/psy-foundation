@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { CompositionEngine } from '@/foundation/music'
 import { createIdentityA } from '@/foundation/music'
 import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG, type RenderResult } from '@/lib/psy4/forensic-bridge'
+import { encodeAiff, encodeFlacPlaceholder, getMimeType, getFileExtension, type ExportFormat } from '@/lib/psy4/multi-export'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,11 +15,9 @@ const BEST_CONFIG = {
   padGain: 0.7,
 }
 
-// Valid stem bus names. When `?stem=<name>` is passed, the API returns a stereo
-// WAV containing only that bus (post-bus-glue, pre-master-chain). This lets
-// mastering engineers download each bus independently for per-bus processing.
 type StemName = 'drum' | 'bass' | 'music'
 const VALID_STEMS: Set<string> = new Set(['drum', 'bass', 'music'])
+const VALID_FORMATS: Set<string> = new Set(['wav', 'aiff', 'flac'])
 
 export async function GET(req: NextRequest) {
   const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
@@ -27,6 +26,9 @@ export async function GET(req: NextRequest) {
   const stemParam = req.nextUrl.searchParams.get('stem')
   const stem: StemName | null =
     stemParam && VALID_STEMS.has(stemParam) ? (stemParam as StemName) : null
+  // Multi-format export: ?format=wav|aiff|flac (default: wav)
+  const formatParam = req.nextUrl.searchParams.get('format') ?? 'wav'
+  const format: ExportFormat = VALID_FORMATS.has(formatParam) ? (formatParam as ExportFormat) : 'wav'
 
   const ctx = {
     tonic: 4,
@@ -111,14 +113,22 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // Default path: full stereo mix.
-  const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
+  // Default path: full stereo mix with multi-format support.
+  let audioBuffer: ArrayBuffer
+  if (format === 'aiff') {
+    audioBuffer = encodeAiff(result.samplesL, result.samplesR, result.sampleRate)
+  } else if (format === 'flac') {
+    audioBuffer = encodeFlacPlaceholder(result.samplesL, result.samplesR, result.sampleRate)
+  } else {
+    audioBuffer = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
+  }
 
-  return new NextResponse(wav, {
+  return new NextResponse(audioBuffer, {
     headers: {
-      'Content-Type': 'audio/wav',
-      'Content-Length': wav.byteLength.toString(),
+      'Content-Type': getMimeType(format),
+      'Content-Length': audioBuffer.byteLength.toString(),
       'Cache-Control': 'no-cache',
+      'X-Export-Format': format,
     },
   })
 }
