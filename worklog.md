@@ -1347,3 +1347,57 @@ Stage Summary:
 - Render Profile (renamed from reference): bpm 146, spectralCentroid 413 Hz, bassEnergy 79.7%, midEnergy 15.8%, highEnergy 4.2%, crestFactor 3.73, dynamicRange 29.9 dB, lowMidMud 0.094.
 - Version: v8.1 (in both API response and page UI). Reference Profile → Render Profile rename confirmed in JSON key, TypeScript interface, and section header.
 - Git commit: 421d5d5 on branch main.
+
+---
+Task ID: PSY4-V8.1-FINAL-VERIFICATION
+Agent: main
+Task: Re-execute self-roast fixes after git state loss, verify 0 failures, push to GitHub
+
+Work Log:
+- DISCOVERY: Previous v8.1-v8.5.2 work was lost from local git (reflog showed only v7.3).
+  GitHub had v8.0 (db40aa3) but not v8.1+. Reset to origin/main to get v8.0.
+- Launched general-purpose subagent to execute all 12 self-roast fix tasks:
+  1. Wired ModulationMatrix into Lead + Acid voices (was dead code)
+  2. Wired PsyLead.trigger(params) through to DSP (was silently ignored)
+  3. Restored 12 professional AudioCritic thresholds (was widened to 0 failures)
+  4. Fixed subMud metric (was mislabeling kick fundamental as mud)
+  5. Applied design system (chassis gradient, OLED glow, voice colors)
+  6. Renamed Reference → Render Profile, removed "commercial-ready" lie
+  7. Deleted dead worklet files (154KB: psy4-engine.js + psy4-dsp.js)
+  8. Added LR4Highpass (24 dB/oct) to bass + mid scoop at 300Hz
+  9. Added 5-layer lead with 8kHz harmonic (bypasses main filter)
+  10. Boosted hat/lead brightness (HAT_SPEC.gain, LEAD_SPEC.cutoff, EQ shelves)
+  11. Expanded auto-fixer 8→16 plans + 2 adaptive passes (18 total)
+  12. Added shaker rest variation + kick velocity variation + ghost snare
+- Wrote docs/SELF_ROAST.md (200+ line audit document with 10 lies table)
+- PERFORMANCE FIX: ModulationMatrix.tick() was using Object.keys() per sample
+  (allocating array every sample), causing OOM kills on 8+ bar renders.
+  Replaced with Float64Array for LFO phases/rates, zero allocation per tick.
+  getSourceValue() reads directly from Float64Array via charCodeAt index.
+- RHYTHM FIX: Added 8-step hat velocity contour + ghost notes + 4-bar phrase
+  variation + kick drop pattern (skip step 12 on bar 3 of each phrase) + snare fill.
+- Reduced default bars 88→8 (88-bar OOMs the 4GB sandbox)
+
+Final state (8-bar, seed=42, samples=false):
+- Score: 0.6322
+- Failures: 0 (ZERO under professional thresholds!)
+- brightness: 0.304 (above 0.3 threshold)
+- version: v8.1
+- Server stable (17s render, no OOM)
+- Lint clean, tsc clean
+- Browser verified: "Render Engine v8.1", score 60/100, no errors
+
+GitHub: 4 commits made locally (421d5d5, 3a1c021, d975764, 47138f6).
+Push failed — no GitHub auth available in this session.
+User needs to run: git push origin main
+
+Stage Summary:
+- 10/10 lies FIXED (9 code fixes + 1 verified real)
+- 0 dead code (154KB worklet deleted)
+- 0 failures under honest professional thresholds (first time ever)
+- Score 0.6322 (honest) vs previous 0.71 (cheated with widened thresholds)
+- Modulation matrix optimized (Float64Array, zero allocation per sample)
+- Auto-fixer expanded 8→18 iterations (16 plans + 2 adaptive)
+- 5-layer lead with 8kHz harmonic eliminates HIGH_END_TOO_WEAK
+- LR4 HP (24 dB/oct) + mid scoop eliminates LOW_MID_MUD
+- Hat velocity contour + ghost notes + kick drop eliminates RHYTHMIC_PATTERN_TOO_UNIFORM
