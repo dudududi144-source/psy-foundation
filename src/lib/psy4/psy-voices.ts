@@ -615,7 +615,7 @@ export class PsyHat {
     // Sparkle layer: pink noise through HP at 12kHz, amplitude 0.6
     // Adds air above the metallic body — targets 5-12kHz presence band.
     const sparkleN = this.sparkleNoise.next()
-    const sparkleSig = this.sparkleHP.process(sparkleN, 12000, SR) * 0.6
+    const sparkleSig = this.sparkleHP.process(sparkleN, 12000, SR) * 1.0  // raised: 0.6 → 1.0
 
     // Two-stage envelope: fast attack, exponential decay
     const env = Math.exp(-this.t / this.decay)

@@ -75,23 +75,52 @@ export async function GET(req: NextRequest) {
       correctionHint: f.correctionHint,
     })),
     metrics: {
+      // lowEnd
       kickClarity: critique.lowEnd.kickClarity,
       bassClarity: critique.lowEnd.bassClarity,
       kickBassSeparation: critique.lowEnd.kickBassSeparation,
       subMud: critique.lowEnd.subMud,
+      phaseRisk: critique.lowEnd.phaseRisk,
+      // transient
       punch: critique.transient.punch,
       attackSharpness: critique.transient.attackSharpness,
+      kickDefinition: critique.transient.kickDefinition,
+      // bass
       bassDecayOverlap: critique.bass.decayOverlap,
       noteSeparation: critique.bass.noteSeparation,
+      pitchStability: critique.bass.pitchStability,
+      spectralConsistency: critique.bass.spectralConsistency,
+      // groove
       onsetClarity: critique.groove.onsetClarity,
+      pocketConsistency: critique.groove.pocketConsistency,
       kickBassLock: critique.groove.kickBassLock,
+      excessiveUniformity: critique.groove.excessiveUniformity,
+      // lead
       leadArticulation: critique.lead.articulation,
       melodicClarity: critique.lead.melodicClarity,
+      phraseContrast: critique.lead.phraseContrast,
+      repetitionBalance: critique.lead.repetitionBalance,
+      harmonicClarity: critique.lead.harmonicClarity,
+      // timbre
       brightness: critique.timbre.brightness,
+      roughness: critique.timbre.roughness,
+      noisiness: critique.timbre.noisiness,
       spectralMovement: critique.timbre.spectralMovement,
+      modulationDepth: critique.timbre.modulationDepth,
+      identityStrength: critique.timbre.identityStrength,
+      // mix
       lowMidMud: critique.mix.lowMidMud,
+      harshness: critique.mix.harshness,
+      highEndPresence: critique.mix.highEndPresence,
+      stereoContrast: critique.mix.stereoContrast,
       masking: critique.mix.masking,
       dynamicRange: critique.mix.dynamicRange,
+      // musicality
+      tensionRelease: critique.musicality.tensionRelease,
+      motifIdentity: critique.musicality.motifIdentity,
+      development: critique.musicality.development,
+      callResponse: critique.musicality.callResponse,
+      rhythmicInterest: critique.musicality.rhythmicInterest,
     },
     renderInfo: {
       durationSec: result.durationSec,

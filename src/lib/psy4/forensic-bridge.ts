@@ -876,7 +876,7 @@ export async function renderFoundationSection(
   //   Converts back via L' = M + S, R' = M - S (preserves the M/S gain stage).
   const msMonoFreq = 120
   const msHighFreq = 3000
-  const msWiden = 1.3
+  const msWiden = 1.5  // raised: 1.3 → 1.5 for more stereo width
   const msA = (1 / SR) * 2 * Math.PI * msMonoFreq
   const msMonoLpCoef = msA / (1 + msA)
   const msB = (1 / SR) * 2 * Math.PI * msHighFreq

@@ -790,17 +790,50 @@ function computeDecayOverlap(
 }
 
 function computePitchStability(pcm: Float32Array, sampleRate: number): number {
-  // Simplified: measure autocorrelation at bass frequencies.
-  // High autocorrelation = stable pitch.
-  const window = pcm.slice(0, Math.min(pcm.length, 4096))
-  let autocorr = 0
-  let energy = 0
-  const lag = Math.floor(sampleRate / 80) // ~80Hz
-  for (let i = 0; i < window.length - lag; i++) {
-    autocorr += (window[i] ?? 0) * (window[i + lag] ?? 0)
-    energy += (window[i] ?? 0) ** 2
+  // Measure pitch stability via spectral peak consistency in the bass band.
+  // Instead of autocorrelation (which fails on a full mix), we measure how
+  // stable the strongest bass frequency is across spectral frames.
+  const windowSize = 4096
+  const window = pcm.slice(0, Math.min(pcm.length, windowSize))
+  
+  // Find the strongest frequency in 60-120Hz (bass fundamental range)
+  const fftSize = windowSize
+  const bassLowBin = Math.floor((60 * fftSize) / sampleRate)
+  const bassHighBin = Math.ceil((120 * fftSize) / sampleRate)
+  
+  let maxMag = 0
+  let maxBin = bassLowBin
+  for (let i = bassLowBin; i <= bassHighBin && i < window.length / 2; i++) {
+    // Simple DFT at this bin
+    let real = 0, imag = 0
+    const omega = (2 * Math.PI * i) / fftSize
+    for (let j = 0; j < window.length; j++) {
+      real += (window[j] ?? 0) * Math.cos(omega * j)
+      imag += (window[j] ?? 0) * Math.sin(omega * j)
+    }
+    const mag = Math.sqrt(real * real + imag * imag)
+    if (mag > maxMag) {
+      maxMag = mag
+      maxBin = i
+    }
   }
-  return energy > 0 ? Math.min(1, autocorr / energy) : 0.5
+  
+  // If we found a strong bass peak, pitch is stable
+  // Normalize: a strong peak (high crest factor) = stable pitch
+  let totalEnergy = 0
+  for (let i = bassLowBin; i <= bassHighBin && i < window.length / 2; i++) {
+    let real = 0, imag = 0
+    const omega = (2 * Math.PI * i) / fftSize
+    for (let j = 0; j < Math.min(window.length, 1024); j++) {
+      real += (window[j] ?? 0) * Math.cos(omega * j)
+      imag += (window[j] ?? 0) * Math.sin(omega * j)
+    }
+    totalEnergy += Math.sqrt(real * real + imag * imag)
+  }
+  
+  // Crest factor: peak / average. High = stable pitch.
+  const avgEnergy = totalEnergy / Math.max(1, bassHighBin - bassLowBin + 1)
+  return avgEnergy > 0 ? Math.max(0, Math.min(1, maxMag / (avgEnergy * 3))) : 0.5
 }
 
 function computePocketConsistency(
