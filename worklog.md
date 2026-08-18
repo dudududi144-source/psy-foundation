@@ -2089,3 +2089,37 @@ Still stuck on:
 - highEndPresence: 0.015 (bass still 78% of energy)
 - dynamicRange: 0.308 (limiter + glue compress too much)
 - spectralMovement: 0.288 (LFO not dramatic enough)
+
+---
+Task ID: PSY4-BUG-HUNT-ITERATION5
+Agent: main
+Task: Deep bug hunt — find and fix more metric bugs
+
+Bugs found and fixed:
+1. phraseContrast (128→512 bins): was only covering 0-2756Hz, missing lead/high
+   - Score impact: +0.005 (0.654 → 0.659)
+   - phraseContrast: 0.289 → 0.366 (+27%)
+   - development: 0.433 → 0.550 (+27%)
+
+Bugs found but NOT bugs (verified correct):
+- highEndPresence (0.015): correct — bass really dominates (78%)
+- stereoContrast (0.019): correct — measures high/low ratio, not stereo
+- dynamicRange (0.308): correct — peak/rms/10 = 3.08/10 = 0.308
+- spectralMovement (0.283): correct — LFO not dramatic enough (DSP issue, not bug)
+- bassClarity (0.279): correct — kick fundamental in sub band dominates
+- excessiveUniformity (0.675): correct — psytrance is repetitive by design
+- pitchStability (0.696): fixed in previous iteration, now correct
+
+Architectural limitation (not a bug):
+- AudioCritic analyzes mono downmix — stereoContrast can't measure real stereo
+- Changing to stereo analysis would require rewriting all metric functions
+
+Score trajectory:
+- Start: 0.6363
+- pitchStability fix: 0.6524 (+0.018)
+- phraseContrast fix: 0.6594 (+0.005)
+- Total improvement from bug fixes: +0.023
+
+Key lesson: 2 real bugs (pitchStability, phraseContrast) contributed more
+to score improvement than 3 iterations of parameter tuning (+0.002).
+Always check for bugs before tuning parameters.
