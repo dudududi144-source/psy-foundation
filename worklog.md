@@ -1509,3 +1509,50 @@ Stage Summary:
   via /api/render-forensic?stem=X. UI has 3 download buttons.
 - All 3 Phase 1 tasks complete. v8.2 ready for Phase 2 (wavetable/granular/physical
   modeling) per competitive gap analysis roadmap.
+
+---
+Task ID: PSY4-V8.3-PHASE2
+Agent: main
+Task: Phase 2 synthesis upgrades — wavetable + granular + physical modeling
+
+Work Log:
+- Created wavetable.ts (147 lines) — Wavetable class with 2048-sample morphing tables
+  - 7 factory methods: createSaw, createSquare, createTriangle, createPsyLead, createAcidSquelch, createVocalFormant, createMulti
+  - Interpolates between adjacent tables for smooth morphing
+  - fromAudio() factory for loading wavetables from audio files
+  - Integrated into PsyLead as optional mode (replaces BLSaw when connected)
+  - Morph position modulatable via matrix destination 'wavetablePos'
+
+- Created granular.ts (147 lines) — GrainCloud class for real granular synthesis
+  - Spawns N grains/sec from source buffer (default 60 grains/sec)
+  - Each grain: position, pitch, pan, Hann envelope, duration
+  - Equal-power panning per grain for stereo width
+  - 3 procedural source buffer generators: noise, saw, mixed (saw+noise)
+  - Integrated into PsyTexture — replaces fake 'granular' comment with real implementation
+  - setDensity, setGrainDuration, setPitchVar, setPosVar, setAmp, setBuffer methods
+
+- Created physical/waveguide-string.ts (72 lines) — Karplus-Strong waveguide
+  - Delay line + damping filter = realistic plucked string decay
+  - triggerDeterministic() using Rng for reproducibility
+  - Integrated into PsyBass as optional blend mode
+  - Creates guitar-like plucked character impossible with oscillator+filter
+
+- Fixed TypeScript errors:
+  - Added setFreq() to Wavetable (API compat)
+  - Added setAmp(), setBuffer() to GrainCloud
+  - Updated generateMixedBuffer to accept 4th param (noiseLevel)
+
+Verification:
+- Lint: clean (0 errors, 0 warnings)
+- tsc: clean for all psy4 files
+- 8-bar critique: score 0.6312, 1 marginal failure (HIGH_END_TOO_WEAK 0.001)
+- Server stable (NODE_OPTIONS=--max-old-space-size=3072)
+- Committed + pushed to GitHub (1af861b)
+
+Stage Summary:
+- 3 new synthesis engines: wavetable, granular, physical modeling
+- 3 new files: wavetable.ts, granular.ts, physical/waveguide-string.ts (366 lines total)
+- All 3 integrated as optional modes (additive, not replacing existing functionality)
+- Score stable at 0.6312 (within noise of v8.2's 0.6313)
+- Closes 3 of 7 competitive gaps identified in COMPETITIVE_GAP_ANALYSIS.md
+- Remaining gaps: DDSP/neural, RAVE style transfer, AI arrangement
