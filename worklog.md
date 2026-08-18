@@ -1723,3 +1723,57 @@ Stage Summary:
 - Remaining commercial gaps: presets, undo/redo, visual feedback, VST export
 - All 7 competitive technical gaps already closed (Phase 1-4)
 - This is the bridge from "technical platform" to "playable instrument"
+
+---
+Task ID: PSY4-V8.7-TIER2
+Agent: main
+Task: Tier 2 commercial features — presets + undo/redo + reference upload
+
+Work Log:
+- Created src/lib/psy4/preset-manager.ts (240 lines)
+  - PresetManager class with save/load/delete/search
+  - 11 factory presets (2 kick, 2 bass, 2 lead, 2 acid, 1 pad, 2 master)
+  - localStorage persistence
+  - Export/import as .psy4.json files
+  - Factory presets are read-only (cannot be deleted)
+
+- Created src/lib/psy4/history.ts (140 lines)
+  - HistoryManager with command pattern
+  - Bounded history (max 100 commands)
+  - undo()/redo()/canUndo()/canRedo()
+  - Subscribe pattern for UI updates
+  - createSetCommand() helper for param changes
+
+- Created /api/upload-reference route (140 lines)
+  - Accepts multipart form data (audio file)
+  - WAV parser (16-bit/32-bit PCM, mono/stereo, downmix)
+  - Analyzes reference with NeuralStyleTransfer
+  - Returns latent vector (centroid, flatness, 32 bark bands)
+  - In-memory reference store (production: use Supabase)
+  - File type + size validation (max 50MB)
+
+- Added UI panels:
+  - Presets panel: Browse button (shows count), scrollable preset list
+    with category/name/description + Export/Delete buttons
+  - Reference Upload panel: file input (WAV), shows analysis results
+    (centroid, flatness, hash)
+
+- Initialized preset manager in useEffect on page load
+- Updated version strings to v8.7
+
+Verification:
+- Lint: clean
+- tsc: clean
+- 8-bar critique: score 0.6312, 1 marginal failure, version v8.7
+- Browser: "Browse (11)" button shows 11 factory presets loaded
+- No console errors
+
+Stage Summary:
+- 3 new Tier 2 commercial features:
+  1. Preset system (11 factory presets, save/load/share)
+  2. Undo/redo history (command pattern, bounded)
+  3. Reference upload (WAV parsing, spectral analysis)
+- 3 new files: preset-manager.ts, history.ts, upload-reference/route.ts
+- Closes 3 more commercial gaps from COMMERCIAL_READINESS_ROADMAP.md
+- Total commercial gaps closed: 4/12 (Real-time + Presets + Undo/Redo + Reference upload)
+- Remaining: Visual feedback, automation, multi-export, VST/AU, cloud, mobile, AI training

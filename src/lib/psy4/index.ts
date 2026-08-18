@@ -63,6 +63,17 @@ export type { LatentVector } from './neural/latent-decoder'
 // AI Arrangement (Phase 4)
 export { ArrangementGenerator, planToSpec } from './arrangement/ArrangementGenerator'
 export type { SectionType, ArrangementSection, ArrangementPlan } from './arrangement/ArrangementGenerator'
+
+// Preset Manager (Tier 2 — commercial)
+export { PresetManager, FACTORY_PRESETS } from './preset-manager'
+export type { Preset, PresetCategory } from './preset-manager'
+
+// Undo/Redo History (Tier 2 — commercial)
+export { HistoryManager, createSetCommand } from './history'
+export type { Command } from './history'
+
+// Audio Engine (Tier 1 — real-time playback)
+export { PSY4AudioEngine } from './audio-engine'
 export type { ChannelFXConfig } from './channel-fx'
 export { CHANNEL_PRESETS } from './channel-presets'
 export type { VoiceType } from './channel-presets'

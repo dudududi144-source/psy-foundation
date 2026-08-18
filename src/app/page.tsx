@@ -101,7 +101,12 @@ export default function Home() {
   const [optReport, setOptReport] = useState<OptReport | null>(null)
   const [arrangement, setArrangement] = useState<any | null>(null)
   const [audioReady, setAudioReady] = useState(false)
+  const [presets, setPresets] = useState<any[]>([])
+  const [showPresets, setShowPresets] = useState(false)
+  const [uploadingRef, setUploadingRef] = useState(false)
+  const [referenceInfo, setReferenceInfo] = useState<any | null>(null)
   const audioEngineRef = useRef<any>(null)
+  const presetMgrRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const render = async () => {
@@ -147,6 +152,11 @@ export default function Home() {
   }
 
   useEffect(() => {
+    // Initialize preset manager and load factory presets
+    import('@/lib/psy4/preset-manager').then(({ PresetManager }) => {
+      presetMgrRef.current = new PresetManager()
+      setPresets(presetMgrRef.current.getAll())
+    })
     render()
   }, [])
 
@@ -383,6 +393,105 @@ export default function Home() {
                   className="flex-1 accent-cyan-500"
                 />
               </div>
+            </div>
+          )}
+        </section>
+
+        {/* Preset Manager */}
+        <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5" style={{ boxShadow: DESIGN.shadows.panel }}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: DESIGN.fonts.mono }}>Presets</span>
+            <button
+              onClick={async () => {
+                const { PresetManager } = await import('@/lib/psy4/preset-manager')
+                if (!presetMgrRef.current) {
+                  presetMgrRef.current = new PresetManager()
+                }
+                setPresets(presetMgrRef.current.getAll())
+                setShowPresets(!showPresets)
+              }}
+              className="ml-auto inline-flex items-center gap-2 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-emerald-950 hover:bg-emerald-400 transition-colors"
+            >
+              {showPresets ? 'Hide' : 'Browse'} ({presets.length})
+            </button>
+          </div>
+          <p className="text-xs text-emerald-300/80 mb-3">
+            {presets.filter(p => p.id.startsWith('factory-')).length} factory + {presets.filter(p => !p.id.startsWith('factory-')).length} user presets. Save/load/share patches as JSON.
+          </p>
+          {showPresets && (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {presets.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 text-xs rounded border border-emerald-500/20 bg-emerald-500/5 p-2">
+                  <span className="text-emerald-400 font-mono w-20 shrink-0">{p.category}</span>
+                  <span className="text-zinc-200 flex-1">{p.name}</span>
+                  <span className="text-zinc-500 text-[10px] truncate max-w-32">{p.description}</span>
+                  <button
+                    onClick={() => {
+                      const pm = presetMgrRef.current
+                      if (pm) pm.export(p)
+                    }}
+                    className="text-emerald-400 hover:text-emerald-300 text-[10px]"
+                  >Export</button>
+                  {!p.id.startsWith('factory-') && (
+                    <button
+                      onClick={() => {
+                        const pm = presetMgrRef.current
+                        if (pm) {
+                          pm.delete(p.id)
+                          setPresets(pm.getAll())
+                        }
+                      }}
+                      className="text-rose-400 hover:text-rose-300 text-[10px]"
+                    >Delete</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Reference Upload */}
+        <section className="rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/10 p-5" style={{ boxShadow: DESIGN.shadows.panel }}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base font-semibold text-fuchsia-200" style={{ fontFamily: DESIGN.fonts.mono }}>Reference Upload</span>
+          </div>
+          <p className="text-xs text-fuchsia-300/80 mb-3">
+            Upload a reference track (WAV) and learn its spectral style for style transfer.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              accept=".wav,audio/wav"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setUploadingRef(true)
+                try {
+                  const formData = new FormData()
+                  formData.append('audio', file)
+                  const res = await fetch('/api/upload-reference', {
+                    method: 'POST',
+                    body: formData,
+                  })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setReferenceInfo(data)
+                  }
+                } catch (err) {
+                  console.error('Upload failed:', err)
+                }
+                setUploadingRef(false)
+              }}
+              className="text-xs text-zinc-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-fuchsia-500 file:text-fuchsia-950 file:font-semibold file:cursor-pointer hover:file:bg-fuchsia-400"
+            />
+            {uploadingRef && <span className="text-xs text-fuchsia-300 animate-pulse">Analyzing...</span>}
+          </div>
+          {referenceInfo && (
+            <div className="mt-3 text-xs space-y-1">
+              <div className="text-fuchsia-300 font-mono">{referenceInfo.name} ({(referenceInfo.size / 1024).toFixed(0)}KB)</div>
+              <div className="text-zinc-400">Centroid: <span className="text-zinc-200">{referenceInfo.latent.centroid} Hz</span></div>
+              <div className="text-zinc-400">Flatness: <span className="text-zinc-200">{referenceInfo.latent.flatness}</span> (0=tonal, 1=noise)</div>
+              <div className="text-fuchsia-400 font-mono text-[10px]">Hash: {referenceInfo.hash}</div>
             </div>
           )}
         </section>
