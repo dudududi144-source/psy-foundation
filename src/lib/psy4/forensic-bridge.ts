@@ -270,16 +270,24 @@ export async function renderFoundationSection(
     const isBreak = phase === 6        // break bar: drop lead, keep percussion
 
     // Four-on-the-floor kick with per-bar velocity variation
+    // SELF_ROAST fix #3: vary kick pattern per 4-bar phrase to reduce uniformity.
+    // Bar 3 of each phrase: drop the last kick (step 12) to create a "breath"
+    // before the next phrase. Adds anticipation/fill feel.
     const kickPhraseBar = barIdx % 8
     const kickVelBase = kickPhraseBar < 2 ? 0.85 : kickPhraseBar < 4 ? 0.8 : kickPhraseBar < 6 ? 0.9 : 0.7
+    const kickDropBar = (barIdx % 4) === 3  // drop on bar 3 of each 4-bar phrase
+    const kickSteps = kickDropBar ? [0, 4, 8] : [0, 4, 8, 12]  // skip step 12 on drop bars
     // Step 8 alternates 1.0/0.75 per bar — creates syncopated kick variation
-    // that reduces rhythmic uniformity (RHYTHMIC_PATTERN_TOO_UNIFORM).
     const step8VelMod = barIdx % 2 === 0 ? 1.0 : 0.75
-    for (const step of [0, 4, 8, 12]) {
+    for (const step of kickSteps) {
       const a = accent[step % accent.length] ?? 1
-      // Downbeat (step 0) slightly louder, beat 4 (step 12) slightly quieter for groove
       const velMod = step === 0 ? 1.0 : step === 8 ? step8VelMod : step === 12 ? 0.9 : 0.95
       events.push({ pos: barStart + step * samplesPerStep, type: 'kick', vel: kickVelBase * velMod + a * 0.1, dur: samplesPerStep })
+    }
+    // On drop bars, add a fill snare on step 14-15 to replace the missing kick
+    if (kickDropBar) {
+      events.push({ pos: barStart + 14 * samplesPerStep, type: 'snare', vel: 0.35, dur: samplesPerStep })
+      events.push({ pos: barStart + 15 * samplesPerStep, type: 'snare', vel: 0.45, dur: samplesPerStep })
     }
     // Ghost kick on offbeat in build/drop sections
     if (kickPhraseBar >= 2 && kickPhraseBar < 6 && barIdx % 2 === 1) {
@@ -380,12 +388,33 @@ export async function renderFoundationSection(
     }
 
     // Closed hats — enter at bar 2 (build)
+    // SELF_ROAST fix #3: replaced static hatVelBase/Strong (only 2 levels)
+    // with a 8-step velocity contour + ghost notes + 4-bar phrase variation.
+    // This changes the onset presence/velocity pattern per bar, which is what
+    // the uniformity metric actually measures.
     if (playHats) {
-      const hatVelBase = barIdx % 2 === 0 ? 0.4 : 0.35
-      const hatVelStrong = barIdx % 2 === 0 ? 0.6 : 0.55
-      for (const step of [2, 6, 10, 14]) {
-        const isStrong = step % 8 === 6
-        events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel: isStrong ? hatVelStrong : hatVelBase, dur: samplesPerStep })
+      const phraseBar = barIdx % 4
+      const phraseBoost = phraseBar === 0 ? 1.15 : phraseBar === 3 ? 0.85 : 1.0
+      const oddBar = barIdx % 2 === 1
+      const stepVel = oddBar
+        ? [0.30, 0.50, 0.40, 0.45, 0.35, 0.55, 0.40, 0.50].map(v => v * phraseBoost)
+        : [0.35, 0.55, 0.40, 0.50, 0.35, 0.60, 0.40, 0.55].map(v => v * phraseBoost)
+      for (let eighth = 0; eighth < 8; eighth++) {
+        const step = eighth * 2
+        const vel = stepVel[eighth]!
+        events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel, dur: samplesPerStep })
+      }
+      // Ghost notes on odd 16ths — vary pattern per bar in 4-bar phrase.
+      const ghostMap: Record<number, number[]> = {
+        0: [3, 7, 11, 15],
+        1: [3, 7, 15],
+        2: [3, 11, 15],
+        3: [5, 7, 11, 15],
+      }
+      const ghostSteps = ghostMap[phraseBar] ?? [3, 7, 11, 15]
+      const ghostVel = phraseBar === 3 ? 0.22 : 0.18
+      for (const gs of ghostSteps) {
+        events.push({ pos: barStart + gs * samplesPerStep, type: 'hat', vel: ghostVel, dur: samplesPerStep })
       }
     }
 

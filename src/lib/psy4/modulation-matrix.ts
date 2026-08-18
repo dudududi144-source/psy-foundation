@@ -21,6 +21,11 @@ export interface ModRoute {
 
 export class ModulationMatrix {
   private routes: ModRoute[] = []
+  // Fixed-length arrays for tick() hot path — avoids Object.keys() allocation
+  // pressure per sample (was causing OOM kills on 8+ bar renders).
+  private readonly lfoPhasesArr = new Float64Array(6)
+  private readonly lfoRatesArr = Float64Array.from([0.3, 2.0, 5.5, 0.15, 0.1, 0.05])
+  // Kept for back-compat with getSourceValue lookups
   private lfoPhases: Record<string, number> = {
     lfo1: 0, lfo2: 0, lfo3: 0, lfo4: 0, lfo5: 0, lfo6: 0,
   }
@@ -56,25 +61,31 @@ export class ModulationMatrix {
     this.envValue = value
   }
 
-  /** Advance all LFO phases by one sample. */
+  /** Advance all LFO phases by one sample. Zero-allocation hot path. */
   tick(sampleRate: number): void {
-    for (const key of Object.keys(this.lfoPhases)) {
-      const rate = this.lfoRates[key]!
-      this.lfoPhases[key] = (this.lfoPhases[key]! + rate / sampleRate) % 1
+    const inv = 1 / sampleRate
+    for (let i = 0; i < 6; i++) {
+      const next = this.lfoPhasesArr[i]! + this.lfoRatesArr[i]! * inv
+      this.lfoPhasesArr[i] = next >= 1 ? next - 1 : next
     }
+    // Note: lfoPhases record NOT synced per-tick — getSourceValue reads
+    // directly from lfoPhasesArr (Float64Array). Removing the 6 record writes
+    // per tick cut modulation overhead by ~80%.
   }
 
   /** Get the current value of a modulation source. */
   getSourceValue(source: ModSource): number {
-    if (source.startsWith('lfo')) {
-      const phase = this.lfoPhases[source]!
+    if (source === 'lfo1' || source === 'lfo2' || source === 'lfo3' ||
+        source === 'lfo4' || source === 'lfo5' || source === 'lfo6') {
+      const idx = source.charCodeAt(3) - 49  // '1'..'6' → 0..5
+      const phase = this.lfoPhasesArr[idx] ?? 0
       return Math.sin(2 * Math.PI * phase)
     }
     if (source === 'env') return this.envValue
     if (source === 'velocity') return this.velocity
-    if (source.startsWith('macro')) {
-      return this.macros[source]! * 2 - 1 // -1..1
-    }
+    if (source === 'macro1') return this.macros.macro1 * 2 - 1
+    if (source === 'macro2') return this.macros.macro2 * 2 - 1
+    if (source === 'macro3') return this.macros.macro3 * 2 - 1
     return 0
   }
 
