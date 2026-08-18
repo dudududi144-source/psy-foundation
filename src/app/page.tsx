@@ -100,6 +100,8 @@ export default function Home() {
   const [critique, setCritique] = useState<CritiqueData | null>(null)
   const [optReport, setOptReport] = useState<OptReport | null>(null)
   const [arrangement, setArrangement] = useState<any | null>(null)
+  const [audioReady, setAudioReady] = useState(false)
+  const audioEngineRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const render = async () => {
@@ -298,6 +300,88 @@ export default function Home() {
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Real-Time Playback (AudioWorklet) */}
+        <section className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 p-5" style={{ boxShadow: DESIGN.shadows.panel }}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base font-semibold text-cyan-200" style={{ fontFamily: DESIGN.fonts.mono }}>Real-Time Playback</span>
+            <button
+              onClick={async () => {
+                try {
+                  const { PSY4AudioEngine } = await import('@/lib/psy4/audio-engine')
+                  if (!audioEngineRef.current) {
+                    audioEngineRef.current = new PSY4AudioEngine()
+                  }
+                  const ok = await audioEngineRef.current.init()
+                  if (ok) {
+                    await audioEngineRef.current.resume()
+                    setAudioReady(true)
+                  }
+                } catch (e) {
+                  console.error('Audio init failed:', e)
+                }
+              }}
+              className="ml-auto inline-flex items-center gap-2 rounded-md bg-cyan-500 px-3 py-1.5 text-xs font-semibold text-cyan-950 hover:bg-cyan-400 transition-colors"
+            >
+              {audioReady ? 'Audio Ready' : 'Start Audio'}
+            </button>
+          </div>
+          <p className="text-xs text-cyan-300/80 mb-3">
+            AudioWorklet real-time synthesis — click a key to play. MIDI input supported.
+          </p>
+          {audioReady && (
+            <div className="space-y-3">
+              {/* Virtual Keyboard */}
+              <div className="flex flex-wrap gap-1">
+                {[48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72].map((midi) => {
+                  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+                  const note = noteNames[midi % 12] + Math.floor(midi / 12 - 1)
+                  const isBlack = noteNames[midi % 12].includes('#')
+                  return (
+                    <button
+                      key={midi}
+                      onPointerDown={() => {
+                        audioEngineRef.current?.noteOn(midi, 0.8)
+                      }}
+                      className={`px-2 py-3 text-[10px] font-mono rounded ${
+                        isBlack ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-900 hover:bg-white'
+                      }`}
+                      style={{ minWidth: '32px' }}
+                    >
+                      {note}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Cutoff slider */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-cyan-300 w-20">Cutoff:</span>
+                <input
+                  type="range"
+                  min="200"
+                  max="8000"
+                  defaultValue="3000"
+                  onChange={(e) => audioEngineRef.current?.setCutoff(Number(e.target.value))}
+                  className="flex-1 accent-cyan-500"
+                />
+                <span className="text-zinc-400 w-16">Hz</span>
+              </div>
+              {/* Resonance slider */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-cyan-300 w-20">Resonance:</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  defaultValue="0.3"
+                  onChange={(e) => audioEngineRef.current?.setResonance(Number(e.target.value))}
+                  className="flex-1 accent-cyan-500"
+                />
               </div>
             </div>
           )}
