@@ -140,12 +140,14 @@ export class ModulationMatrix {
   /** Default routes based on PSY4_DEEP_ROAST recommendations. */
   static createDefault(): ModulationMatrix {
     const matrix = new ModulationMatrix()
-    // LFO1 (0.3Hz) → lead cutoff (depth 0.3)
-    matrix.addRoute({ source: 'lfo1', destination: 'cutoff', amount: 0.3 })
+    // LFO1 (0.3Hz) → lead cutoff (depth 0.5 — raised from 0.3 for more movement)
+    matrix.addRoute({ source: 'lfo1', destination: 'cutoff', amount: 0.5 })
     // LFO2 (2Hz) → acid cutoff (depth 0.7, bidirectional)
     matrix.addRoute({ source: 'lfo2', destination: 'cutoff', amount: 0.7 })
-    // LFO3 (5.5Hz) → lead FM index (depth 0.2)
-    matrix.addRoute({ source: 'lfo3', destination: 'fmIndex', amount: 0.2 })
+    // LFO3 (5.5Hz) → lead FM index (depth 0.3 — raised from 0.2)
+    matrix.addRoute({ source: 'lfo3', destination: 'fmIndex', amount: 0.3 })
+    // LFO4 (0.15Hz) → lead cutoff (depth 0.4 — new route for slow filter sweep)
+    matrix.addRoute({ source: 'lfo4', destination: 'cutoff', amount: 0.4 })
     // Velocity → lead brightness (0.5)
     matrix.addRoute({ source: 'velocity', destination: 'cutoff', amount: 0.5 })
     // Macro1 (SPACE) → delay send

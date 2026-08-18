@@ -551,7 +551,7 @@ function detectOnsets(
   const onsets: number[] = []
   for (let pos = 0; pos < pcm.length; pos += samplesPerStep) {
     // Measure the energy in a short window after the onset.
-    const windowSize = Math.floor(sampleRate * 0.01) // 10ms
+    const windowSize = Math.floor(sampleRate * 0.02) // 20ms — widened to capture bass onsets
     let energy = 0
     for (let i = 0; i < windowSize && pos + i < pcm.length; i++) {
       energy += Math.abs(pcm[pos + i] ?? 0)

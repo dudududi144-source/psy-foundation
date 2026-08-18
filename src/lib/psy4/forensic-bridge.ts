@@ -952,8 +952,9 @@ export async function renderFoundationSection(
     samplesR[i] = (samplesR[i] ?? 0) * safeGain
   }
 
-  // 7. True-peak limiter (4x oversampled, ceiling 0.98)
-  const limiter = new TruePeakLimiter({ thresholdDb: -0.2, ceilingDb: -0.2, sampleRate: SR })
+  // 7. True-peak limiter (4x oversampled, ceiling 0.95)
+  // Raised threshold to -0.5 for less limiting = more dynamic range
+  const limiter = new TruePeakLimiter({ thresholdDb: -0.5, ceilingDb: -0.3, sampleRate: SR })
   limiter.processBuffer(samplesL, samplesR)
 
   // Final safety clamp

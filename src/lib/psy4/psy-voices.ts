@@ -257,7 +257,7 @@ export class PsyBass {
     // This removes the boxy 250-400Hz mud that builds up when the body saw
     // harmonics accumulate. ZDFSVF bandpass output is subtracted from the mix.
     const scoopSig = this.midScoop.process(mixed, 300, 0.6, SR, 1)
-    mixed = mixed - scoopSig * 0.35
+    mixed = mixed - scoopSig * 0.5  // deepened: 0.35 → 0.5
 
     // ── Saturation with oversampling ──
     mixed = this.sat.process(mixed, BASS_SPEC.saturation)
