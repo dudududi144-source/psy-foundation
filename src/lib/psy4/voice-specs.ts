@@ -272,10 +272,10 @@ export interface BusGains {
 }
 
 export const BUS_GAINS: BusGains = {
-  drum: 1.4,
-  bass: 0.7,
-  music: 1.4,
-  fx: 0.7,
+  drum: 1.0,
+  bass: 0.5,
+  music: 1.8,
+  fx: 0.9,
 }
 
 // ═══════════════════════════════════════════════════════════════
