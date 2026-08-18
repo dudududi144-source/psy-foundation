@@ -90,7 +90,7 @@ function MetricBar({ label, value, invert = false }: { label: string; value: num
 }
 
 export default function Home() {
-  const [bars, setBars] = useState(88)
+  const [bars, setBars] = useState(8)
   const [seed, setSeed] = useState(42)
   const [useSamples, setUseSamples] = useState(true)
   const [loading, setLoading] = useState(false)
