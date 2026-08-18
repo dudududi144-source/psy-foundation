@@ -77,6 +77,10 @@ export type { Command } from './history'
 
 // Audio Engine (Tier 1 — real-time playback)
 export { PSY4AudioEngine } from './audio-engine'
+
+// Automation (Tier 2 — parameter automation)
+export { AutomationEngine, createDefaultLanes } from './automation'
+export type { AutomationPoint, AutomationLane, InterpolationType } from './automation'
 export type { ChannelFXConfig } from './channel-fx'
 export { CHANNEL_PRESETS } from './channel-presets'
 export type { VoiceType } from './channel-presets'

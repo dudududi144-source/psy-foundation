@@ -1897,3 +1897,49 @@ Stage Summary:
   5. Copy .onnx files to /public/models/
 - 7/12 commercial gaps closed + AI training pipeline ready
 - This is the LAST technical gap from COMPETITIVE_GAP_ANALYSIS.md
+
+---
+Task ID: PSY4-V9.0-AUTOMATION-VST
+Agent: main
+Task: Parameter automation + VST/AU plugin scaffold
+
+Work Log:
+- Created src/lib/psy4/automation.ts (274 lines)
+  - AutomationEngine: parameter automation with breakpoint curves
+  - 4 interpolation types: linear, exponential, step, bezier
+  - AutomationLane: per-parameter timeline with points
+  - renderToParameterArray(): sample automation at fixed rate
+  - exportJSON/importJSON for save/load
+  - createDefaultLanes(): 4 default lanes (cutoff, leadGain, stereoWidth, targetLufs)
+  - Subscribe pattern for UI updates
+
+- Created vst-plugin/ directory with JUCE scaffold:
+  - README.md (80 lines) — build guide for VST3/AU/LV2
+  - CMakeLists.txt (90 lines) — CMake build system with JUCE FetchContent
+  - Source/PluginProcessor.h (110 lines) — main processor header
+    - 10 parameters (cutoff, resonance, gains, macros)
+    - 8-voice polyphonic lead, 2 bass, 4 kick
+    - Modulation matrix + master chain
+  - Source/PluginProcessor.cpp (170 lines) — DSP implementation
+    - JUCE AudioProcessor interface
+    - MIDI input → noteOn/noteOff
+    - Parameter automation via APVTS
+    - Preset management (11 factory presets)
+    - State save/load (XML)
+
+- Updated index.ts to export AutomationEngine
+
+Verification:
+- Lint: clean
+- tsc: clean
+- 8-bar critique: score 0.6312, 1 marginal failure, version v8.8
+- VST scaffold provides structure for C++ port
+
+Stage Summary:
+- 2 more commercial features:
+  1. Parameter automation (breakpoint curves, 4 interpolation types)
+  2. VST/AU plugin scaffold (JUCE C++ wrapper)
+- 8/12 commercial gaps now closed (real-time + presets + undo/redo + reference
+  + visual + multi-export + automation + VST scaffold)
+- VST plugin is a scaffold (needs DSP port from TypeScript to C++)
+- Remaining: cloud sync, mobile, AI training (pipeline ready, needs dataset)
