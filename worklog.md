@@ -2017,3 +2017,36 @@ What still doesn't work (from HONEST_TRUTH.md):
 - Style transfer: spectral filter (not neural)
 - AudioWorklet: 1 voice only (not 13)
 - Score: 0.6377 (not commercial quality)
+
+---
+Task ID: PSY4-ROAST-ITERATION3
+Agent: main
+Task: Roast iteration 3 — compare to professional, fix what's fixable
+
+Roast findings:
+1. Score stuck at 0.63-0.64 — parameter tuning can't break 0.65
+2. bassClarity 0.289 — bass still not clear enough (kick dominates sub band)
+3. brightness 0.337 — lead not bright enough (wavetable helps but not enough)
+4. dynamicRange 0.307 — limiter + glue + multiband compress too much
+5. onsetClarity 0.370 — onsets not sharp (10ms→20ms helped kickBassLock but not clarity)
+6. spectralMovement 0.289 — LFO depth raised but movement still low
+
+What was fixed:
+- Layer 5 amplitude: 0.7 → 0.8, added ampEnv tracking
+- Bass bus gain: 0.5 → 0.7
+- Multiband thresholds all raised (less compression)
+- These are real fixes but small impact
+
+What can't be fixed with parameter tuning:
+- dynamicRange: needs less compression overall (would need to remove multiband)
+- bassClarity: needs kick fundamental below 80Hz (already at 38Hz)
+- spectralMovement: needs more dramatic filter sweeps (would need new LFO shapes)
+- onsetClarity: needs sharper transients (would need better oscillator)
+
+Honest conclusion:
+- Score 0.6339 is the ceiling for this DSP architecture
+- To reach 0.70+ need: convolution reverb, analog-modeled delay, better saturation
+- To reach 0.80+ need: entirely new voice engines with wavetable morphing
+- Parameter tuning has diminishing returns — 3 iterations moved score by 0.002
+
+The score is honestly stuck. More tuning won't help. Need better DSP.
