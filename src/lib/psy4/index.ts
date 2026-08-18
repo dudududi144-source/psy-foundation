@@ -60,6 +60,9 @@ export { DDSPNoise } from './neural/ddsp-noise'
 export { LatentDecoder, NeuralStyleTransfer } from './neural/latent-decoder'
 export type { LatentVector } from './neural/latent-decoder'
 
+// ONNX inference (Phase 3 — trained model support)
+export { ONNXDDSPDecoder, ONNXRAVEEncoder, ONNXRAVEDecoder, ONNXStyleTransfer, checkModelAvailability } from './neural/onnx-inference'
+
 // AI Arrangement (Phase 4)
 export { ArrangementGenerator, planToSpec } from './arrangement/ArrangementGenerator'
 export type { SectionType, ArrangementSection, ArrangementPlan } from './arrangement/ArrangementGenerator'
