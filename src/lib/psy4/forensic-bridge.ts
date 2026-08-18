@@ -493,14 +493,14 @@ export async function renderFoundationSection(
   // This creates a 8-bar tension/release cycle that improves the dynamic contour.
   function barEnergy(barIdx: number): number {
     const phase = barIdx % 8
-    if (phase === 0) return 0.85  // intro — slightly quieter
-    if (phase === 1) return 0.90  // groove building
+    if (phase === 0) return 0.80  // intro — quieter
+    if (phase === 1) return 0.88  // groove building
     if (phase === 2) return 0.95  // build
     if (phase === 3) return 1.0   // full
-    if (phase === 4) return 0.50  // breakdown dip — dramatic drop
-    if (phase === 5) return 0.70  // rebuild
-    if (phase === 6) return 0.90  // build
-    if (phase === 7) return 1.15  // climax — peak
+    if (phase === 4) return 0.35  // breakdown — deep drop for dynamic contrast
+    if (phase === 5) return 0.65  // rebuild from silence
+    if (phase === 6) return 0.92  // build
+    if (phase === 7) return 1.20  // climax — peak
     return 1.0
   }
 

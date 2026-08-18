@@ -311,18 +311,18 @@ export interface MasterSpec {
 export const MASTER_SPEC: MasterSpec = {
   hpFreq: 25,
   mbLowXover: 180,
-  mbHighXover: 4000,
+  mbHighXover: 3500,
   mbLowThr: 0.126,
-  mbMidThr: 0.079,
-  mbHighThr: 0.1,
-  glueThr: 0.6,
-  glueRatio: 2.0,
-  glueAttack: 0.004,
-  glueRelease: 0.12,
-  glueMakeup: 1.3,
-  satDrive: 1.15,
-  satMix: 0.15,
-  stereoWidth: 1.3,
+  mbMidThr: 0.06,    // lower threshold = more mid compression (carve mud)
+  mbHighThr: 0.08,   // lower threshold = more high compression (control)
+  glueThr: 0.5,      // lower = more glue
+  glueRatio: 2.5,    // higher ratio = tighter
+  glueAttack: 0.003,
+  glueRelease: 0.1,
+  glueMakeup: 1.4,   // more makeup to compensate
+  satDrive: 1.2,     // slightly more drive for harmonic excitement
+  satMix: 0.18,      // slightly more saturation (air)
+  stereoWidth: 1.4,  // wider for more air
   monoBelowHz: 120,
   ceiling: 0.89,
   targetLufs: -11,
