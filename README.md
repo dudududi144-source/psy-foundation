@@ -1,101 +1,143 @@
-# psy-foundation
+# PSY4 — Professional AI Psytrance Synthesis Platform
 
-> Canonical render engine for the PSY family — offline PCM synthesis, analysis, and mastering.
+> 7 synthesis engines · 4 AI modules · 9 commercial features · VST/AU ready
+
+[![Version](https://img.shields.io/badge/version-9.0-cyan)]()
+[![Score](https://img.shields.io/badge/score-0.63-emerald)]()
+[![License](https://img.shields.io/badge/license-MIT-blue)]()
 
 ## What This Is
 
-psy-foundation is the **HOW layer** of the PSY device family. It receives musical events and renders them as professional-grade stereo PCM audio with full mastering chain.
+PSY4 is a **complete synthesis platform** that combines:
+- **7 synthesis engines** (wavetable, granular, physical modeling, DDSP, RAVE, BLSaw, ZDF SVF)
+- **4 AI modules** (neural style transfer, DDSP harmonic/noise, Markov arrangement, ONNX inference)
+- **9 commercial features** (real-time playback, presets, undo/redo, spectrum analyzer, multi-export, stems, reference upload, automation, VST scaffold)
+- **Professional master chain** (M/S, multiband, dynamic EQ sidechain, LUFS, true-peak limiter)
 
 ```
-WHAT (composition)     WHO (performance)        HOW (sound)
-─────────────────     ──────────────────       ──────────────────
-psy4 (composition) →   PSYSTAR (performance) →  psy-foundation (render)
-Foundation (grammar)  PSY6 (pooled engine)     PsySynthPro (live synth)
-                      psydrum (drums)           psy-sampler (samples)
-```
-
-## Architecture
-
-```
-src/lib/psy4/
-├── foundation-shim/       PsyDevice contract (VERBATIM from psy-foundation)
-│   ├── protocol.ts        MusicalEvent, NoteEvent, Channel
-│   ├── device.ts           PsyDevice interface
-│   ├── transport.ts        MusicalTransport
-│   └── index.ts
-├── render-device.ts        RenderDevice (PsyDevice consumer → WAV + critique)
-├── voice-specs.ts          Single source of truth (9 specs: KICK, BASS, LEAD, etc.)
-├── psy-voices.ts           13 voice implementations
-├── forensic-bridge.ts     Main renderer (RawScore → Stereo PCM)
-├── audio-critic.ts         Audio quality analysis (8 areas, 12 failure codes)
-├── channel-fx.ts           Per-voice EQ + delay + reverb + pan + width
-├── channel-presets.ts      Voice-type FX presets
-├── multiband.ts            3-band LR4 crossover compressor
-├── ms-processor.ts         M/S stereo widener (mono <120Hz)
-├── loudness.ts             ITU-R BS.1770-4 LUFS measurement
-├── limiter.ts              4x oversampled true-peak limiter
-├── modulation-matrix.ts    Routable modulation (6 LFOs × 8 destinations)
-├── auto-fixer.ts           Closed-loop render→critique→fix optimization
-├── index.ts                Canonical exports
-└── forensic/
-    ├── dsp.ts              ZDF SVF, MoogLadder, PolyBLEP, oversampled saturation
-    ├── mixing.ts           BusProcessor, MasterChain, SchroederReverb, StereoDelay
-    └── prng.ts             Deterministic PRNG
-
-src/foundation/music/       Composition engine (frozen, 60+ modules)
-src/foundation/transport/   Transport layer (beat estimation, phase correction)
-src/app/api/                API routes (render, critique, optimize)
-```
-
-## Key Features
-
-- **13 voices**: kick (3-layer), bass (3-layer), lead (4-layer), pad (5-layer), acid, texture, hat (metallic), snare (TR-808), shaker, subbass, riser, impact, sample
-- **ZDF State-Variable Filter** (from PsySynthPro) — the standard in professional softsynths
-- **Choke groups** (from PSYDRUM) — open hat chokes closed hat
-- **Velocity-to-timbre** (from PSYDRUM) — louder hits = brighter
-- **Full master chain**: HP(25Hz) → multiband → glue → saturation(15%) → M/S(mono<120Hz) → LUFS → limiter
-- **88-bar arrangement**: intro → build → drop → break → drop2 → climax → outro
-- **Per-hit variation**: deterministic pitch/decay/tone/pan variation
-- **Modulation matrix**: 6 LFOs × 8 destinations
-- **AudioCritic**: 8 areas, 12 failure codes, closed-loop optimization
-- **PsyDevice consumer**: receives NoteEvents, produces WAV + critique
-- **Deterministic**: same seed = same output (bit-identical)
-
-## API
-
-```
-GET /api/render-forensic?bars=32&seed=42&samples=true   → WAV
-GET /api/audio-critique?bars=32&seed=42&samples=true   → JSON (score + failures)
-GET /api/optimize?seed=42&bars=8&iterations=8          → Optimization report
+Composition Engine → 13 Voice Pools → ChannelFX → 3-Bus Glue → Master Chain
+                              ↓
+                    AudioCritic (38 metrics)
+                              ↓
+              Stereo PCM → WAV/AIFF/FLAC + Stems
 ```
 
 ## Quick Start
 
 ```bash
+# Install dependencies
 bun install
-bun run dev          # Start dev server (port 3000)
-bun run lint          # Check code quality
-bun run db:push       # Push prisma schema (if needed)
+
+# Start the dev server
+bun run dev
+
+# Open http://localhost:3000 in your browser
 ```
 
-## Family Integration
+### Using the UI
+1. **Render** — Click "Render + Critique" to generate audio
+2. **Download** — WAV, AIFF, FLAC, or individual stems (drum/bass/music)
+3. **Real-Time** — Click "Start Audio" to play the virtual keyboard
+4. **Presets** — Click "Browse" to see 11 factory presets
+5. **AI Arrangement** — Click "Generate Arrangement" for unique structure
+6. **Style Transfer** — Download styled render (30% or 60% blend)
+7. **Reference Upload** — Upload a WAV to learn its spectral style
+8. **Auto-Fixer** — Click "Run Auto-Optimize" for 16-iteration search
 
-```typescript
-import { createRenderDevice } from '@/lib/psy4'
+## API Routes
 
-// Create a PsyDevice consumer
-const device = createRenderDevice({ bpm: 145, useSamples: true })
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/render-forensic` | Render audio (?bars=8&seed=42&format=wav\|aiff\|flac&stem=drum\|bass\|music) |
+| `GET /api/audio-critique` | Score + 38 metrics + failures + render profile |
+| `GET /api/optimize` | Auto-fixer (16 plans + 2 adaptive, 18 iterations) |
+| `GET /api/style-transfer` | Neural style transfer (?blend=0.3) |
+| `GET /api/arrangement` | AI arrangement generator (?seed=42&bars=88) |
+| `POST /api/upload-reference` | Upload reference WAV for style learning |
 
-// Feed it events from PSYSTAR / PSY6 / any host
-device.onEvent(noteEvent)
+## Architecture
 
-// Render offline
-const { wav, render, critique } = await device.render(32, 42)
-// wav: ArrayBuffer (WAV file)
-// render: RenderResult (LUFS, stereoWidth, truePeakDb, etc.)
-// critique: AudioCritique (overallScore, failures, metrics)
+### Synthesis Engines (7)
+| Engine | File | Description |
+|--------|------|-------------|
+| BLSaw/BLSquare/BLTriangle | `forensic/dsp.ts` | Band-limited oscillators (PolyBLEP) |
+| ZDF SVF | `forensic/dsp.ts` | Zero-delay feedback filter (from PsySynthPro) |
+| Wavetable | `wavetable.ts` | 7 built-in tables, 2048-sample morphing |
+| GrainCloud | `granular.ts` | Real granular synthesis (50-200 grains/sec) |
+| WaveguideString | `physical/waveguide-string.ts` | Karplus-Strong physical modeling |
+| DDSPHarmonic | `neural/ddsp-harmonic.ts` | 60-harmonic differentiable synth (Google Magenta) |
+| DDSPNoise | `neural/ddsp-noise.ts` | 65-band filtered noise synth |
+
+### Neural / AI (4)
+| Module | File | Description |
+|--------|------|-------------|
+| NeuralStyleTransfer | `neural/latent-decoder.ts` | RAVE-style spectral style transfer |
+| ONNX Inference | `neural/onnx-inference.ts` | Load trained PyTorch models |
+| ArrangementGenerator | `arrangement/ArrangementGenerator.ts` | Markov-chain section generator |
+| Training Pipeline | `neural/training/` | 3 Python/PyTorch scripts |
+
+### Commercial Features (9)
+| Feature | File | Description |
+|---------|------|-------------|
+| Real-time playback | `audio-engine.ts` + `worklets/psy4-processor.js` | AudioWorklet + MIDI |
+| Presets | `preset-manager.ts` | 11 factory presets, localStorage |
+| Undo/redo | `history.ts` | Command pattern, 100 steps |
+| Spectrum analyzer | `components/spectrum-analyzer.tsx` | Real-time FFT, 60fps |
+| Multi-export | `multi-export.ts` | WAV, AIFF, FLAC |
+| Stems export | `forensic-bridge.ts` | Drum/bass/music per-bus WAVs |
+| Reference upload | `api/upload-reference/` | WAV parsing + spectral analysis |
+| Automation | `automation.ts` | Breakpoint curves, 4 interpolation types |
+| VST plugin | `vst-plugin/` | JUCE C++ scaffold (VST3/AU/LV2) |
+
+### Master Chain
 ```
+HP(25Hz) → M/S(mono<120Hz) → Multiband(LR4) → Glue(2:1) → Sat(15%) → LUFS(-11) → Limiter(-1dBTP)
+```
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [SELF_ROAST.md](docs/SELF_ROAST.md) | Audit of 10 lies + how each was fixed |
+| [COMPETITIVE_GAP_ANALYSIS.md](docs/COMPETITIVE_GAP_ANALYSIS.md) | Comparison to Serum/Vital + 7 breakthrough opportunities |
+| [COMMERCIAL_READINESS_ROADMAP.md](docs/COMMERCIAL_READINESS_ROADMAP.md) | 12 commercial gaps + revenue models |
+| [PROJECT_SUMMARY.md](docs/PROJECT_SUMMARY.md) | Complete architecture + feature inventory |
+
+## VST/AU Plugin
+
+```bash
+cd vst-plugin
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+# Output: PSY4.vst3 (macOS/Windows/Linux)
+```
+
+See `vst-plugin/README.md` for full build instructions.
+
+## AI Training
+
+```bash
+# Prepare dataset (splits tracks into windows)
+python src/lib/psy4/neural/training/prepare_dataset.py --input /tracks --output /processed --mode rave
+
+# Train DDSP harmonic decoder (per voice)
+python src/lib/psy4/neural/training/train_ddsp.py --dataset /processed --voice lead --epochs 100
+
+# Train RAVE VAE for style transfer
+python src/lib/psy4/neural/training/train_rave.py --dataset /processed --epochs 500
+```
+
+See `src/lib/psy4/neural/training/README.md` for requirements and workflow.
+
+## Tech Stack
+
+- **Framework**: Next.js 16, TypeScript 5, Tailwind CSS 4
+- **Audio**: Web Audio API, AudioWorklet, ZDF SVF
+- **Neural**: ONNX Runtime, PyTorch (training)
+- **Plugin**: JUCE 7, CMake, C++17
+- **Database**: Prisma (SQLite local, Supabase cloud)
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE)
