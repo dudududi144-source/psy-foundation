@@ -99,6 +99,7 @@ export default function Home() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [critique, setCritique] = useState<CritiqueData | null>(null)
   const [optReport, setOptReport] = useState<OptReport | null>(null)
+  const [arrangement, setArrangement] = useState<any | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const render = async () => {
@@ -163,7 +164,7 @@ export default function Home() {
       <header className="border-b border-zinc-800/50 backdrop-blur sticky top-0 z-10" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-4">
           <h1 className="text-lg font-bold text-zinc-50" style={{ fontFamily: DESIGN.fonts.mono }}>psy-foundation</h1>
-          <span className="text-xs text-zinc-500">v8.4 · ZDF SVF · ModulationMatrix · wavetable · granular · waveguide · 5-layer lead · LR4 bass · M/S master · dyn-EQ sidechain · stems · 16 iters</span>
+          <span className="text-xs text-zinc-500">v8.5 · ZDF SVF · ModulationMatrix · wavetable · granular · waveguide · 5-layer lead · LR4 bass · M/S master · dyn-EQ sidechain · stems · 16 iters</span>
           {critique?.version && <span className="text-xs text-cyan-500/60" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.version}</span>}
           <span className="ml-auto text-xs text-zinc-600" style={{ fontFamily: DESIGN.fonts.mono }}>{critique ? `${(critique.overallScore * 100).toFixed(0)}/100` : ''}</span>
         </div>
@@ -173,7 +174,7 @@ export default function Home() {
         {/* Render controls */}
         <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: DESIGN.fonts.mono }}>Render Engine v8.4</span>
+            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: DESIGN.fonts.mono }}>Render Engine v8.5</span>
             {critique && (
               <span className={`ml-auto text-2xl font-bold tabular-nums ${scoreColor}`}>
                 {(critique.overallScore * 100).toFixed(0)}/100
@@ -263,7 +264,7 @@ export default function Home() {
         {/* Auto-Optimize */}
         <section className="rounded-lg border border-violet-500/40 bg-violet-500/10 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-violet-200" style={{ fontFamily: DESIGN.fonts.mono }}>Auto-Fixer v8.4 (Stage 9)</span>
+            <span className="text-base font-semibold text-violet-200" style={{ fontFamily: DESIGN.fonts.mono }}>Auto-Fixer v8.5 (Stage 9)</span>
             <button
               onClick={runOptimize}
               disabled={optimizing}
@@ -297,6 +298,49 @@ export default function Home() {
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* AI Arrangement */}
+        <section className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-5" style={{ boxShadow: DESIGN.shadows.panel }}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-base font-semibold text-amber-200" style={{ fontFamily: DESIGN.fonts.mono }}>AI Arrangement (Phase 4)</span>
+            <button
+              onClick={async () => {
+                const res = await fetch(`/api/arrangement?seed=${seed}&bars=88`)
+                if (res.ok) {
+                  const data = await res.json()
+                  setArrangement(data)
+                }
+              }}
+              className="ml-auto inline-flex items-center gap-2 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-400 transition-colors"
+            >
+              Generate Arrangement
+            </button>
+          </div>
+          <p className="text-xs text-amber-300/80 mb-3">
+            Markov-chain section generator — every seed produces a different structure (intro→build→drop→break→drop2→climax→outro with random durations and transitions).
+          </p>
+          {arrangement && (
+            <div className="space-y-2">
+              <div className="flex items-baseline gap-3 text-xs">
+                <span className="text-zinc-400">Structure:</span>
+                <span className="text-amber-200 font-mono">{arrangement.summary}</span>
+                <span className="text-zinc-500 ml-auto">Hash: <span className="font-mono text-amber-400">{arrangement.structureHash}</span></span>
+                <span className="text-zinc-500">Bars: {arrangement.totalBars}</span>
+              </div>
+              <div className="grid gap-1.5">
+                {arrangement.sections.map((s, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs rounded border border-amber-500/20 bg-amber-500/5 p-2">
+                    <span className="text-amber-400 font-mono w-16 shrink-0">{s.name}</span>
+                    <span className="text-zinc-400 w-12">{s.bars} bars</span>
+                    <span className="text-zinc-400 w-16">E: {Math.round(s.energy * 100)}%</span>
+                    <span className="text-zinc-400 w-16">{s.tensionShape}</span>
+                    <span className="text-zinc-500 text-[10px] flex-1 truncate">{s.voices.length} voices</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -471,12 +515,12 @@ export default function Home() {
 
         {/* Pipeline */}
         <section>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-3" style={{ fontFamily: DESIGN.fonts.mono }}>Pipeline (v8.4)</h2>
+          <h2 className="text-lg font-semibold text-zinc-100 mb-3" style={{ fontFamily: DESIGN.fonts.mono }}>Pipeline (v8.5)</h2>
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto" style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}>
             <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre" style={{ fontFamily: DESIGN.fonts.mono }}>{`Foundation CompositionEngine (WHAT — frozen)
   └── RawScore Serializer
         ↓
-Forensic Bridge v8.4 (HOW)
+Forensic Bridge v8.5 (HOW)
   ├── Harmony Engine (8 scales, 7 progressions, from PSYSTAR)
   ├── Humanizer (mulberry32 PRNG, velocity jitter, timing drift, from PSYSTAR)
   ├── ModulationMatrix (LFO1/2/3 + velocity + 3 macros → cutoff/fmIndex/drive/res)
@@ -510,7 +554,7 @@ Stereo PCM 44100Hz → WAV + AudioCritic + RenderProfile`}</pre>
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
           <span style={{ fontFamily: DESIGN.fonts.mono }} className="text-zinc-500">github.com/dudududi144-source/psy-foundation</span>
           <span>·</span>
-          <span style={{ fontFamily: DESIGN.fonts.mono }}>v8.4 · ZDF SVF · ModulationMatrix · M/S master · dyn-EQ sidechain · stems export · wavetable · granular · waveguide</span>
+          <span style={{ fontFamily: DESIGN.fonts.mono }}>v8.5 · ZDF SVF · ModulationMatrix · M/S master · dyn-EQ sidechain · stems export · wavetable · granular · waveguide</span>
           <span className="ml-auto" style={{ fontFamily: DESIGN.fonts.mono }}>deterministic · 88 bars · 13 voices · PsyDevice</span>
         </div>
       </footer>

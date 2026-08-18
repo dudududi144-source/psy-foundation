@@ -59,6 +59,10 @@ export { DDSPHarmonic } from './neural/ddsp-harmonic'
 export { DDSPNoise } from './neural/ddsp-noise'
 export { LatentDecoder, NeuralStyleTransfer } from './neural/latent-decoder'
 export type { LatentVector } from './neural/latent-decoder'
+
+// AI Arrangement (Phase 4)
+export { ArrangementGenerator, planToSpec } from './arrangement/ArrangementGenerator'
+export type { SectionType, ArrangementSection, ArrangementPlan } from './arrangement/ArrangementGenerator'
 export type { ChannelFXConfig } from './channel-fx'
 export { CHANNEL_PRESETS } from './channel-presets'
 export type { VoiceType } from './channel-presets'
