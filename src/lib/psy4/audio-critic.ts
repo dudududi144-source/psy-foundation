@@ -973,11 +973,12 @@ function computeMelodicClarity(pcm: Float32Array, sampleRate: number): number {
 
 function computePhraseContrast(pcm: Float32Array, sampleRate: number, _bpm: number): number {
   // Contrast = how different the first and second halves of the section are.
+  // Fix: use 512 bins (not 128) to cover full spectrum up to 11kHz.
   const half = Math.floor(pcm.length / 2)
   const firstHalf = pcm.slice(0, half)
   const secondHalf = pcm.slice(half)
-  const centroid1 = computeCentroid(computeDFT(firstHalf.slice(0, 2048), 128), sampleRate, 2048)
-  const centroid2 = computeCentroid(computeDFT(secondHalf.slice(0, 2048), 128), sampleRate, 2048)
+  const centroid1 = computeCentroid(computeDFT(firstHalf.slice(0, 2048), 512), sampleRate, 2048)
+  const centroid2 = computeCentroid(computeDFT(secondHalf.slice(0, 2048), 512), sampleRate, 2048)
   const diff = Math.abs(centroid1 - centroid2) / Math.max(1, centroid1)
   return Math.min(1, diff)
 }
