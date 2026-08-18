@@ -272,8 +272,8 @@ export interface BusGains {
 }
 
 export const BUS_GAINS: BusGains = {
-  drum: 1.5,
-  bass: 0.5,
+  drum: 1.4,
+  bass: 0.7,
   music: 1.4,
   fx: 0.7,
 }
@@ -312,9 +312,9 @@ export const MASTER_SPEC: MasterSpec = {
   hpFreq: 25,
   mbLowXover: 180,
   mbHighXover: 3500,
-  mbLowThr: 0.15,     // raised = less low-band compression (more dynamics)
-  mbMidThr: 0.08,     // raised = less mid compression (less mud carving, more natural)
-  mbHighThr: 0.1,     // raised = less high compression (more air)
+  mbLowThr: 0.20,     // raised = even less low-band compression
+  mbMidThr: 0.12,     // raised = less mid compression
+  mbHighThr: 0.15,    // raised = less high compression = more air
   glueThr: 0.6,       // raised = less glue compression (more dynamic range)
   glueRatio: 2.0,     // lowered = gentler compression (more dynamics)
   glueAttack: 0.005,  // slightly slower = let transients through

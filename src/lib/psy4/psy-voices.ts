@@ -527,11 +527,12 @@ export class PsyLead {
     let out = this.sat.process(filtered, drive)
 
     // ── Layer 5: 8kHz harmonic — BYPASSES main filter, added AFTER saturation ──
-    // BLSaw at 4× freq through ZDFSVF bandpass @ 8000Hz (res 0.7), amplitude 0.7.
+    // BLSaw at 4× freq through ZDFSVF bandpass @ 8000Hz (res 0.7), amplitude 0.8.
     // Targets the 5-12kHz "presence" band directly to eliminate HIGH_END_TOO_WEAK.
+    // v9.2: amplitude 0.7 → 0.8, multiplied by ampEnv for proper envelope tracking.
     const harmRaw = this.harmSaw.process((this.freq * 4) / SR)
     const harmBP = this.harmFilter.process(harmRaw, 8000, 0.7, SR, 1)
-    const harmSig = harmBP * 0.7
+    const harmSig = harmBP * 0.8 * attackEnv
     out += harmSig
 
     // ── Amp envelope ──
