@@ -51,7 +51,7 @@ export const CHANNEL_PRESETS: Record<VoiceType, ChannelFXConfig> = {
     width: 0,
   },
   bass: {
-    eq: { lowGainDb: 1, lowFreqHz: 80, highGainDb: -2, highFreqHz: 5000 },
+    eq: { lowGainDb: 3, lowFreqHz: 80, highGainDb: -2, highFreqHz: 5000, midGainDb: 2, midFreqHz: 150 },
     delay: { timeMs: 0, feedback: 0, mix: 0, stereoOffsetMs: 0 },
     reverb: { roomSize: 0.2, decaySec: 0.4, damping: 0.9, mix: 0.0 },
     pan: 0,

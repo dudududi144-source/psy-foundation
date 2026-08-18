@@ -70,9 +70,9 @@ export interface BassSpec {
 
 export const BASS_SPEC: BassSpec = {
   mode: 'pluck',
-  subLevel: 0.5,
-  bodyLevel: 0.45,
-  characterLevel: 0.15,
+  subLevel: 0.3,
+  bodyLevel: 0.7,
+  characterLevel: 0.2,
   cutoffStart: 1200,
   cutoffEnd: 150,
   res: 0.3,
@@ -272,9 +272,9 @@ export interface BusGains {
 }
 
 export const BUS_GAINS: BusGains = {
-  drum: 1.6,
-  bass: 0.15,
-  music: 1.5,
+  drum: 1.5,
+  bass: 0.5,
+  music: 1.4,
   fx: 0.7,
 }
 
@@ -312,20 +312,20 @@ export const MASTER_SPEC: MasterSpec = {
   hpFreq: 25,
   mbLowXover: 180,
   mbHighXover: 3500,
-  mbLowThr: 0.126,
-  mbMidThr: 0.06,    // lower threshold = more mid compression (carve mud)
-  mbHighThr: 0.08,   // lower threshold = more high compression (control)
-  glueThr: 0.5,      // lower = more glue
-  glueRatio: 2.5,    // higher ratio = tighter
-  glueAttack: 0.003,
-  glueRelease: 0.1,
-  glueMakeup: 1.4,   // more makeup to compensate
-  satDrive: 1.2,     // slightly more drive for harmonic excitement
-  satMix: 0.18,      // slightly more saturation (air)
-  stereoWidth: 1.4,  // wider for more air
+  mbLowThr: 0.15,     // raised = less low-band compression (more dynamics)
+  mbMidThr: 0.08,     // raised = less mid compression (less mud carving, more natural)
+  mbHighThr: 0.1,     // raised = less high compression (more air)
+  glueThr: 0.6,       // raised = less glue compression (more dynamic range)
+  glueRatio: 2.0,     // lowered = gentler compression (more dynamics)
+  glueAttack: 0.005,  // slightly slower = let transients through
+  glueRelease: 0.15,  // slower = more natural release
+  glueMakeup: 1.1,    // lowered = less makeup = less loudness pumping
+  satDrive: 1.0,      // lowered = less saturation = cleaner
+  satMix: 0.1,        // lowered = less sat mix = more transparency
+  stereoWidth: 1.3,   // slightly less width = more mono compatibility
   monoBelowHz: 120,
-  ceiling: 0.89,
-  targetLufs: -11,
+  ceiling: 0.95,      // raised = less limiting = more dynamics
+  targetLufs: -12,    // lowered = less loudness = more headroom
 }
 
 // ═══════════════════════════════════════════════════════════════

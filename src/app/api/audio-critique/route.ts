@@ -9,8 +9,13 @@ import { PSYTRANCE_PROGRESSIONS, buildProgression, midiToNoteName } from '@/lib/
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Best config (v6.8 — ZDF SVF + harmony + humanizer)
-const BEST_CONFIG = DEFAULT_RENDER_CONFIG
+// Best config (synced with render-forensic route)
+const BEST_CONFIG = {
+  ...DEFAULT_RENDER_CONFIG,
+  bassGain: 0.8,
+  subBassGain: 0.6,
+  padGain: 0.7,
+}
 
 export async function GET(req: NextRequest) {
   const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
