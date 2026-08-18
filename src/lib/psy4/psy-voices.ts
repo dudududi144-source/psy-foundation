@@ -17,6 +17,9 @@ import { fastTanh, MoogLadder, ZDFSVF, BLSaw, BLSquare, BLTriangle, OnePoleHP, L
 import { Rng } from './forensic/prng'
 import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, ACID_SPEC, HAT_SPEC, SNARE_SPEC } from './voice-specs'
 import type { ModulationMatrix } from './modulation-matrix'
+import { Wavetable } from './wavetable'
+import { GrainCloud } from './granular'
+import { WaveguideString } from './physical/waveguide-string'
 
 const SR = 44100
 
@@ -119,6 +122,16 @@ export class PsyBass {
   noteOffTime = 0
   mode: 'pluck' | 'sustain' = BASS_SPEC.mode
 
+  // Waveguide (optional — when set, blends a Karplus-Strong plucked-string
+  // decay with the existing bass layers. Default null = legacy behavior.)
+  private waveguide: WaveguideString | null = null
+  private waveguideLevel = 0.3   // blend level 0..1
+  private waveguideDamping = 0.5 // 0=bright pluck, 1=warm sustain
+  // Rng for deterministic waveguide excitation (also allows future per-note
+  // variation without changing the constructor signature for callers that
+  // don't pass an rng)
+  private _rng: Rng
+
   // Layer 1: Sub (sine at f/2, mono)
   subPhase = 0
   // Layer 2: Body (saw through Moog)
@@ -133,6 +146,15 @@ export class PsyBass {
   hp = new LR4Highpass()
   // Mid scoop: ZDFSVF in bandpass mode at 300Hz, subtract 0.35 depth
   midScoop = new ZDFSVF()
+
+  /**
+   * Constructor — accepts an optional Rng for deterministic waveguide mode.
+   * Existing call sites (e.g. `new PsyBass()`) still work — the default
+   * Rng(seed=1) ensures reproducible excitation noise.
+   */
+  constructor(rng?: Rng) {
+    this._rng = rng ?? new Rng(1)
+  }
 
   trigger(freq: number, dur: number, amp: number) {
     this.active = true
@@ -156,6 +178,29 @@ export class PsyBass {
     this.midScoop.reset()
     this.hp.reset()
     this.sat.reset()
+    // Waveguide: trigger with bass frequency for realistic string decay.
+    // Deterministic excitation via _rng so reruns produce bit-identical output.
+    if (this.waveguide) {
+      this.waveguide.triggerDeterministic(freq, 1.0, this.waveguideDamping, this._rng)
+    }
+  }
+
+  /**
+   * setWaveguide — connect an optional WaveguideString to add realistic
+   * plucked-string decay to the bass. Pass null to disable.
+   */
+  setWaveguide(wg: WaveguideString | null): void {
+    this.waveguide = wg
+  }
+
+  /** Set the waveguide blend level (0..1, default 0.3). */
+  setWaveguideLevel(level: number): void {
+    this.waveguideLevel = Math.max(0, Math.min(1, level))
+  }
+
+  /** Set the waveguide damping (0=bright pluck, 1=warm sustain, default 0.5). */
+  setWaveguideDamping(damping: number): void {
+    this.waveguideDamping = Math.max(0, Math.min(1, damping))
   }
 
   setMode(mode: 'pluck' | 'sustain') {
@@ -165,6 +210,7 @@ export class PsyBass {
   noteOff() {
     this.releasing = true
     this.releaseT = 0
+    if (this.waveguide) this.waveguide.noteOff()
   }
 
   render(): [number, boolean] {
@@ -196,6 +242,15 @@ export class PsyBass {
 
     // ── Mix layers ──
     let mixed = sub + filtered * BASS_SPEC.bodyLevel + charFiltered
+
+    // ── Waveguide layer — Karplus-Strong plucked-string decay ──
+    // Adds realistic string-like decay impossible with oscillator+filter.
+    // Blended BEFORE the mid scoop + saturation + HP so it gets the same
+    // channel treatment as the rest of the bass — keeps the bass cohesive.
+    if (this.waveguide && this.waveguideLevel > 0) {
+      const wgSig = this.waveguide.render() * this.waveguideLevel
+      mixed += wgSig
+    }
 
     // ── Mid scoop: subtract bandpass at 300Hz (depth 0.35) ──
     // This removes the boxy 250-400Hz mud that builds up when the body saw
@@ -252,7 +307,13 @@ export class PsyLead {
   // ModulationMatrix (optional — wired by forensic-bridge)
   private matrix: ModulationMatrix | null = null
   // Per-sample modulation params buffer (reused to avoid allocation)
-  private _modParams: { cutoff?: number; fmIndex?: number; amp?: number; drive?: number; delaySend?: number } = {}
+  private _modParams: { cutoff?: number; fmIndex?: number; amp?: number; drive?: number; delaySend?: number; wavetablePos?: number } = {}
+
+  // Wavetable (optional — when set, replaces the saw fundamental layer with a
+  // morphable wavetable. Default null = legacy BLSaw behavior preserved.)
+  private wavetable: Wavetable | null = null
+  // Wavetable morph position 0..1 (default 0.5 = middle of multi-table)
+  private wavetablePos = 0.5
 
   // trigger() params — stored in fields and used throughout render()
   // Default to LEAD_SPEC values; trigger() overrides from params argument.
@@ -288,6 +349,21 @@ export class PsyLead {
 
   setModulationMatrix(m: ModulationMatrix | null): void {
     this.matrix = m
+  }
+
+  /**
+   * setWavetable — connect an optional morphable wavetable to replace the
+   * saw fundamental layer. Pass null to restore legacy BLSaw behavior.
+   * The wavetable's morph position can be modulated via the matrix destination
+   * 'wavetablePos' (see modulation-matrix.ts).
+   */
+  setWavetable(wt: Wavetable | null): void {
+    this.wavetable = wt
+  }
+
+  /** Set the wavetable morph position directly (0..1). */
+  setWavetablePosition(pos: number): void {
+    this.wavetablePos = Math.max(0, Math.min(1, pos))
   }
 
   trigger(freq: number, dur: number, amp: number, params?: {
@@ -327,6 +403,11 @@ export class PsyLead {
     this.harmFilter.reset()
     this.filter.reset()
     this.sat.reset()
+    // Wavetable: reset phase, set fundamental frequency.
+    if (this.wavetable) {
+      this.wavetable.reset()
+      this.wavetable.setFreq(freq)
+    }
   }
 
   noteOff() {
@@ -345,9 +426,20 @@ export class PsyLead {
 
     const attackEnv = Math.min(1, this.t / 0.003)
 
-    // ── Layer 1: Fundamental — 2 detuned saws (pDetune) ──
-    const fundSig = (this.saw1.process(this.freq * Math.pow(2, -this.pDetune / 1200) / SR) +
-                    this.saw2.process(this.freq * Math.pow(2, this.pDetune / 1200) / SR)) * 0.5
+    // ── Layer 1: Fundamental — wavetable (if connected) OR 2 detuned saws ──
+    // When a Wavetable is connected via setWavetable(), it replaces the dual-saw
+    // fundamental layer with a morphable wavetable. The morph position is updated
+    // below (after matrix.apply for the matrix path, or directly for the legacy
+    // path). One-sample delay between matrix output and wavetable position is
+    // inaudible at audio rate.
+    let fundSig: number
+    if (this.wavetable) {
+      const inc = this.freq / SR
+      fundSig = this.wavetable.process(inc)
+    } else {
+      fundSig = (this.saw1.process(this.freq * Math.pow(2, -this.pDetune / 1200) / SR) +
+                this.saw2.process(this.freq * Math.pow(2, this.pDetune / 1200) / SR)) * 0.5
+    }
 
     // ── Layer 2: Octave-up — 2 detuned saws, adds brightness ──
     const octSig = (this.octSaw1.process(this.freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200) / SR) +
@@ -380,15 +472,24 @@ export class PsyLead {
       this._modParams.amp = 1
       this._modParams.drive = drive
       this._modParams.delaySend = 0
+      // Wavetable morph position is included so matrix routes targeting
+      // 'wavetablePos' can morph the table during playback.
+      this._modParams.wavetablePos = this.wavetablePos
       this.matrix.apply(this._modParams)
       cutoff = Math.max(200, this._modParams.cutoff ?? this.pCutoff)
       currentModIndex = this._modParams.fmIndex ?? currentModIndex
       drive = this._modParams.drive ?? drive
+      // Update wavetable morph position from matrix output
+      if (this.wavetable && this._modParams.wavetablePos !== undefined) {
+        this.wavetable.setPosition(this._modParams.wavetablePos)
+      }
     } else {
       // Legacy inline LFO path (preserves pre-matrix behavior when matrix is null)
       const lfo1 = Math.sin(2 * Math.PI * this.pLfoRate * this.t) * this.pLfoDepth
       const lfo2 = Math.sin(2 * Math.PI * 5.5 * this.t) * 0.15 // shimmer LFO
       cutoff = Math.max(200, this.pCutoff * (1 + filterEnv + lfo1 + lfo2))
+      // No matrix — apply wavetablePos directly (no LFO modulation)
+      if (this.wavetable) this.wavetable.setPosition(this.wavetablePos)
     }
 
     // FM signal (uses final currentModIndex, after matrix modulation if any)
@@ -899,7 +1000,7 @@ export class PsyAcid {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TEXTURE — granular + morphing atmospheric bed
+// TEXTURE — real granular synthesis + morphing atmospheric bed
 // ═══════════════════════════════════════════════════════════════
 
 export class PsyTexture {
@@ -909,19 +1010,35 @@ export class PsyTexture {
   releasing = false
   releaseT = 0
 
-  // 4 detuned oscillators with random grain positions
-  oscs: BLSaw[]
-  grainPhases: number[]
-  // Noise bed
+  // Grain cloud — replaces the old "4 detuned saws + fake grain movement"
+  // with real granular synthesis. Each grain has its own position, pitch,
+  // pan, and Hann envelope. Spawns grains at the configured density.
+  private cloud: GrainCloud
+  private cloudAmp = 0.6      // gain applied to grain cloud output
+  // Noise bed (kept — adds a low-frequency rumble layer beneath the grains)
   noise: PinkNoise
   noiseBP = new ZDFSVF()
   // Filter
   filter = new ZDFSVF()
   sat = new OversampledSaturation()
+  // Source-buffer cache so we don't regenerate per trigger
+  private sourceBuffer: Float32Array | null = null
+  private sourceFreq = 220
+  // Rng reference (for source-buffer generation)
+  private rng: Rng
 
   constructor(rng: Rng) {
-    this.oscs = [new BLSaw(), new BLSaw(), new BLSaw(), new BLSaw()]
-    this.grainPhases = [0, 0, 0, 0]
+    this.rng = rng
+    // Default source: 2-second mixed saw+noise buffer. Will be regenerated
+    // in trigger() based on the actual chord freqs.
+    this.sourceBuffer = GrainCloud.generateMixedBuffer(rng, 220, 2.0, 0.5)
+    this.cloud = new GrainCloud(this.sourceBuffer, rng)
+    // Density 60 grains/sec, 40ms grains — dense evolving texture
+    this.cloud.setDensity(60)
+    this.cloud.setGrainDuration(40)
+    this.cloud.setPitchVar(0.15)    // +/-15% pitch variation
+    this.cloud.setPosVar(0.4)       // +/-40% position spread
+    this.cloud.setAmp(0.5)
     this.noise = new PinkNoise(rng)
   }
 
@@ -931,13 +1048,16 @@ export class PsyTexture {
     this.amp = amp * 0.15
     this.releasing = false
     this.releaseT = 0
-    // 4 oscillators with wide detune for granular texture
-    for (let i = 0; i < 4; i++) {
-      this.oscs[i]!.reset()
-      const baseFreq = freqs[i % freqs.length] ?? freqs[0] ?? 220
-      const detune = (i - 1.5) * 15 // -22.5 to +22.5 cents
-      this.oscs[i]!.setFreq(baseFreq * Math.pow(2, detune / 1200))
-      this.grainPhases[i] = Math.random() * 0.1 // random grain start
+    // Generate a fresh source buffer based on the chord's root frequency.
+    // Mixed saw+noise gives the cloud both pitch definition (for harmonic
+    // coherence with the rest of the mix) and noisy evolution (for texture).
+    const root = freqs[0] ?? 220
+    if (Math.abs(root - this.sourceFreq) > 0.5 || !this.sourceBuffer) {
+      this.sourceFreq = root
+      this.sourceBuffer = GrainCloud.generateMixedBuffer(this.rng, root, 2.0, 0.5)
+      this.cloud.setBuffer(this.sourceBuffer)
+    } else {
+      this.cloud.reset()
     }
     this.noise.reset()
     this.noiseBP.reset()
@@ -955,24 +1075,20 @@ export class PsyTexture {
       if (this.releaseT > 0.5) { this.active = false; return [0, true] }
     }
 
-    // ── Layer 1: 4 detuned oscillators with grain movement ──
-    let oscSum = 0
-    for (let i = 0; i < 4; i++) {
-      // Slow grain position modulation (0.05-0.2Hz per osc)
-      const grainLfo = Math.sin(2 * Math.PI * (0.05 + i * 0.05) * this.t) * 0.3
-      const inc = this.oscs[i]!.freq / SR
-      this.grainPhases[i] = (this.grainPhases[i]! + inc * (1 + grainLfo * 0.1)) % 1
-      oscSum += this.oscs[i]!.process(inc)
-    }
-    oscSum /= 4
+    // ── Layer 1: Real granular cloud — spawns grains, applies Hann window ──
+    // Returns stereo [L, R] with per-grain pan. We sum to mono (0.5*(L+R))
+    // since PsyTexture's output interface is mono — external M/S widening
+    // (in forensic-bridge master chain) spreads this back to stereo.
+    const [gL, gR] = this.cloud.process()
+    const grainSig = (gL + gR) * 0.5 * this.cloudAmp
 
-    // ── Layer 2: Noise bed with slow bandpass sweep ──
+    // ── Layer 2: Noise bed with slow bandpass sweep (kept from old design) ──
     const n = this.noise.next()
     const noiseSweep = 400 + Math.sin(2 * Math.PI * 0.1 * this.t) * 300 // 100-700Hz
     const noiseSig = this.noiseBP.process(n, noiseSweep, 0.5, SR, 1) * 0.3
 
     // ── Mix ──
-    let signal = oscSum * 0.6 + noiseSig * 0.4
+    let signal = grainSig + noiseSig * 0.4
 
     // ── Filter: slow morph (0.05Hz) ──
     const morphLfo = Math.sin(2 * Math.PI * 0.05 * this.t) * 0.5

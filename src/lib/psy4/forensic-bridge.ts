@@ -188,7 +188,7 @@ export async function renderFoundationSection(
 
   // ── Voice pools ──
   const kicks = [new PsyKick(rng), new PsyKick(rng), new PsyKick(rng), new PsyKick(rng)]
-  const basses = [new PsyBass(), new PsyBass()]
+  const basses = [new PsyBass(rng), new PsyBass(rng)]
   const leads = [new PsyLead(rng), new PsyLead(rng), new PsyLead(rng), new PsyLead(rng)]
   const hats = [new PsyHat(rng), new PsyHat(rng), new PsyHat(rng), new PsyHat(rng)]
   const snares = [new PsySnare(rng), new PsySnare(rng)]

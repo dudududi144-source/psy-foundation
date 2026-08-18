@@ -11,7 +11,7 @@
  */
 
 export type ModSource = 'lfo1' | 'lfo2' | 'lfo3' | 'lfo4' | 'lfo5' | 'lfo6' | 'env' | 'velocity' | 'macro1' | 'macro2' | 'macro3'
-export type ModDestination = 'pitch' | 'cutoff' | 'resonance' | 'fmIndex' | 'amp' | 'pan' | 'drive' | 'delaySend'
+export type ModDestination = 'pitch' | 'cutoff' | 'resonance' | 'fmIndex' | 'amp' | 'pan' | 'drive' | 'delaySend' | 'wavetablePos'
 
 export interface ModRoute {
   source: ModSource
@@ -99,6 +99,7 @@ export class ModulationMatrix {
     pan?: number
     drive?: number
     delaySend?: number
+    wavetablePos?: number
   }): void {
     for (const route of this.routes) {
       const sourceValue = this.getSourceValue(route.source)
@@ -127,6 +128,10 @@ export class ModulationMatrix {
           break
         case 'delaySend':
           if (params.delaySend !== undefined) params.delaySend = Math.max(0, Math.min(1, params.delaySend + sourceValue * amount * 0.3))
+          break
+        case 'wavetablePos':
+          // Bidirectional morph modulation, clamped to [0, 1]
+          if (params.wavetablePos !== undefined) params.wavetablePos = Math.max(0, Math.min(1, params.wavetablePos + sourceValue * amount * 0.5))
           break
       }
     }
