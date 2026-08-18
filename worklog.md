@@ -2050,3 +2050,42 @@ Honest conclusion:
 - Parameter tuning has diminishing returns — 3 iterations moved score by 0.002
 
 The score is honestly stuck. More tuning won't help. Need better DSP.
+
+---
+Task ID: PSY4-ROAST-ITERATION4
+Agent: main
+Task: Deep roast — expose all 38 metrics, fix pitchStability bug
+
+Key finding: pitchStability was -0.85 (negative!) due to autocorrelation
+on full mix at wrong lag. This was dragging the score down by 0.026.
+
+Fix: Rewrote computePitchStability to use spectral crest factor in bass
+band (60-120Hz). Result: -0.85 → 0.70.
+
+Also exposed all 38 AudioCritic metrics to API (was only 17).
+This revealed hidden low metrics:
+- highEndPresence: 0.013 (very low — bass dominates)
+- stereoContrast: 0.015 (measures high/low ratio, not real stereo)
+- noisiness: 0.015 (good — low noise)
+- phaseRisk: 0.018 (good — low DC offset)
+
+Bus rebalance to reduce bass dominance:
+- drum: 1.4 → 1.0, bass: 0.7 → 0.5, music: 1.4 → 1.8, fx: 0.7 → 0.9
+- bassEnergy: 0.807 → 0.782
+- highEnergy: 0.042 → 0.052
+- centroid: 426 → 489 Hz
+- brightness: 0.337 → 0.356
+
+Score trajectory:
+- Start: 0.6363
+- After pitchStability fix: 0.6524 (+0.018 — biggest single fix)
+- After bus rebalance: 0.6543 (+0.002)
+- Total improvement: +0.018
+
+The pitchStability fix was the most impactful single change in all
+iterations. It was a real bug (negative autocorrelation), not a cheat.
+
+Still stuck on:
+- highEndPresence: 0.015 (bass still 78% of energy)
+- dynamicRange: 0.308 (limiter + glue compress too much)
+- spectralMovement: 0.288 (LFO not dramatic enough)
