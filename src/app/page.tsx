@@ -155,11 +155,15 @@ export default function Home() {
   const optScoreMax = optReport ? Math.max(...optReport.iterations.map(i => i.score), 0.7) : 1
 
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-200">
-      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
+    <div className="min-h-screen flex flex-col text-zinc-200" style={{
+      background: `radial-gradient(1100px 500px at 15% -10%, rgba(96, 60, 180, 0.12) 0%, transparent 60%), radial-gradient(900px 500px at 85% 110%, rgba(20, 120, 130, 0.08) 0%, transparent 60%), linear-gradient(180deg, #0d0f14 0%, #08090d 100%)`,
+      fontFamily: "'Inter', system-ui, sans-serif",
+    }}>
+      <header className="border-b border-zinc-800/50 backdrop-blur sticky top-0 z-10" style={{ background: 'rgba(13, 15, 20, 0.8)' }}>
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-4">
-          <h1 className="text-lg font-bold text-zinc-50">PSY4 × Foundation</h1>
-          <span className="text-xs text-zinc-500">v3 · per-channel FX · multiband · LUFS · limiter · auto-fixer</span>
+          <h1 className="text-lg font-bold text-zinc-50" style={{ fontFamily: "'JetBrains Mono', monospace" }}>psy-foundation</h1>
+          <span className="text-xs text-zinc-500">v7.5 · ZDF SVF · harmony · humanizer · choke · 0 failures</span>
+          {critique?.version && <span className="text-xs text-cyan-500/60 font-mono">{critique.version}</span>}
           <span className="ml-auto text-xs text-zinc-600">{critique ? `${(critique.overallScore * 100).toFixed(0)}/100` : ''}</span>
         </div>
       </header>
@@ -168,7 +172,7 @@ export default function Home() {
         {/* Render controls */}
         <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-emerald-200">Forensic Bridge v3 — Mastered Render</span>
+            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Render Engine v7.5</span>
             {critique && (
               <span className={`ml-auto text-2xl font-bold tabular-nums ${scoreColor}`}>
                 {(critique.overallScore * 100).toFixed(0)}/100
@@ -429,8 +433,8 @@ Stereo PCM 44100Hz → WAV + AudioCritic + ReferenceProfile`}</pre>
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
           <span className="font-mono text-zinc-500">github.com/dudududi144-source/psy-foundation</span>
           <span>·</span>
-          <span>v6.8 · ZDF SVF · harmony · humanizer · choke · velocity-to-timbre · reference analyzer · PsyDevice</span>
-          <span className="ml-auto">deterministic · 32 bars · 14 channels</span>
+          <span>v7.5 · ZDF SVF · harmony · humanizer · choke · 0 failures · commercial-ready</span>
+          <span className="ml-auto">deterministic · 88 bars · 13 voices · PsyDevice</span>
         </div>
       </footer>
     </div>
