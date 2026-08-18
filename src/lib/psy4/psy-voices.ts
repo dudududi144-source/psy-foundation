@@ -20,6 +20,7 @@ import type { ModulationMatrix } from './modulation-matrix'
 import { Wavetable } from './wavetable'
 import { GrainCloud } from './granular'
 import { WaveguideString } from './physical/waveguide-string'
+import { DDSPHarmonic } from './neural/ddsp-harmonic'
 
 const SR = 44100
 
@@ -315,6 +316,11 @@ export class PsyLead {
   // Wavetable morph position 0..1 (default 0.5 = middle of multi-table)
   private wavetablePos = 0.5
 
+  // DDSP Harmonic synth (optional — Phase 3 neural synthesis mode)
+  // When set, replaces the fundamental layer with a differentiable harmonic
+  // additive synthesizer. 60 harmonics, controllable amplitudes.
+  private ddsp: DDSPHarmonic | null = null
+
   // trigger() params — stored in fields and used throughout render()
   // Default to LEAD_SPEC values; trigger() overrides from params argument.
   private pCutoff: number = LEAD_SPEC.cutoff
@@ -364,6 +370,18 @@ export class PsyLead {
   /** Set the wavetable morph position directly (0..1). */
   setWavetablePosition(pos: number): void {
     this.wavetablePos = Math.max(0, Math.min(1, pos))
+  }
+
+  /**
+   * setDDSP — connect a DDSP harmonic synth (Phase 3 neural mode).
+   * When set, replaces the fundamental layer with a differentiable harmonic
+   * additive synthesizer (60 harmonics). Pass null to restore legacy behavior.
+   */
+  setDDSP(synth: DDSPHarmonic | null): void {
+    this.ddsp = synth
+    if (synth) {
+      synth.setPreset('psyLead')
+    }
   }
 
   trigger(freq: number, dur: number, amp: number, params?: {
@@ -426,14 +444,15 @@ export class PsyLead {
 
     const attackEnv = Math.min(1, this.t / 0.003)
 
-    // ── Layer 1: Fundamental — wavetable (if connected) OR 2 detuned saws ──
-    // When a Wavetable is connected via setWavetable(), it replaces the dual-saw
-    // fundamental layer with a morphable wavetable. The morph position is updated
-    // below (after matrix.apply for the matrix path, or directly for the legacy
-    // path). One-sample delay between matrix output and wavetable position is
-    // inaudible at audio rate.
+    // ── Layer 1: Fundamental — DDSP (if connected) OR wavetable OR 2 detuned saws ──
+    // Priority: DDSP > Wavetable > BLSaw (legacy)
     let fundSig: number
-    if (this.wavetable) {
+    if (this.ddsp) {
+      // DDSP neural synthesis — set freq and process
+      this.ddsp.setFreq(this.freq)
+      this.ddsp.setAmplitude(this.amp)
+      fundSig = this.ddsp.process()
+    } else if (this.wavetable) {
       const inc = this.freq / SR
       fundSig = this.wavetable.process(inc)
     } else {

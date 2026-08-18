@@ -45,8 +45,20 @@ export type { RenderConfig, RenderResult } from './forensic-bridge'
 export { critiqueAudio } from './audio-critic'
 export type { AudioCritique, AudioFailure } from './audio-critic'
 
-// Master chain
-export { ChannelFX } from './channel-fx'
+// Wavetable synthesis (Phase 2)
+export { Wavetable } from './wavetable'
+
+// Granular synthesis (Phase 2)
+export { GrainCloud } from './granular'
+
+// Physical modeling (Phase 2)
+export { WaveguideString } from './physical/waveguide-string'
+
+// Neural synthesis (Phase 3)
+export { DDSPHarmonic } from './neural/ddsp-harmonic'
+export { DDSPNoise } from './neural/ddsp-noise'
+export { LatentDecoder, NeuralStyleTransfer } from './neural/latent-decoder'
+export type { LatentVector } from './neural/latent-decoder'
 export type { ChannelFXConfig } from './channel-fx'
 export { CHANNEL_PRESETS } from './channel-presets'
 export type { VoiceType } from './channel-presets'
