@@ -163,7 +163,7 @@ export default function Home() {
       <header className="border-b border-zinc-800/50 backdrop-blur sticky top-0 z-10" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-4">
           <h1 className="text-lg font-bold text-zinc-50" style={{ fontFamily: DESIGN.fonts.mono }}>psy-foundation</h1>
-          <span className="text-xs text-zinc-500">v8.3 · ZDF SVF · ModulationMatrix · wavetable · granular · waveguide · 5-layer lead · LR4 bass · M/S master · dyn-EQ sidechain · stems · 16 iters</span>
+          <span className="text-xs text-zinc-500">v8.4 · ZDF SVF · ModulationMatrix · wavetable · granular · waveguide · 5-layer lead · LR4 bass · M/S master · dyn-EQ sidechain · stems · 16 iters</span>
           {critique?.version && <span className="text-xs text-cyan-500/60" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.version}</span>}
           <span className="ml-auto text-xs text-zinc-600" style={{ fontFamily: DESIGN.fonts.mono }}>{critique ? `${(critique.overallScore * 100).toFixed(0)}/100` : ''}</span>
         </div>
@@ -173,7 +173,7 @@ export default function Home() {
         {/* Render controls */}
         <section className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: DESIGN.fonts.mono }}>Render Engine v8.3</span>
+            <span className="text-base font-semibold text-emerald-200" style={{ fontFamily: DESIGN.fonts.mono }}>Render Engine v8.4</span>
             {critique && (
               <span className={`ml-auto text-2xl font-bold tabular-nums ${scoreColor}`}>
                 {(critique.overallScore * 100).toFixed(0)}/100
@@ -241,6 +241,20 @@ export default function Home() {
                   className="text-cyan-400 hover:underline"
                   title="Download the music bus (post-bus-glue, pre-master) as a stereo WAV"
                 >Download Music Stem</a>
+                <span className="text-zinc-600">·</span>
+                <span className="text-zinc-400" style={{ fontFamily: DESIGN.fonts.mono }}>Neural:</span>
+                <a
+                  href={`/api/style-transfer?bars=${bars}&seed=${seed}&samples=${useSamples}&blend=0.3`}
+                  download={`psy4-style-transfer-bars${bars}-seed${seed}.wav`}
+                  className="text-fuchsia-400 hover:underline"
+                  title="Apply spectral style transfer (RAVE-style, 30% blend)"
+                >Style Transfer (30%)</a>
+                <a
+                  href={`/api/style-transfer?bars=${bars}&seed=${seed}&samples=${useSamples}&blend=0.6`}
+                  download={`psy4-style-transfer-strong-bars${bars}-seed${seed}.wav`}
+                  className="text-fuchsia-400 hover:underline"
+                  title="Apply spectral style transfer (RAVE-style, 60% blend)"
+                >Style Transfer (60%)</a>
               </p>
             </div>
           )}
@@ -249,7 +263,7 @@ export default function Home() {
         {/* Auto-Optimize */}
         <section className="rounded-lg border border-violet-500/40 bg-violet-500/10 p-5" style={{ background: DESIGN.gradients.chassis, boxShadow: DESIGN.shadows.panel }}>
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-base font-semibold text-violet-200" style={{ fontFamily: DESIGN.fonts.mono }}>Auto-Fixer v8.3 (Stage 9)</span>
+            <span className="text-base font-semibold text-violet-200" style={{ fontFamily: DESIGN.fonts.mono }}>Auto-Fixer v8.4 (Stage 9)</span>
             <button
               onClick={runOptimize}
               disabled={optimizing}
@@ -457,12 +471,12 @@ export default function Home() {
 
         {/* Pipeline */}
         <section>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-3" style={{ fontFamily: DESIGN.fonts.mono }}>Pipeline (v8.3)</h2>
+          <h2 className="text-lg font-semibold text-zinc-100 mb-3" style={{ fontFamily: DESIGN.fonts.mono }}>Pipeline (v8.4)</h2>
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto" style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}>
             <pre className="text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre" style={{ fontFamily: DESIGN.fonts.mono }}>{`Foundation CompositionEngine (WHAT — frozen)
   └── RawScore Serializer
         ↓
-Forensic Bridge v8.3 (HOW)
+Forensic Bridge v8.4 (HOW)
   ├── Harmony Engine (8 scales, 7 progressions, from PSYSTAR)
   ├── Humanizer (mulberry32 PRNG, velocity jitter, timing drift, from PSYSTAR)
   ├── ModulationMatrix (LFO1/2/3 + velocity + 3 macros → cutoff/fmIndex/drive/res)
@@ -496,7 +510,7 @@ Stereo PCM 44100Hz → WAV + AudioCritic + RenderProfile`}</pre>
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-600">
           <span style={{ fontFamily: DESIGN.fonts.mono }} className="text-zinc-500">github.com/dudududi144-source/psy-foundation</span>
           <span>·</span>
-          <span style={{ fontFamily: DESIGN.fonts.mono }}>v8.3 · ZDF SVF · ModulationMatrix · M/S master · dyn-EQ sidechain · stems export · wavetable · granular · waveguide</span>
+          <span style={{ fontFamily: DESIGN.fonts.mono }}>v8.4 · ZDF SVF · ModulationMatrix · M/S master · dyn-EQ sidechain · stems export · wavetable · granular · waveguide</span>
           <span className="ml-auto" style={{ fontFamily: DESIGN.fonts.mono }}>deterministic · 88 bars · 13 voices · PsyDevice</span>
         </div>
       </footer>
