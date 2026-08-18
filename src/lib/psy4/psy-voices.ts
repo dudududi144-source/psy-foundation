@@ -121,10 +121,10 @@ export class PsyBass {
   // Layer 2: Body (saw through Moog)
   saw1 = new BLSaw()
   saw2 = new BLSaw()  // detuned for stereo width
-  filter = new MoogLadder()
+  filter = new ZDFSVF()
   // Layer 3: Character (square through BP, stereo)
   charSquare = new BLSquare()
-  charFilter = new MoogLadder()
+  charFilter = new ZDFSVF()
   sat = new OversampledSaturation()
   hpState = 0
 
@@ -181,11 +181,11 @@ export class PsyBass {
 
     // Filter envelope: opens to 1500Hz, drops to 150Hz (PSY3 Rule 2)
     const cutoffEnv = (BASS_SPEC.cutoffStart - BASS_SPEC.cutoffEnd) * Math.exp(-this.t / 0.03) + BASS_SPEC.cutoffEnd
-    const filtered = this.filter.process(sawOut, cutoffEnv, BASS_SPEC.res, 2.0, SR)
+    const filtered = this.filter.process(sawOut, cutoffEnv, BASS_SPEC.res, SR, 0)
 
     // ── Layer 3: CHARACTER — square through BP at 400Hz, stereo ──
     const charOut = this.charSquare.process((this.freq * 2) / SR)
-    const charFiltered = this.charFilter.process(charOut, 400, 0.7, 1.0, SR) * BASS_SPEC.characterLevel
+    const charFiltered = this.charFilter.process(charOut, 400, 0.7, SR, 1) * BASS_SPEC.characterLevel
 
     // ── Mix layers ──
     let mixed = sub + filtered * BASS_SPEC.bodyLevel + charFiltered
@@ -358,7 +358,7 @@ export class PsyHat {
   private phases = new Float64Array(6)
   private freqs = [540, 800, 1080, 1360, 1700, 2400]
   // Bandpass filter for the metallic clang
-  private bp = new MoogLadder()
+  private bp = new ZDFSVF()
   // Highpass for cleaning up low end
   private hp = new OnePoleHP()
   // Per-hit variation (deterministic via Rng)
@@ -398,7 +398,7 @@ export class PsyHat {
     metallic /= 6
 
     // Bandpass at ~10kHz for shimmer
-    const bpOut = this.bp.process(metallic, 12000, 0.5, 1.0, SR)
+    const bpOut = this.bp.process(metallic, 12000, 0.5, SR, 1) // bandpass
     // Highpass at 6kHz to remove any low leakage
     const hpOut = this.hp.process(bpOut, 6000, SR)
 
@@ -458,7 +458,7 @@ export class PsySnare {
   freq1 = SNARE_SPEC.tone1Freq
   freq2 = SNARE_SPEC.tone2Freq
   // Bandpass for the noise component
-  noiseBP = new MoogLadder()
+  noiseBP = new ZDFSVF()
   // Highpass for cleaning
   noiseHP = new OnePoleHP()
   // Per-hit variation
@@ -490,7 +490,7 @@ export class PsySnare {
 
     // ── Noise component: filtered through bandpass + highpass ──
     const n = this.noise.next()
-    const bpOut = this.noiseBP.process(n, 1800, 0.7, 1.0, SR) // ~1.8kHz bandpass
+    const bpOut = this.noiseBP.process(n, 1800, 0.7, SR, 1) // ~1.8kHz bandpass
     const hpOut = this.noiseHP.process(bpOut, 1000, SR) // HP at 1kHz
     // Noise has longer decay (the "sizzle")
     const noiseEnv = Math.exp(-this.t / 0.08)
@@ -664,7 +664,7 @@ export class PsyShaker {
   amp = 0.25
   noise: PinkNoise
   // Bandpass for the "shhh" character
-  bp = new MoogLadder()
+  bp = new ZDFSVF()
   // Highpass for cleanup
   hp = new OnePoleHP()
   // Per-hit variation
@@ -693,7 +693,7 @@ export class PsyShaker {
     if (this.t > 0.06) { this.active = false; return [0, true] }
     const n = this.noise.next()
     // Bandpass with per-hit frequency variation
-    const bpOut = this.bp.process(n, this.bpFreqVar, 0.4, 1.0, SR)
+    const bpOut = this.bp.process(n, this.bpFreqVar, 0.4, SR, 1)
     const hpOut = this.hp.process(bpOut, 4000, SR)
     // Two-stage envelope: fast body + slow tail
     const bodyEnv = Math.exp(-this.t / 0.008)
@@ -791,7 +791,7 @@ export class PsyTexture {
   grainPhases: number[]
   // Noise bed
   noise: PinkNoise
-  noiseBP = new MoogLadder()
+  noiseBP = new ZDFSVF()
   // Filter
   filter = new ZDFSVF()
   sat = new OversampledSaturation()
@@ -846,7 +846,7 @@ export class PsyTexture {
     // ── Layer 2: Noise bed with slow bandpass sweep ──
     const n = this.noise.next()
     const noiseSweep = 400 + Math.sin(2 * Math.PI * 0.1 * this.t) * 300 // 100-700Hz
-    const noiseSig = this.noiseBP.process(n, noiseSweep, 0.5, 1.0, SR) * 0.3
+    const noiseSig = this.noiseBP.process(n, noiseSweep, 0.5, SR, 1) * 0.3
 
     // ── Mix ──
     let signal = oscSum * 0.6 + noiseSig * 0.4
@@ -878,7 +878,7 @@ export class PsyRiser {
   dur = 2.0
   amp = 0.25
   noise: PinkNoise
-  filter = new MoogLadder()
+  filter = new ZDFSVF()
   // Saw oscillator for pitched rise
   saw = new BLSaw()
   sawPhase = 0
@@ -905,7 +905,7 @@ export class PsyRiser {
     // Noise sweep: filter opens from 200Hz to 10kHz
     const n = this.noise.next()
     const cutoff = 200 + Math.pow(progress, 1.5) * 9800
-    const filtered = this.filter.process(n, cutoff, 0.5, 1.5, SR)
+    const filtered = this.filter.process(n, cutoff, 0.5, SR, 0)
 
     // Pitched saw: rises from 100Hz to 800Hz exponentially
     const sawFreq = 100 * Math.pow(8, progress) // 100→800Hz

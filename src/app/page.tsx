@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { DESIGN } from '@/lib/psy4/design-system'
 
 interface CritiqueData {
   overallScore: number
@@ -156,14 +157,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col text-zinc-200" style={{
-      background: `radial-gradient(1100px 500px at 15% -10%, rgba(96, 60, 180, 0.12) 0%, transparent 60%), radial-gradient(900px 500px at 85% 110%, rgba(20, 120, 130, 0.08) 0%, transparent 60%), linear-gradient(180deg, #0d0f14 0%, #08090d 100%)`,
-      fontFamily: "'Inter', system-ui, sans-serif",
+      background: DESIGN.gradients.background,
+      fontFamily: DESIGN.fonts.sans,
     }}>
       <header className="border-b border-zinc-800/50 backdrop-blur sticky top-0 z-10" style={{ background: 'rgba(13, 15, 20, 0.8)' }}>
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-4">
-          <h1 className="text-lg font-bold text-zinc-50" style={{ fontFamily: "'JetBrains Mono', monospace" }}>psy-foundation</h1>
+          <h1 className="text-lg font-bold text-zinc-50" style={{ fontFamily: DESIGN.fonts.mono }}>psy-foundation</h1>
           <span className="text-xs text-zinc-500">v7.5 · ZDF SVF · harmony · humanizer · choke · 0 failures</span>
-          {critique?.version && <span className="text-xs text-cyan-500/60 font-mono">{critique.version}</span>}
+          {critique?.version && <span className="text-xs text-cyan-500/60" style={{ fontFamily: DESIGN.fonts.mono }}>{critique.version}</span>}
           <span className="ml-auto text-xs text-zinc-600">{critique ? `${(critique.overallScore * 100).toFixed(0)}/100` : ''}</span>
         </div>
       </header>
