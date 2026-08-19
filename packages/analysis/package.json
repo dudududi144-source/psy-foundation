@@ -1,0 +1,14 @@
+{
+  "name": "@psy-foundation/analysis",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "bun test",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome check src"
+  },
+  "devDependencies": { "@psy-foundation/fixtures": "workspace:*", "typescript": "^5.6.0" }
+}

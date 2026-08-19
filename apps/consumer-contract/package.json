@@ -1,0 +1,17 @@
+{
+  "name": "@psy-foundation/consumer-contract",
+  "version": "0.1.0",
+  "description": "Consumer contract tests — prove (by failing) the API gaps between foundation and PSY4.",
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@psy-foundation/transport": "workspace:*",
+    "@psy-foundation/protocol": "workspace:*",
+    "@psy-foundation/device-sdk": "workspace:*",
+    "@psy-foundation/fixtures": "workspace:*"
+  },
+  "devDependencies": { "typescript": "^5.6.0", "@types/bun": "latest" }
+}

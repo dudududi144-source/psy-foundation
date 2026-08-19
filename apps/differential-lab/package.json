@@ -1,0 +1,19 @@
+{
+  "name": "@psy-foundation/differential-lab",
+  "version": "0.1.0",
+  "description": "Differential testing — proves foundation Transport v1 is behaviorally equivalent to psy4 MusicalTransport on the same input streams.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome check src",
+    "run": "bun src/index.ts"
+  },
+  "dependencies": {
+    "@psy-foundation/transport": "workspace:*",
+    "@psy-foundation/fixtures": "workspace:*"
+  },
+  "devDependencies": { "typescript": "^5.6.0", "@types/bun": "latest" }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@psy-foundation/transport-runtime-lab",
+  "version": "0.1.0",
+  "description": "Browser runtime proof — minimal AudioContext consumer that proves Foundation Transport works in a real browser with continuous time advancement.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@psy-foundation/transport": "workspace:*"
+  },
+  "devDependencies": { "typescript": "^5.6.0", "@types/bun": "latest" }
+}
