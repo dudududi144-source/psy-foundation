@@ -272,10 +272,10 @@ export interface BusGains {
 }
 
 export const BUS_GAINS: BusGains = {
-  drum: 1.0,
-  bass: 0.5,
-  music: 1.8,
-  fx: 0.9,
+  drum: 0.8,
+  bass: 0.35,
+  music: 2.5,
+  fx: 1.0,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -315,11 +315,11 @@ export const MASTER_SPEC: MasterSpec = {
   mbLowThr: 0.20,     // raised = even less low-band compression
   mbMidThr: 0.12,     // raised = less mid compression
   mbHighThr: 0.15,    // raised = less high compression = more air
-  glueThr: 0.6,       // raised = less glue compression (more dynamic range)
-  glueRatio: 2.0,     // lowered = gentler compression (more dynamics)
-  glueAttack: 0.005,  // slightly slower = let transients through
-  glueRelease: 0.15,  // slower = more natural release
-  glueMakeup: 1.1,    // lowered = less makeup = less loudness pumping
+  glueThr: 0.8,       // raised: 0.6 → 0.8 (much less glue compression)
+  glueRatio: 1.5,     // lowered: 2.0 → 1.5 (gentler ratio)
+  glueAttack: 0.01,   // slower: 0.005 → 0.01 (let transients through)
+  glueRelease: 0.2,   // slower: 0.15 → 0.2 (more natural)
+  glueMakeup: 1.0,    // lowered: 1.1 → 1.0 (no makeup = no pumping)
   satDrive: 1.0,      // lowered = less saturation = cleaner
   satMix: 0.1,        // lowered = less sat mix = more transparency
   stereoWidth: 1.3,   // slightly less width = more mono compatibility
