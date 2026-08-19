@@ -208,7 +208,13 @@ export function critiqueAudio(
   // stereoContrast: measured from the spectral difference between low and high bins
   // (a proxy for stereo width when we only have mono — wide mixes have more high-freq
   // energy relative to low because reverb/delay add high-end ambience).
-  const stereoContrast = Math.min(1, highEnergy / Math.max(0.01, subEnergy + bassEnergy))
+  // spectralContrast: measures the dynamic range of the spectrum itself.
+  // High contrast = peaks (harmonics) stand out from valleys (noise floor).
+  // Low contrast = flat spectrum (noise-like).
+  // This replaces the old "stereoContrast" which was actually high/low ratio
+  // (same as highEndPresence — redundant).
+  const spectralContrastRaw = computeSpectralContrast(avgSpectrum)
+  const stereoContrast = spectralContrastRaw
   const masking = computeMasking(avgSpectrum, sampleRate, fftSize)
 
   // ── Musicality analysis ──
@@ -1028,6 +1034,34 @@ function computeIdentityStrength(spectra: number[][]): number {
     totalCorr += energy > 0 ? (corr / energy) * 2 : 0
   }
   return totalCorr / spectra.length
+}
+
+function computeSpectralContrast(spectrum: number[]): number {
+  // Spectral contrast = how much peaks stand out from valleys.
+  // Divides spectrum into 24 bark bands, finds max/min ratio per band,
+  // averages. High = harmonic content (good), low = noise (bad).
+  if (spectrum.length < 10) return 0.5
+  const numBands = 24
+  const bandSize = Math.floor(spectrum.length / numBands)
+  let totalContrast = 0
+  let validBands = 0
+  for (let b = 0; b < numBands; b++) {
+    const start = b * bandSize
+    const end = Math.min(start + bandSize, spectrum.length)
+    let maxVal = 0
+    let minVal = Infinity
+    for (let i = start; i < end; i++) {
+      const v = spectrum[i] ?? 0
+      if (v > maxVal) maxVal = v
+      if (v < minVal) minVal = v
+    }
+    if (maxVal > 1e-8) {
+      // Contrast = (max - min) / max. 1 = sharp peak, 0 = flat.
+      totalContrast += (maxVal - minVal) / maxVal
+      validBands++
+    }
+  }
+  return validBands > 0 ? totalContrast / validBands : 0.5
 }
 
 function computeLowMidMud(spectrum: number[], sampleRate: number, fftSize: number): number {
