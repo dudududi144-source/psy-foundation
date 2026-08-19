@@ -151,7 +151,7 @@ export function critiqueAudio(
   const noteSeparation = computeNoteSeparation(spectra, sampleRate, fftSize)
   const decayOverlap = computeDecayOverlap(spectra, sampleRate, fftSize)
   const pitchStability = computePitchStability(pcm, sampleRate)
-  const spectralConsistency = 1 - spectralMovement
+  const spectralConsistency = computeSpectralConsistency(spectra)
 
   // ── Groove analysis ──
   const pocketConsistency = computePocketConsistency(onsets, sampleRate, bpm, stepsPerBar)
@@ -440,7 +440,7 @@ function computeRMS(pcm: Float32Array): number {
  * For performance, uses a simplified DFT (not a full FFT) at reduced resolution.
  */
 function computeSpectrogram(pcm: Float32Array, fftSize: number, _sampleRate: number): number[][] {
-  const hopSize = fftSize
+  const hopSize = Math.floor(fftSize / 4)  // 512 at fftSize=2048 — 4× better time resolution
   const numFrames = Math.floor(pcm.length / hopSize)
   // Full spectrum: 512 bins at fftSize=2048 → 0 to 11025Hz (covers all bands incl. 5-12kHz high band).
   // Previous 128-bin limit only covered 0-2756Hz, making highEndPresence/brightness always 0.
@@ -650,7 +650,7 @@ function computeSpectralMovement(spectra: number[][]): number {
     if (count > 0) totalChange += change / count
   }
   // Scale for lead-band-only movement — higher scaling for richer filter movement
-  return Math.min(1, (totalChange / (spectra.length - 1)) * 5000)
+  return Math.min(1, (totalChange / (spectra.length - 1)) * 15000)
 }
 
 function computeKickBassSeparation(
@@ -1055,6 +1055,35 @@ function computeNoisiness(spectrum: number[], sampleRate: number, fftSize: numbe
   // High CV = peaky spectrum (harmonic, low noise) → low noisiness
   // Low CV = flat spectrum (noisy) → high noisiness
   return Math.max(0, Math.min(1, 1 - cv))
+}
+
+function computeSpectralConsistency(spectra: number[][]): number {
+  // Spectral consistency = how similar consecutive spectral frames are.
+  // Fix: was 1 - spectralMovement (exact duplicate, always summed to 1.0).
+  // Now measures autocorrelation of spectral envelope across frames.
+  if (spectra.length < 2) return 0.5
+  let totalCorr = 0
+  let count = 0
+  for (let i = 1; i < spectra.length; i++) {
+    const prev = spectra[i - 1] ?? []
+    const cur = spectra[i] ?? []
+    let dot = 0
+    let normPrev = 0
+    let normCur = 0
+    for (let j = 0; j < prev.length && j < cur.length; j++) {
+      const a = prev[j] ?? 0
+      const b = cur[j] ?? 0
+      dot += a * b
+      normPrev += a * a
+      normCur += b * b
+    }
+    const denom = Math.sqrt(normPrev * normCur)
+    if (denom > 1e-8) {
+      totalCorr += dot / denom
+      count++
+    }
+  }
+  return count > 0 ? totalCorr / count : 0.5
 }
 
 function computeIdentityStrength(spectra: number[][]): number {
