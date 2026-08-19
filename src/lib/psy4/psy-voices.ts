@@ -442,7 +442,7 @@ export class PsyLead {
       if (this.releaseT > 0.05) { this.active = false; return [0, true] }
     }
 
-    const attackEnv = Math.min(1, this.t / 0.003)
+    const attackEnv = Math.min(1, this.t / 0.001)  // faster attack: 3ms → 1ms = sharper transients
 
     // ── Layer 1: Fundamental — DDSP (if connected) OR wavetable OR 2 detuned saws ──
     // Priority: DDSP > Wavetable > BLSaw (legacy)

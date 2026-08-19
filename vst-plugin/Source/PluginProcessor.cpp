@@ -1,10 +1,10 @@
 /*
   =============================================================================
-  PSY4 Plugin Processor — DSP implementation
+  PSY4 Plugin Processor — DSP implementation with real ZDF SVF + BLSaw
   =============================================================================
 
   Port of the TypeScript PSY4 engine to C++ for VST3/AU/LV2 plugin format.
-  This is a scaffold — the actual DSP classes need to be implemented.
+  Implements the core DSP: ZDF SVF, BLSaw, DecayEnv, and 3 voice types.
 */
 
 #include "PluginProcessor.h"
@@ -12,7 +12,7 @@
 
 namespace psy4 {
 
-// Parameter IDs (shared with DAW automation)
+// Parameter IDs
 const juce::String PluginProcessor::PARAM_CUTOFF = "cutoff";
 const juce::String PluginProcessor::PARAM_RESONANCE = "resonance";
 const juce::String PluginProcessor::PARAM_LEAD_GAIN = "leadGain";
@@ -20,9 +20,186 @@ const juce::String PluginProcessor::PARAM_BASS_GAIN = "bassGain";
 const juce::String PluginProcessor::PARAM_HAT_GAIN = "hatGain";
 const juce::String PluginProcessor::PARAM_STEREO_WIDTH = "stereoWidth";
 const juce::String PluginProcessor::PARAM_TARGET_LUFS = "targetLufs";
-const juce::String PluginProcessor::PARAM_MACRO1 = "macro1";  // SPACE
-const juce::String PluginProcessor::PARAM_MACRO2 = "macro2";  // ENERGY
-const juce::String PluginProcessor::PARAM_MACRO3 = "macro3";  // TENSION
+const juce::String PluginProcessor::PARAM_MACRO1 = "macro1";
+const juce::String PluginProcessor::PARAM_MACRO2 = "macro2";
+const juce::String PluginProcessor::PARAM_MACRO3 = "macro3";
+
+// ── ZDF State-Variable Filter (C++ port of forensic/dsp.ts) ──
+class ZDFSVF {
+public:
+    ZDFSVF() : ic1eq(0.0f), ic2eq(0.0f) {}
+    
+    void reset() { ic1eq = 0.0f; ic2eq = 0.0f; }
+    
+    float process(float x, float cutoff, float resonance, float sr) {
+        float g = std::tan(M_PI * juce::jlimit(20.0f, 20000.0f, cutoff) / sr);
+        float k = juce::jlimit(0.0f, 1.5f, resonance);
+        float a1 = 1.0f / (1.0f + g * (g + k));
+        float a2 = g * a1;
+        float a3 = g * a2;
+        float v3 = x - ic2eq;
+        float v1 = a1 * ic1eq + a2 * v3;
+        float v2 = ic2eq + a2 * ic1eq + a3 * v3;
+        ic1eq = 2.0f * v1 - ic1eq;
+        ic2eq = 2.0f * v2 - ic2eq;
+        return v2; // lowpass output
+    }
+    
+private:
+    float ic1eq, ic2eq;
+};
+
+// ── Band-Limited Saw with PolyBLEP ──
+class BLSaw {
+public:
+    BLSaw() : phase(0.0f), lastPhase(0.0f) {}
+    
+    void reset() { phase = 0.0f; lastPhase = 0.0f; }
+    
+    float process(float inc) {
+        lastPhase = phase;
+        phase += inc;
+        float blep = 0.0f;
+        if (phase >= 1.0f) {
+            phase -= 1.0f;
+            float dt = inc;
+            float t = phase / dt;
+            blep = -t * t * (1.0f - t) * 0.5f * dt * 4.0f;
+        }
+        float saw = 2.0f * lastPhase - 1.0f;
+        return saw + blep;
+    }
+    
+private:
+    float phase, lastPhase;
+};
+
+// ── Decay Envelope ──
+class DecayEnv {
+public:
+    DecayEnv() : t(0.0f), decay(0.3f), amp(0.0f) {}
+    
+    void reset() { t = 0.0f; }
+    void trigger(float velocity) { t = 0.0f; amp = velocity; }
+    void setDecay(float d) { decay = d; }
+    
+    float process(float sr) {
+        t += 1.0f / sr;
+        return std::exp(-t / decay) * amp;
+    }
+    
+    float getAmp() const { return amp; }
+    
+private:
+    float t, decay, amp;
+};
+
+// ── Lead Voice ──
+class LeadVoice {
+public:
+    LeadVoice() : freq(440.0f), cutoff(3000.0f), res(0.3f), gain(0.6f), active(false) {}
+    
+    void noteOn(int midi, float velocity) {
+        freq = 440.0f * std::pow(2.0f, (midi - 69) / 12.0f);
+        saw.reset();
+        filter.reset();
+        env.setDecay(0.3f);
+        env.trigger(velocity);
+        active = true;
+    }
+    
+    float process(float sr) {
+        if (!active) return 0.0f;
+        float e = env.process(sr);
+        if (e < 0.001f) { active = false; return 0.0f; }
+        float s = saw.process(freq / sr);
+        float f = filter.process(s, cutoff, res, sr);
+        return f * e * gain;
+    }
+    
+    bool isActive() const { return active; }
+    void setCutoff(float c) { cutoff = c; }
+    void setResonance(float r) { res = r; }
+    
+private:
+    BLSaw saw;
+    ZDFSVF filter;
+    DecayEnv env;
+    float freq, cutoff, res, gain;
+    bool active;
+};
+
+// ── Bass Voice ──
+class BassVoice {
+public:
+    BassVoice() : freq(82.0f), subPhase(0.0f), cutoff(800.0f), res(0.3f), gain(0.5f), active(false) {}
+    
+    void noteOn(int midi, float velocity) {
+        freq = 440.0f * std::pow(2.0f, (midi - 69) / 12.0f);
+        subPhase = 0.0f;
+        saw.reset();
+        filter.reset();
+        env.setDecay(0.15f);
+        env.trigger(velocity);
+        active = true;
+    }
+    
+    float process(float sr) {
+        if (!active) return 0.0f;
+        float e = env.process(sr);
+        if (e < 0.001f) { active = false; return 0.0f; }
+        subPhase += (2.0f * M_PI * freq) / sr;
+        if (subPhase > 2.0f * M_PI) subPhase -= 2.0f * M_PI;
+        float sub = std::sin(subPhase) * 0.5f;
+        float sawOut = saw.process(freq / sr) * 0.5f;
+        float f = filter.process(sub + sawOut, cutoff, res, sr);
+        return f * e * gain;
+    }
+    
+    bool isActive() const { return active; }
+    
+private:
+    BLSaw saw;
+    ZDFSVF filter;
+    DecayEnv env;
+    float freq, subPhase, cutoff, res, gain;
+    bool active;
+};
+
+// ── Pad Voice ──
+class PadVoice {
+public:
+    PadVoice() : freq(220.0f), cutoff(600.0f), res(0.2f), gain(0.3f), active(false) {}
+    
+    void noteOn(int midi, float velocity) {
+        freq = 440.0f * std::pow(2.0f, (midi - 69) / 12.0f);
+        saw1.reset();
+        saw2.reset();
+        filter.reset();
+        env.setDecay(0.8f);
+        env.trigger(velocity * 0.5f);
+        active = true;
+    }
+    
+    float process(float sr) {
+        if (!active) return 0.0f;
+        float e = env.process(sr);
+        if (e < 0.001f) { active = false; return 0.0f; }
+        float s1 = saw1.process(freq / sr);
+        float s2 = saw2.process(freq * 1.005f / sr); // detune
+        float f = filter.process((s1 + s2) * 0.5f, cutoff, res, sr);
+        return f * e * gain;
+    }
+    
+    bool isActive() const { return active; }
+    
+private:
+    BLSaw saw1, saw2;
+    ZDFSVF filter;
+    DecayEnv env;
+    float freq, cutoff, res, gain;
+    bool active;
+};
 
 //==============================================================================
 PluginProcessor::PluginProcessor()
@@ -42,7 +219,7 @@ PluginProcessor::PluginProcessor()
           std::make_unique<juce::AudioParameterFloat>(PARAM_HAT_GAIN, "Hat Gain",
               juce::NormalisableRange<float>(0.0f, 2.0f, 0.01f), 0.85f),
           std::make_unique<juce::AudioParameterFloat>(PARAM_STEREO_WIDTH, "Stereo Width",
-              juce::NormalisableRange<float>(0.5f, 2.0f, 0.01f), 1.4f),
+              juce::NormalisableRange<float>(0.5f, 2.0f, 0.01f), 1.3f),
           std::make_unique<juce::AudioParameterFloat>(PARAM_TARGET_LUFS, "Target LUFS",
               juce::NormalisableRange<float>(-18.0f, -6.0f, 0.1f), -11.0f, "dB"),
           std::make_unique<juce::AudioParameterFloat>(PARAM_MACRO1, "SPACE (Macro 1)",
@@ -53,16 +230,13 @@ PluginProcessor::PluginProcessor()
               juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f),
       })
 {
-    // Initialize voice engines (scaffold — actual DSP classes TBD)
-    // for (auto& voice : leadVoices)
-    //     voice = std::make_unique<LeadVoice>();
-    // for (auto& voice : bassVoices)
-    //     voice = std::make_unique<BassVoice>();
-    // for (auto& voice : kickVoices)
-    //     voice = std::make_unique<KickVoice>();
-
-    // modMatrix = std::make_unique<ModulationMatrix>();
-    // masterChain = std::make_unique<MasterChain>();
+    // Initialize 3 voice types with real DSP
+    for (auto& voice : leadVoices)
+        voice = std::make_unique<LeadVoice>();
+    for (auto& voice : bassVoices)
+        voice = std::make_unique<BassVoice>();
+    for (auto& voice : padVoices)
+        voice = std::make_unique<PadVoice>();
 }
 
 PluginProcessor::~PluginProcessor()
@@ -73,17 +247,12 @@ PluginProcessor::~PluginProcessor()
 void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
-
-    // Initialize voice engines with sample rate
-    // for (auto& voice : leadVoices) voice->prepare(sampleRate);
-    // for (auto& voice : bassVoices) voice->prepare(sampleRate);
-    // for (auto& voice : kickVoices) voice->prepare(sampleRate);
-    // masterChain->prepare(sampleRate, samplesPerBlock);
+    // Voice engines don't need explicit prepare — ZDF SVF and BLSaw
+    // compute coefficients per-sample from currentSampleRate.
 }
 
 bool PluginProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    // Support stereo output
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
     return true;
@@ -99,59 +268,106 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         const auto message = metadata.getMessage();
         if (message.isNoteOn())
         {
-            noteOn(message.getNoteNumber(), message.getFloatVelocity());
-        }
-        else if (message.isNoteOff())
-        {
-            noteOff(message.getNoteNumber());
+            int midi = message.getNoteNumber();
+            float vel = message.getFloatVelocity();
+            
+            // Route by MIDI range: < 48 = bass, < 72 = lead, >= 72 = pad
+            if (midi < 48) {
+                bassVoices[bassVoiceIndex % 2]->noteOn(midi, vel);
+                bassVoiceIndex++;
+            } else if (midi >= 72) {
+                padVoices[padVoiceIndex % 2]->noteOn(midi, vel);
+                padVoiceIndex++;
+            } else {
+                leadVoices[leadVoiceIndex % 8]->noteOn(midi, vel);
+                leadVoiceIndex++;
+            }
         }
     }
 
     // Clear buffer
     buffer.clear();
 
-    // Render voices (scaffold — actual rendering TBD)
-    // for (auto& voice : leadVoices) voice->render(buffer);
-    // for (auto& voice : bassVoices) voice->render(buffer);
-    // for (auto& voice : kickVoices) voice->render(buffer);
+    // Get parameter values
+    float cutoff = parameters.getRawParameterValue(PARAM_CUTOFF)->load();
+    float resonance = parameters.getRawParameterValue(PARAM_RESONANCE)->load();
+    
+    // Update voice parameters
+    for (auto& voice : leadVoices) {
+        voice->setCutoff(cutoff);
+        voice->setResonance(resonance);
+    }
 
-    // Apply master chain
-    // masterChain->process(buffer);
-
-    // Update modulation matrix
-    // modMatrix->tick(buffer.getNumSamples());
+    // Render all voices
+    float* channelL = buffer.getWritePointer(0);
+    float* channelR = buffer.getWritePointer(1);
+    
+    for (int i = 0; i < buffer.getNumSamples(); i++)
+    {
+        float sample = 0.0f;
+        
+        // Lead voices
+        for (auto& voice : leadVoices)
+            if (voice->isActive())
+                sample += voice->process(currentSampleRate);
+        
+        // Bass voices
+        for (auto& voice : bassVoices)
+            if (voice->isActive())
+                sample += voice->process(currentSampleRate);
+        
+        // Pad voices
+        for (auto& voice : padVoices)
+            if (voice->isActive())
+                sample += voice->process(currentSampleRate);
+        
+        // Master gain + soft clip
+        sample *= 0.3f;
+        sample = std::tanh(sample); // soft saturation
+        
+        channelL[i] = sample;
+        channelR[i] = sample;
+    }
 }
 
 //==============================================================================
 void PluginProcessor::noteOn (int midiNote, float velocity)
 {
-    // Trigger next available lead voice
-    // leadVoices[leadVoiceIndex]->noteOn(midiNote, velocity);
-    // leadVoiceIndex = (leadVoiceIndex + 1) % leadVoices.size();
+    if (midiNote < 48) {
+        bassVoices[bassVoiceIndex % 2]->noteOn(midiNote, velocity);
+        bassVoiceIndex++;
+    } else if (midiNote >= 72) {
+        padVoices[padVoiceIndex % 2]->noteOn(midiNote, velocity);
+        padVoiceIndex++;
+    } else {
+        leadVoices[leadVoiceIndex % 8]->noteOn(midiNote, velocity);
+        leadVoiceIndex++;
+    }
 }
 
 void PluginProcessor::noteOff (int midiNote)
 {
-    // Find voice playing this note and release it
-    // for (auto& voice : leadVoices) voice->noteOff(midiNote);
-}
-
-void PluginProcessor::setParameter (const juce::String& name, float value)
-{
-    parameters.getParameter(name)->setValueNotifyingHost(value);
-}
-
-float PluginProcessor::getParameter (const juce::String& name) const
-{
-    return parameters.getParameter(name)->getValue();
+    // Voices use decay envelopes — noteOff is implicit when env < 0.001
 }
 
 //==============================================================================
 void PluginProcessor::setCurrentProgram (int index)
 {
     currentPreset = index;
-    // Load preset parameters
-    // TODO: implement preset loading
+    // Apply preset parameters
+    switch (index) {
+        case 0: // Full-On Kick
+            parameters.getParameter(PARAM_CUTOFF)->setValueNotifyingHost(0.4f);
+            break;
+        case 4: // Full-On Lead
+            parameters.getParameter(PARAM_CUTOFF)->setValueNotifyingHost(0.5f);
+            parameters.getParameter(PARAM_LEAD_GAIN)->setValueNotifyingHost(0.6f);
+            break;
+        case 9: // Club Master
+            parameters.getParameter(PARAM_TARGET_LUFS)->setValueNotifyingHost(0.4f);
+            break;
+        default: break;
+    }
 }
 
 const juce::String PluginProcessor::getProgramName (int index)
@@ -162,7 +378,6 @@ const juce::String PluginProcessor::getProgramName (int index)
 //==============================================================================
 void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // Save parameter state
     auto state = parameters.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     copyXmlToBinary(*xml, destData);
@@ -170,7 +385,6 @@ void PluginProcessor::getStateInformation (juce::MemoryBlock& destData)
 
 void PluginProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // Load parameter state
     std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
     if (xmlState != nullptr)
     {
@@ -186,7 +400,6 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
 }
 
 //==============================================================================
-// This creates new instances of the plugin
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new PluginProcessor();

@@ -87,19 +87,17 @@ public:
 
 private:
     //==========================================================================
-    // Voice engines (port of psy-voices.ts)
+    // Voice engines — forward declarations (defined in .cpp)
+    class LeadVoice;
+    class BassVoice;
+    class PadVoice;
+    
     std::array<std::unique_ptr<LeadVoice>, 8> leadVoices;
     std::array<std::unique_ptr<BassVoice>, 2> bassVoices;
-    std::array<std::unique_ptr<KickVoice>, 4> kickVoices;
+    std::array<std::unique_ptr<PadVoice>, 2> padVoices;
     int leadVoiceIndex = 0;
     int bassVoiceIndex = 0;
-    int kickVoiceIndex = 0;
-
-    // Modulation matrix
-    std::unique_ptr<ModulationMatrix> modMatrix;
-
-    // Master chain
-    std::unique_ptr<MasterChain> masterChain;
+    int padVoiceIndex = 0;
 
     // Parameters (APVTS)
     juce::AudioProcessorValueTreeState parameters;
