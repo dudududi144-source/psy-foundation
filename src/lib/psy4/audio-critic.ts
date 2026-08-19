@@ -1015,11 +1015,50 @@ function computePhraseContrast(pcm: Float32Array, sampleRate: number, _bpm: numb
 }
 
 function computeRepetitionBalance(pcm: Float32Array, sampleRate: number, bpm: number): number {
-  // Balance = some repetition but not too much.
-  const uniformity = computeExcessiveUniformity(pcm, sampleRate, bpm)
-  // Ideal is around 0.3-0.5 repetition.
-  const distance = Math.abs(uniformity - 0.4)
-  return 1 - distance
+  // Fix: was 1 - |uniformity - 0.4| (pure derivative of excessiveUniformity).
+  // Now measures actual repetition pattern: how many times the most common
+  // 1-bar energy pattern repeats, normalized by total bars.
+  const secondsPerBar = (60 / bpm) * 4
+  const samplesPerBar = Math.floor(secondsPerBar * sampleRate)
+  const numBars = Math.floor(pcm.length / samplesPerBar)
+  if (numBars < 2) return 0.5
+
+  // Compute per-bar energy profiles (8 sub-windows per bar)
+  const subWindows = 8
+  const subSize = Math.floor(samplesPerBar / subWindows)
+  const profiles: number[][] = []
+  for (let b = 0; b < numBars; b++) {
+    const profile: number[] = []
+    for (let s = 0; s < subWindows; s++) {
+      let energy = 0
+      for (let i = 0; i < subSize; i++) {
+        energy += Math.abs(pcm[b * samplesPerBar + s * subSize + i] ?? 0)
+      }
+      profile.push(energy / subSize)
+    }
+    profiles.push(profile)
+  }
+
+  // Count how many bar pairs are similar (correlation > 0.8)
+  let similarPairs = 0
+  let totalPairs = 0
+  for (let i = 0; i < profiles.length; i++) {
+    for (let j = i + 1; j < profiles.length; j++) {
+      let dot = 0, normI = 0, normJ = 0
+      for (let k = 0; k < subWindows; k++) {
+        dot += profiles[i]![k]! * profiles[j]![k]!
+        normI += profiles[i]![k]! ** 2
+        normJ += profiles[j]![k]! ** 2
+      }
+      const corr = dot / Math.max(1e-8, Math.sqrt(normI * normJ))
+      if (corr > 0.8) similarPairs++
+      totalPairs++
+    }
+  }
+  // Ideal: some repetition (not all, not none)
+  // Sweet spot at 0.5 (50% of pairs similar)
+  const repRatio = totalPairs > 0 ? similarPairs / totalPairs : 0.5
+  return Math.max(0, 1 - Math.abs(repRatio - 0.5) * 1.5)
 }
 
 function computeHarmonicClarity(spectrum: number[], sampleRate: number, fftSize: number): number {
@@ -1187,15 +1226,65 @@ function computeTensionRelease(pcm: Float32Array, _sampleRate: number, _bpm: num
 }
 
 function computeMotifIdentity(pcm: Float32Array, sampleRate: number, bpm: number): number {
-  // Simplified: if there's some repetition, motif identity is present.
-  const uniformity = computeExcessiveUniformity(pcm, sampleRate, bpm)
-  return Math.min(1, uniformity * 1.5)
+  // Fix: was uniformity * 1.5 (pure derivative of excessiveUniformity).
+  // Now measures autocorrelation at 1-bar lag — if the motif repeats
+  // at the bar level, autocorrelation will be high.
+  const secondsPerBar = (60 / bpm) * 4
+  const samplesPerBar = Math.floor(secondsPerBar * sampleRate)
+  if (pcm.length < samplesPerBar * 2) return 0.5
+
+  // Measure autocorrelation at 1-bar, 2-bar, and 4-bar lags
+  let bestCorr = 0
+  for (const lagBars of [1, 2, 4]) {
+    const lag = lagBars * samplesPerBar
+    if (pcm.length < lag * 2) continue
+    let dot = 0, normA = 0, normB = 0
+    const windowSize = Math.min(pcm.length - lag, samplesPerBar * 4)
+    for (let i = 0; i < windowSize; i++) {
+      const a = pcm[i] ?? 0
+      const b = pcm[lag + i] ?? 0
+      dot += a * b
+      normA += a * a
+      normB += b * b
+    }
+    const corr = dot / Math.max(1e-8, Math.sqrt(normA * normB))
+    if (corr > bestCorr) bestCorr = corr
+  }
+  return Math.max(0, Math.min(1, bestCorr))
 }
 
 function computeDevelopment(pcm: Float32Array, sampleRate: number, bpm: number): number {
-  // Development = some change over time but not random.
-  const contrast = computePhraseContrast(pcm, sampleRate, bpm)
-  return Math.min(1, contrast * 1.5)
+  // Fix: was phraseContrast * 1.5 (pure derivative of phraseContrast).
+  // Now measures energy development: how much the energy contour changes
+  // across 4 sections (not just 2 halves like phraseContrast).
+  const secondsPerBar = (60 / bpm) * 4
+  const samplesPerBar = Math.floor(secondsPerBar * sampleRate)
+  const numBars = Math.floor(pcm.length / samplesPerBar)
+  if (numBars < 4) return 0.5
+
+  // Split into 4 quarters and measure energy progression
+  const quarterBars = Math.floor(numBars / 4)
+  const energies: number[] = []
+  for (let q = 0; q < 4; q++) {
+    let energy = 0
+    const start = q * quarterBars * samplesPerBar
+    const end = Math.min(start + quarterBars * samplesPerBar, pcm.length)
+    for (let i = start; i < end; i++) {
+      energy += Math.abs(pcm[i] ?? 0)
+    }
+    energies.push(energy / Math.max(1, end - start))
+  }
+
+  // Development = energy changes across quarters (not flat, not random)
+  // Good development: energy rises and falls (arc shape)
+  let totalChange = 0
+  for (let i = 1; i < energies.length; i++) {
+    totalChange += Math.abs(energies[i]! - energies[i - 1]!)
+  }
+  const meanEnergy = energies.reduce((s, v) => s + v, 0) / energies.length
+  if (meanEnergy < 1e-8) return 0.5
+  const cv = totalChange / (meanEnergy * 3)  // 3 transitions
+  return Math.max(0, Math.min(1, cv))
 }
 
 function computeCallResponse(pcm: Float32Array, sampleRate: number, _bpm: number): number {
