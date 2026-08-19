@@ -107,6 +107,7 @@ export function critiqueAudio(
   stepsPerBar = 16
 ): AudioCritique {
   const failures: AudioFailure[] = []
+  pcmLength = pcm.length  // set for computeOnsetTimingConsistency
 
   // ── Basic levels ──
   const peak = findPeak(pcm)
@@ -157,8 +158,10 @@ export function critiqueAudio(
   const pocketConsistency = computePocketConsistency(onsets, sampleRate, bpm, stepsPerBar)
   const kickBassLock = computeKickBassLock(pcm, onsets, sampleRate, bpm)
   const excessiveUniformity = computeExcessiveUniformity(pcm, sampleRate, bpm)
-  // onsetClarity: general onset clarity = sharpness × consistency (how regular the onsets are)
-  const onsetClarity = onsetSharpness * (1 - excessiveUniformity * 0.3)
+  // onsetClarity: independent measurement — onset timing consistency
+  // Fix: was onsetSharpness * (1 - uniformity*0.3) (derivative of 2 metrics already in scores)
+  // Now measures onset timing regularity: how close onsets are to the ideal grid
+  const onsetClarity = computeOnsetTimingConsistency(onsets, sampleRate, bpm, stepsPerBar)
 
   // ── Lead analysis ──
   const articulation = computeArticulation(pcm, sampleRate)
@@ -222,8 +225,10 @@ export function critiqueAudio(
   const motifIdentity = computeMotifIdentity(pcm, sampleRate, bpm)
   const development = computeDevelopment(pcm, sampleRate, bpm)
   const callResponse = computeCallResponse(pcm, sampleRate, bpm)
-  // rhythmicInterest: measures syncopation and rhythmic variation (not just 1-uniformity)
-  const rhythmicInterest = Math.min(1, (1 - excessiveUniformity) * 0.6 + pocketConsistency * 0.4)
+  // rhythmicInterest: independent measurement — syncopation
+  // Fix: was (1-uniformity)*0.6 + pocket*0.4 (derivative of 2 metrics already in scores)
+  // Now measures syncopation: how many onsets are off-beat (not on downbeats)
+  const rhythmicInterest = computeSyncopation(onsets, sampleRate, bpm, stepsPerBar)
 
   // ── Diagnose failures ──
   if (subMud > 0.45) {
@@ -840,6 +845,75 @@ function computePitchStability(pcm: Float32Array, sampleRate: number): number {
   // Crest factor: peak / average. High = stable pitch.
   const avgEnergy = totalEnergy / Math.max(1, bassHighBin - bassLowBin + 1)
   return avgEnergy > 0 ? Math.max(0, Math.min(1, maxMag / (avgEnergy * 3))) : 0.5
+}
+
+function computeOnsetTimingConsistency(
+  onsets: number[],
+  sampleRate: number,
+  bpm: number,
+  stepsPerBar: number
+): number {
+  // Onset timing consistency = how close onsets are to ideal grid positions.
+  // Measures the jitter of onset positions relative to the ideal 16th-note grid.
+  // Low jitter = tight timing (good), high jitter = sloppy timing (bad).
+  if (onsets.length < 4) return 0.5
+  const secondsPerStep = 60 / bpm / (stepsPerBar / 4)
+  const samplesPerStep = Math.ceil(secondsPerStep * sampleRate)
+  let totalJitter = 0
+  let count = 0
+  for (let s = 0; s < onsets.length; s++) {
+    const idealPos = s * samplesPerStep
+    // Find actual onset peak near ideal position
+    const searchStart = Math.max(0, idealPos - samplesPerStep / 4)
+    const searchEnd = Math.min(pcmLength, idealPos + samplesPerStep / 4)
+    let peakPos = idealPos
+    let peakVal = 0
+    for (let i = searchStart; i < searchEnd; i++) {
+      if ((onsets[i] ?? 0) > peakVal) {
+        peakVal = onsets[i] ?? 0
+        peakPos = i
+      }
+    }
+    const jitter = Math.abs(peakPos - idealPos) / samplesPerStep
+    totalJitter += jitter
+    count++
+  }
+  const avgJitter = count > 0 ? totalJitter / count : 0.5
+  // Low jitter (< 0.05) = very tight, high jitter (> 0.3) = sloppy
+  return Math.max(0, 1 - avgJitter * 3)
+}
+
+let pcmLength = 0  // set by critiqueAudio
+
+function computeSyncopation(
+  onsets: number[],
+  _sampleRate: number,
+  _bpm: number,
+  stepsPerBar: number
+): number {
+  // Syncopation = how many onsets are off-beat (odd 16th positions).
+  // Psytrance has syncopation in hats/ghost notes but kick/bass on downbeats.
+  // High syncopation = interesting groove, low = flat/monotonous.
+  if (onsets.length < 4) return 0.3
+  const strongSteps = new Set([0, 4, 8, 12]) // downbeats
+  const weakSteps = new Set([2, 6, 10, 14]) // off-beats
+  let strongEnergy = 0
+  let weakEnergy = 0
+  let ghostEnergy = 0
+  for (let s = 0; s < onsets.length; s++) {
+    const stepInBar = s % stepsPerBar
+    const energy = onsets[s] ?? 0
+    if (strongSteps.has(stepInBar)) strongEnergy += energy
+    else if (weakSteps.has(stepInBar)) weakEnergy += energy
+    else ghostEnergy += energy
+  }
+  const total = strongEnergy + weakEnergy + ghostEnergy
+  if (total < 1e-8) return 0.3
+  // Syncopation ratio: weak+ghost / total
+  // Psytrance typically: 30-50% off-beat energy
+  const syncRatio = (weakEnergy + ghostEnergy) / total
+  // Sweet spot at 0.4 (40% off-beat)
+  return Math.max(0, 1 - Math.abs(syncRatio - 0.4) * 2)
 }
 
 function computePocketConsistency(
