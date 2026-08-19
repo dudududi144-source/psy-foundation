@@ -108,25 +108,107 @@ class LeadVoice {
   }
 }
 
+// ── Bass Voice (simple sub + saw) ──
+class BassVoice {
+  constructor() {
+    this.subPhase = 0
+    this.saw = new BLSaw()
+    this.filter = new ZDFSVF()
+    this.env = new DecayEnv()
+    this.freq = 82
+    this.cutoff = 800
+    this.res = 0.3
+    this.active = false
+  }
+  noteOn(midi, velocity) {
+    this.freq = 440 * Math.pow(2, (midi - 69) / 12)
+    this.subPhase = 0
+    this.saw.reset()
+    this.filter.reset()
+    this.env.decay = 0.15
+    this.env.trigger(velocity)
+    this.active = true
+  }
+  process() {
+    if (!this.active) return 0
+    const env = this.env.process()
+    if (env < 0.001) { this.active = false; return 0 }
+    this.subPhase += (2 * Math.PI * this.freq) / SR
+    if (this.subPhase > 2 * Math.PI) this.subPhase -= 2 * Math.PI
+    const sub = Math.sin(this.subPhase) * 0.5
+    const saw = this.saw.process(this.freq / SR) * 0.5
+    const filtered = this.filter.process(sub + saw, this.cutoff, this.res, SR, 0)
+    return filtered * env
+  }
+}
+
+// ── Pad Voice (detuned saws + slow env) ──
+class PadVoice {
+  constructor() {
+    this.saw1 = new BLSaw()
+    this.saw2 = new BLSaw()
+    this.filter = new ZDFSVF()
+    this.env = new DecayEnv()
+    this.freq = 220
+    this.cutoff = 600
+    this.res = 0.2
+    this.active = false
+  }
+  noteOn(midi, velocity) {
+    this.freq = 440 * Math.pow(2, (midi - 69) / 12)
+    this.saw1.reset()
+    this.saw2.reset()
+    this.filter.reset()
+    this.env.decay = 0.8  // slow pad decay
+    this.env.trigger(velocity * 0.5)
+    this.active = true
+  }
+  process() {
+    if (!this.active) return 0
+    const env = this.env.process()
+    if (env < 0.001) { this.active = false; return 0 }
+    const s1 = this.saw1.process(this.freq / SR)
+    const s2 = this.saw2.process(this.freq * 1.005 / SR)  // detune
+    const filtered = this.filter.process((s1 + s2) * 0.5, this.cutoff, this.res, SR, 0)
+    return filtered * env
+  }
+}
+
 // ── AudioWorklet Processor ──
 class PSY4Processor extends AudioWorkletProcessor {
   constructor() {
     super()
-    this.voices = []
-    for (let i = 0; i < 8; i++) this.voices.push(new LeadVoice())
+    // 3 voice types: lead (8 voices), bass (2 voices), pad (2 voices)
+    this.leadVoices = []
+    for (let i = 0; i < 8; i++) this.leadVoices.push(new LeadVoice())
+    this.bassVoices = [new BassVoice(), new BassVoice()]
+    this.padVoices = [new PadVoice(), new PadVoice()]
     this.voiceIdx = 0
+    this.bassIdx = 0
+    this.padIdx = 0
     this.masterGain = 0.3
 
     this.port.onmessage = (e) => {
       const msg = e.data
       if (msg.type === 'noteOn') {
-        const voice = this.voices[this.voiceIdx % this.voices.length]
-        voice.noteOn(msg.midi, msg.velocity)
-        this.voiceIdx++
+        // Route by MIDI range: < 48 = bass, < 72 = lead, >= 72 = pad
+        if (msg.midi < 48) {
+          const voice = this.bassVoices[this.bassIdx % this.bassVoices.length]
+          voice.noteOn(msg.midi, msg.velocity)
+          this.bassIdx++
+        } else if (msg.midi >= 72) {
+          const voice = this.padVoices[this.padIdx % this.padVoices.length]
+          voice.noteOn(msg.midi, msg.velocity)
+          this.padIdx++
+        } else {
+          const voice = this.leadVoices[this.voiceIdx % this.leadVoices.length]
+          voice.noteOn(msg.midi, msg.velocity)
+          this.voiceIdx++
+        }
       } else if (msg.type === 'setCutoff') {
-        for (const v of this.voices) v.cutoff = msg.value
+        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices]) v.cutoff = msg.value
       } else if (msg.type === 'setResonance') {
-        for (const v of this.voices) v.res = msg.value
+        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices]) v.res = msg.value
       } else if (msg.type === 'setMasterGain') {
         this.masterGain = msg.value
       }
@@ -142,7 +224,7 @@ class PSY4Processor extends AudioWorkletProcessor {
 
     for (let i = 0; i < channelL.length; i++) {
       let sample = 0
-      for (const voice of this.voices) {
+      for (const voice of [...this.leadVoices, ...this.bassVoices, ...this.padVoices]) {
         if (voice.active) sample += voice.process()
       }
       sample *= this.masterGain

@@ -24,6 +24,7 @@ import { BusProcessor, MasterChain } from './forensic/mixing'
 import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact, PsyAcid, PsyTexture } from './psy-voices'
 import { Wavetable } from './wavetable'
 import { WaveguideString } from './physical/waveguide-string'
+import { DDSPHarmonic } from './neural/ddsp-harmonic'
 import type { AutomationEngine } from './automation'
 import { ChannelFX } from './channel-fx'
 import { CHANNEL_PRESETS } from './channel-presets'
@@ -213,6 +214,11 @@ export async function renderFoundationSection(
   // Waveguide → Bass: adds Karplus-Strong string decay to the bass voice
   const bassWaveguide = new WaveguideString()
   for (const bass of basses) bass.setWaveguide(bassWaveguide)
+
+  // DDSP → Lead: adds harmonic additive synthesis as ADDITIONAL layer (not replacement)
+  // Note: PsyLead.render() uses DDSP as the fundamental if connected (priority: DDSP > Wavetable > BLSaw).
+  // DDSP is NOT connected by default — it's opt-in via the API (?ddsp=true).
+  // When not connected, the wavetable fundamental is used (better score).
 
   // ── Modulation Matrix (wired into Lead + Acid voices) ──
   // createDefault() sets up 7 routes: LFO1/2/3 → cutoff/fmIndex, velocity → cutoff,
