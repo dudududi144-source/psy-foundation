@@ -2271,3 +2271,70 @@ Stage Summary:
   - [✓] `apps/web/` runs at localhost:3000
   - [✓] `/api/render-forensic?bars=8&seed=42` returns identical WAV (md5: a50d5601b6c96a1ff3068c655f936b9f, LUFS -10.4)
 - Ready for Phase 0 Day 2: cleanup (delete skills/, samples/real/, unused deps, dead UI components, prisma tutorial, etc.)
+
+
+---
+Task ID: PHASE-0-DAY-2
+Agent: PSY Engineer
+Task: Phase 0 Day 2 — cleanup (skills/, samples/real/, unused deps, dead UI components, prisma tutorial, old demo WAVs, layout metadata).
+
+Work Log:
+- Created tag `backup/pre-cleanup-20260819` (permanent safety backup).
+- Deleted `skills/` (61MB, 1074 files, 60 subdirectories — Z.ai marketplace dump, 0 psytrance-related).
+- Deleted `apps/web/public/samples/real/` (21MB, 141 commercial 909/MD/Nord samples — license violation per project's own manifest).
+- Patched `apps/web/src/lib/psy4/forensic-bridge.ts` (lines 255-281): replaced `909_BD_02.wav`/`md_hat*`/`md_clap*`/`md_perc*` loading with procedural CC0 samples (`kick.wav`, `hat_closed.wav`, `clap.wav`, `hat_open.wav`).
+- Deleted 46 shadcn/ui components (only `toast.tsx` and `toaster.tsx` kept — only ones imported via layout.tsx).
+- Deleted `prisma/` (dead tutorial schema with User/Post models, never imported).
+- Deleted `src/lib/db.ts` (dead boilerplate, 0 imports in src/).
+- Deleted `tests/*.sh` (3 Z.ai deploy tests referencing `.zscripts/` that doesn't exist).
+- Deleted `scripts/keepalive.sh` (path wrong — pointed to /home/z/my-project).
+- Deleted `apps/web/public/psy-foundation.zip` (504KB — already unpacked to packages/).
+- Deleted `apps/web/public/demo-16bars.wav` (4.5MB) and `apps/web/public/diagnostic.wav` (3.4MB) — old demo files.
+- Rewrote `apps/web/package.json` with minimal deps (12 deps instead of 68 — removed 20+ unused including next-auth, next-intl, react-markdown, framer-motion, zustand, z-ai-web-dev-sdk, @dnd-kit/*, @mdxeditor, react-syntax-highlighter, @tanstack/*, date-fns, uuid, zod, tailwindcss-animate, @reactuses/core, react-hook-form, @hookform/resolvers, embla-carousel-react, input-otp, react-day-picker, react-resizable-panels, vaul, cmdk, sonner, recharts, react-syntax-highlighter, onnxruntime-node, @prisma/client, prisma).
+- Updated `apps/web/src/app/layout.tsx` metadata:
+  - title: "Z.ai Code Scaffold - AI-Powered Development" → "PSY Foundation — Procedural Psytrance Synthesis Engine"
+  - description: honestly states "in development — not commercial-ready"
+  - keywords: replaced Z.ai/Next.js/TypeScript with psytrance/synthesis/DSP/ZDF SVF/LUFS/music/procedural
+  - Removed external icon link to z.ai CDN
+  - Updated OpenGraph and Twitter card to PSY Foundation
+- Renamed `package.json: name` from "nextjs_tailwind_shadcn_ts" to "psy-foundation" (was already done in Phase 0 Day 1, but verified).
+
+Verification (post-cleanup):
+- `bun install`: **737ms** (was 89s pre-restructure, was 11.5s post-Day-1 restructure, now 737ms because minimal deps)
+- `bun test`: **646 pass, 14 skip, 0 fail** (same as before — no regressions in foundation tests)
+- `apps/web/` dev server: HTTP 200 on `/` (29337 bytes)
+- `/api/render-forensic?bars=8&seed=42`: HTTP 200, WAV 1.75MB, 9.93s, stereo 44.1kHz 16-bit PCM
+- ffmpeg loudnorm on new render:
+  - LUFS: -10.6 (was -10.4 — delta 0.2 LU due to procedural samples being slightly different)
+  - dBTP: **+0.2 dBTP** (was -0.3 — now EXCEEDS 0 dBFS! Bug amplified because procedural samples are louder than commercial 909. This is the TruePeakLimiter bug documented in Phase 1 Day 3-4 — to be fixed.)
+  - LRA: 1.9 (was 2.1)
+- WAV md5: `0e1294f1e9f8b5280893ad01f9ca6326` (NEW baseline — Phase 0 Day 1 was `a50d5601b6c96a1ff3068c655f936b9f`. Difference is expected because commercial samples replaced with procedural ones.)
+- WAV duration: 9.933061s (identical — confirms render deterministic structure unchanged)
+
+Repo size:
+- Tracked files: **341** (was 1372 after Phase 0 Day 1 — 75% reduction)
+- 1271 files changed in this commit, 262690 deletions
+- Source size (excl node_modules + .git): **88MB** (down from 168MB after Phase 0 Day 1)
+- Total size (incl node_modules): 753M (down from 1.4GB)
+
+Bugs documented for Phase 1 (not blocking):
+1. TruePeakLimiter doesn't catch ISPs — render now exceeds 0 dBFS (+0.2 dBTP). Phase 1 Day 3-4: replace Catmull-Rom with FIR 48-tap, apply gain at 4× rate.
+2. Procedural samples are louder than commercial 909 (kick.wav in public/samples/ is hotter). Phase 2 will replace procedural samples with DSP-synthesized 909 emulation.
+
+Stage Summary:
+- Phase 0 Day 2 COMPLETE: cleanup successful.
+- Acceptance criteria all met:
+  - [✓] skills/ deleted (61MB, 1074 files removed)
+  - [✓] samples/real/ deleted (141 commercial samples removed, license risk eliminated)
+  - [✓] 20+ unused deps removed (package.json down from 68 to 12 deps)
+  - [✓] 46 dead shadcn components removed
+  - [✓] prisma/ + db.ts deleted (dead tutorial)
+  - [✓] tests/*.sh + scripts/keepalive.sh deleted
+  - [✓] public/psy-foundation.zip + demo WAVs deleted
+  - [✓] package.json name = "psy-foundation" (was "nextjs_tailwind_shadcn_ts")
+  - [✓] layout.tsx metadata = "PSY Foundation" (was "Z.ai Code Scaffold")
+  - [✓] bun install: 737ms (was 89s — 120× faster)
+  - [✓] bun test: 646 pass, 0 fail (no regressions)
+  - [✓] render: HTTP 200, WAV 1.75MB, deterministic (new baseline hash)
+- Known issue: dBTP now +0.2 (was -0.3) — Phase 1 Day 3-4 will fix TruePeakLimiter.
+- Ready for Phase 0 Day 3: README + docs rewrite (honest, no false claims).

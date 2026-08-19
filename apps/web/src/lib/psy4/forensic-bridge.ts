@@ -256,7 +256,10 @@ export async function renderFoundationSection(
     try {
       const fs = await import('fs/promises')
       const path = await import('path')
-      const dir = path.join(process.cwd(), 'public', 'samples', 'real')
+      // Phase 0 Day 2: commercial 909/MD/Nord samples removed (license violation,
+      // per project manifest). Using procedural CC0 samples in public/samples/.
+      // Phase 2 will replace these with proper DSP-synthesized 909 emulation.
+      const dir = path.join(process.cwd(), 'public', 'samples')
 
       const loadSample = async (name: string) => {
         const buf = await fs.readFile(path.join(dir, name))
@@ -266,13 +269,12 @@ export async function renderFoundationSection(
         return s
       }
 
-      kickSample = await loadSample('909_BD_02.wav')
-      const hatFiles = (await fs.readdir(dir)).filter(f => f.includes('md_hat'))
-      if (hatFiles[0]) hatSample = await loadSample(hatFiles[0])
-      const clapFiles = (await fs.readdir(dir)).filter(f => f.includes('md_clap'))
-      if (clapFiles[0]) clapSample = await loadSample(clapFiles[0])
-      const percFiles = (await fs.readdir(dir)).filter(f => f.includes('md_perc'))
-      if (percFiles[0]) percSample = await loadSample(percFiles[0])
+      kickSample = await loadSample('kick.wav')
+      hatSample = await loadSample('hat_closed.wav')
+      clapSample = await loadSample('clap.wav')
+      // perc sample: no procedural one yet — will be synthesized in Phase 2
+      // (currently using hat_open.wav as a stand-in percussive sample)
+      percSample = await loadSample('hat_open.wav')
     } catch (e) {
       console.warn('Samples not available:', (e as Error).message)
     }
