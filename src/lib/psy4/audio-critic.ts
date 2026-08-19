@@ -1254,37 +1254,37 @@ function computeMotifIdentity(pcm: Float32Array, sampleRate: number, bpm: number
 }
 
 function computeDevelopment(pcm: Float32Array, sampleRate: number, bpm: number): number {
-  // Fix: was phraseContrast * 1.5 (pure derivative of phraseContrast).
-  // Now measures energy development: how much the energy contour changes
-  // across 4 sections (not just 2 halves like phraseContrast).
+  // Fix: was splitting into 4 quarters, but with 6 bars the quarters only
+  // covered bars 0-3, missing the breakdown/rebuild bars.
+  // Now uses ALL bars and measures the energy contour shape.
   const secondsPerBar = (60 / bpm) * 4
   const samplesPerBar = Math.floor(secondsPerBar * sampleRate)
   const numBars = Math.floor(pcm.length / samplesPerBar)
-  if (numBars < 4) return 0.5
+  if (numBars < 2) return 0.5
 
-  // Split into 4 quarters and measure energy progression
-  const quarterBars = Math.floor(numBars / 4)
+  // Compute per-bar energy
   const energies: number[] = []
-  for (let q = 0; q < 4; q++) {
+  for (let b = 0; b < numBars; b++) {
     let energy = 0
-    const start = q * quarterBars * samplesPerBar
-    const end = Math.min(start + quarterBars * samplesPerBar, pcm.length)
+    const start = b * samplesPerBar
+    const end = Math.min(start + samplesPerBar, pcm.length)
     for (let i = start; i < end; i++) {
       energy += Math.abs(pcm[i] ?? 0)
     }
     energies.push(energy / Math.max(1, end - start))
   }
 
-  // Development = energy changes across quarters (not flat, not random)
-  // Good development: energy rises and falls (arc shape)
+  // Development = total variation of energy contour
+  // (sum of changes between consecutive bars, normalized)
   let totalChange = 0
   for (let i = 1; i < energies.length; i++) {
     totalChange += Math.abs(energies[i]! - energies[i - 1]!)
   }
   const meanEnergy = energies.reduce((s, v) => s + v, 0) / energies.length
   if (meanEnergy < 1e-8) return 0.5
-  const cv = totalChange / (meanEnergy * 3)  // 3 transitions
-  return Math.max(0, Math.min(1, cv))
+  // Normalize: totalChange / (meanEnergy * numTransitions)
+  const cv = totalChange / (meanEnergy * Math.max(1, numBars - 1))
+  return Math.max(0, Math.min(1, cv * 2))  // scale ×2 for sensitivity
 }
 
 function computeCallResponse(pcm: Float32Array, sampleRate: number, _bpm: number): number {

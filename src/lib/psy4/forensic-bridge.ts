@@ -167,8 +167,9 @@ export async function renderFoundationSection(
   const samplesPerStep = Math.ceil(secondsPerStep * SR)
   const samplesPerBar = samplesPerStep * rawScore.groove.stepsPerBar
 
-  // Only render bars with kick+bass (skip INTRO/BREAK/OUTRO silence)
-  const activeBars = rawScore.bars.filter(b => b.roles.kick && b.roles.bass && b.arrangementState !== 'INTRO' && b.arrangementState !== 'BREAK' && b.arrangementState !== 'OUTRO')
+  // Only render bars with kick+bass (skip INTRO/OUTRO silence)
+  // Fix: keep BREAK bars — they have kick+bass and add dynamic contrast
+  const activeBars = rawScore.bars.filter(b => b.roles.kick && b.roles.bass && b.arrangementState !== 'INTRO' && b.arrangementState !== 'OUTRO')
   const renderBars = activeBars.length > 0 ? activeBars : rawScore.bars
   const barRemap = new Map<number, number>()
   renderBars.forEach((b, i) => barRemap.set(b.barIndex, i))
@@ -605,14 +606,14 @@ export async function renderFoundationSection(
   // This creates a 8-bar tension/release cycle that improves the dynamic contour.
   function barEnergy(barIdx: number): number {
     const phase = barIdx % 8
-    if (phase === 0) return 0.80  // intro — quieter
-    if (phase === 1) return 0.88  // groove building
-    if (phase === 2) return 0.95  // build
-    if (phase === 3) return 1.0   // full
-    if (phase === 4) return 0.35  // breakdown — deep drop for dynamic contrast
-    if (phase === 5) return 0.65  // rebuild from silence
-    if (phase === 6) return 0.92  // build
-    if (phase === 7) return 1.20  // climax — peak
+    if (phase === 0) return 0.60  // intro — quieter (was 0.80)
+    if (phase === 1) return 0.85  // groove building (was 0.88)
+    if (phase === 2) return 1.00  // build (was 0.95)
+    if (phase === 3) return 1.10  // full (was 1.0)
+    if (phase === 4) return 0.20  // breakdown — deep drop (was 0.35)
+    if (phase === 5) return 0.50  // rebuild (was 0.65)
+    if (phase === 6) return 0.95  // build (was 0.92)
+    if (phase === 7) return 1.30  // climax — peak (was 1.20)
     return 1.0
   }
 
@@ -950,9 +951,12 @@ export async function renderFoundationSection(
   // 5. Measure LUFS
   const lufsResult = measureLUFS(samplesL, samplesR, SR)
 
-  // 6. Apply LUFS gain targeting (-9 LUFS)
+  // 6. Apply LUFS gain targeting — partial correction preserves dynamic contrast
+  // Fix: was applying full normalization which cancels the energy contour.
+  // Now applies only 50% correction to keep dynamic range.
   const gainOffset = lufsToGainOffset(lufsResult.integratedLUFS, targetLufs)
-  const safeGain = Math.max(0.1, Math.min(8.0, gainOffset))
+  const fullGain = Math.max(0.1, Math.min(8.0, gainOffset))
+  const safeGain = 1.0 + (fullGain - 1.0) * 0.5  // 50% correction
   for (let i = 0; i < totalSamples; i++) {
     samplesL[i] = (samplesL[i] ?? 0) * safeGain
     samplesR[i] = (samplesR[i] ?? 0) * safeGain
