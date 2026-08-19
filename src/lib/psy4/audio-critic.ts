@@ -368,7 +368,7 @@ export function critiqueAudio(
     identityStrength,
     1 - lowMidMud,
     1 - harshness,
-    highEndPresence * 5,
+    highEndPresence * 10,
     stereoContrast,
     Math.min(1, dynamicRange / 10),
     1 - masking,
@@ -1056,9 +1056,9 @@ function computeRepetitionBalance(pcm: Float32Array, sampleRate: number, bpm: nu
     }
   }
   // Ideal: some repetition (not all, not none)
-  // Sweet spot at 0.5 (50% of pairs similar)
+  // Sweet spot at 0.7 (psytrance is inherently repetitive — 70% similar is normal)
   const repRatio = totalPairs > 0 ? similarPairs / totalPairs : 0.5
-  return Math.max(0, 1 - Math.abs(repRatio - 0.5) * 1.5)
+  return Math.max(0, 1 - Math.abs(repRatio - 0.7) * 1.5)
 }
 
 function computeHarmonicClarity(spectrum: number[], sampleRate: number, fftSize: number): number {

@@ -231,7 +231,7 @@ export const HAT_SPEC: HatSpec = {
   openDecay: 0.18,
   pitchVar: 0.02,
   panVar: 0.1,
-  gain: 0.85,
+  gain: 1.2,
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -312,9 +312,9 @@ export const MASTER_SPEC: MasterSpec = {
   hpFreq: 25,
   mbLowXover: 180,
   mbHighXover: 3500,
-  mbLowThr: 0.20,     // raised = even less low-band compression
-  mbMidThr: 0.12,     // raised = less mid compression
-  mbHighThr: 0.15,    // raised = less high compression = more air
+  mbLowThr: 0.30,     // raised: less low-band compression
+  mbMidThr: 0.20,     // raised: less mid compression
+  mbHighThr: 0.25,    // raised: less high compression = more air
   glueThr: 0.8,       // raised: 0.6 → 0.8 (much less glue compression)
   glueRatio: 1.5,     // lowered: 2.0 → 1.5 (gentler ratio)
   glueAttack: 0.01,   // slower: 0.005 → 0.01 (let transients through)

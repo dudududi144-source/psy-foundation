@@ -532,7 +532,7 @@ export class PsyLead {
     // v9.2: amplitude 0.7 → 0.8, multiplied by ampEnv for proper envelope tracking.
     const harmRaw = this.harmSaw.process((this.freq * 4) / SR)
     const harmBP = this.harmFilter.process(harmRaw, 8000, 0.7, SR, 1)
-    const harmSig = harmBP * 0.8 * attackEnv
+    const harmSig = harmBP * 1.0 * attackEnv
     out += harmSig
 
     // ── Amp envelope ──
