@@ -2338,3 +2338,96 @@ Stage Summary:
   - [✓] render: HTTP 200, WAV 1.75MB, deterministic (new baseline hash)
 - Known issue: dBTP now +0.2 (was -0.3) — Phase 1 Day 3-4 will fix TruePeakLimiter.
 - Ready for Phase 0 Day 3: README + docs rewrite (honest, no false claims).
+
+
+---
+Task ID: PHASE-0-DAY-3
+Agent: PSY Engineer
+Task: Phase 0 Day 3 — docs rewrite (archive old, write honest README + 5 new docs).
+
+Work Log:
+- Recovery: previous sandbox was wiped during session transition. Re-cloned from GitHub (rebuild/phase-0 branch). All Phase 0 Day 1 + Day 2 commits verified intact (c5b2539).
+- Archived 5 old docs to docs/archive/:
+  - COMMERCIAL_READINESS_ROADMAP.md
+  - COMPETITIVE_GAP_ANALYSIS.md
+  - HONEST_TRUTH.md
+  - PROJECT_SUMMARY.md
+  - SELF_ROAST.md
+  - knowledge-hub/ (11 files: CHOKE_GROUPS, COMMERCIAL_AUDIO_AUDIT, COMMERCIAL_ROADMAP, HARMONY_ENGINE, HUMANIZER, MUSICAL_GRAMMAR, PSY3_PRODUCTION_KNOWLEDGE, PSY3_SOUND_DESIGN_RULES, PSY4_DEEP_ROAST, README, ZDF_SVF)
+- Wrote new README.md (278 lines):
+  - Title: "PSY Foundation — Procedural Psytrance Synthesis Engine" (was "PSY4 — Professional AI Psytrance Synthesis Platform")
+  - Status badge: "Phase 0 | rebuild" (was implied "v9.0 commercial-ready")
+  - Honest metrics table with verified values: -10.6 LUFS, +0.2 dBTP (with bug note), 1.9 LU LRA
+  - All 10 foundation packages listed with test counts
+  - VST stub honestly labeled "Cannot build — PluginEditor.cpp missing"
+  - 11 critical bugs listed (Phase 1 fixes)
+  - 7 incomplete features listed (Phase 2 fixes)
+  - 6 "honest about what we don't have" items (Phase 4-5)
+  - "What This Is Not" section explicitly disclaims commercial/AI/VST claims
+  - All claims link to file:line or verified measurement
+- Wrote docs/STATUS.md (current state, all metrics verified by runtime):
+  - Tests: 646 pass, 0 fail (391,380 expect() calls)
+  - Install: 737ms
+  - Render: md5 0e1294f1e9f8b5280893ad01f9ca6326
+  - ffmpeg loudnorm: -10.6 LUFS, +0.2 dBTP, 1.9 LU LRA
+  - Day 1 + Day 2 acceptance all checked
+  - 11 known bugs (Phase 1) documented with file:line + fix plan
+- Wrote docs/ARCHITECTURE.md (layered architecture):
+  - 5 layers (Presentation, Application, PSY4 Render, Composition, Foundation)
+  - Dependency rules: Layer N imports from Layer N-1 only
+  - 10 foundation packages with test counts + key exports
+  - Module dependency map for Layer 3
+  - Sample-rate strategy (DEFAULT_SR in foundation/dsp, all modules accept sr parameter)
+  - Determinism strategy (Rng class, snapshot tests, no Math.random in production)
+  - Linting strategy (Biome, 5 strict rules planned for Day 4)
+- Wrote docs/ROADMAP.md (5 phases, 16-20 weeks):
+  - Phase 0 (week 1): Day 1 ✅, Day 2 ✅, Day 3 (in progress), Day 4-5 (pending)
+  - Phase 1 (weeks 2-4): DSP bugs, sample-rate param, FFT, learning-kernel fixes
+  - Phase 2 (weeks 5-8): composition loops, psytrance-specific (sidechain, OTT, 16th bass)
+  - Phase 3 (weeks 9-14): reference comparison, -9 LUFS target, LRA > 4
+  - Phase 4 (weeks 15-20): VST build, AudioWorklet 13 voices
+  - Phase 5 (optional): RAVE training if GPU available
+  - Tags: v0.4.0-phase-0-complete through v0.9.0-phase-5-complete
+- Wrote docs/QUALITY_GATES.md (acceptance criteria per phase):
+  - Gate 0: 7 hygiene + 3 docs + 4 tests + 5 DSP unit tests
+  - Gate 1: 9 DSP fixes + 3 sample-rate + 3 learning-kernel + 3 audio-critic + 2 API + 4 performance
+  - Gate 2: 7 composition loops + 6 psytrance features + 5 integration tests
+  - Gate 3: 3 loudness targets + 6 voice quality + 5 reference comparison + 4 polish
+  - Gate 4: 6 AudioWorklet + 12 VST build steps
+  - Gate 5: 3 dataset + 5 training + 3 inference (optional, only if GPU)
+  - Forbidden Claims table (13 claims → which gate allows them)
+- Wrote docs/RISK_REGISTER.md (14 risks):
+  - R1 (commercial samples) ✅ Mitigated
+  - R2 (score gaming) Open — Phase 1 replaces with external LUFS+EBU R128
+  - R3 (performance) Open — Phase 1 FFT
+  - R4 (dead exports) Partial — Phase 0 reduced, Phase 1 completes
+  - R5 (VST not buildable) Open — Phase 4
+  - R6 (0 DSP tests) Open — Phase 0 Day 5
+  - R7 (sample-rate hard-coded) Open — Phase 1 Week 3
+  - R8 (dependency rot) ✅ Mitigated
+  - R9 (identity crisis) ✅ Mitigated
+  - R10 (self-reference style transfer) Open — Phase 5 or delete
+  - R11 (architecture drift) ✅ Mitigated
+  - R12 (team capacity) Accepted
+  - R13 (foundation drift) Verified low — Phase 0 Day 1 confirmed no API mismatches
+  - R14 (GitHub token exposure) ✅ Mitigated (kept out of repo)
+
+Verification:
+- bun install: 31.7s (cold install after sandbox wipe; cached would be ~1s)
+- bun test: 646 pass, 0 fail (no regressions from docs work)
+- README grep for false claims: all instances of "AI", "neural", "Huovilainen", "true-peak limiter" appear in negation context ("NOT neural", "mislabeled", "bug documented") or Known Gaps section. No false claims.
+
+Stage Summary:
+- Phase 0 Day 3 COMPLETE: docs rewritten honestly.
+- Acceptance criteria all met:
+  - [✓] Old docs archived to docs/archive/
+  - [✓] README rewritten (honest, no false claims)
+  - [✓] docs/STATUS.md written (verified metrics)
+  - [✓] docs/ARCHITECTURE.md written (layered)
+  - [✓] docs/ROADMAP.md written (5 phases)
+  - [✓] docs/QUALITY_GATES.md written (per-phase acceptance)
+  - [✓] docs/RISK_REGISTER.md written (14 risks)
+  - [✓] README contains "in development", "not commercial-ready"
+  - [✓] README does NOT contain false "AI/neural/commercial/VST-AU" claims
+  - [✓] bun test: 646 pass, 0 fail
+- Ready for Phase 0 Day 4: lint + type check strict (enable 5 biome rules, remove ignoreBuildErrors).
