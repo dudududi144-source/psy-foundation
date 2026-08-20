@@ -482,11 +482,17 @@ function hannWindow(size: number): Float32Array {
 
 /**
  * Simplified DFT — computes the magnitude spectrum at numBins frequency bins.
- * Uses direct computation (O(n*k)) rather than FFT for simplicity. This is
- * slow for large fftSize but adequate for analysis (not real-time).
+ * Phase 1 Day 5 FIX: replaced O(N²) DFT with O(N log N) radix-2 FFT.
+ * Speedup: ~100× for typical frame sizes (2048 samples).
+ * The FFT is iterative (non-recursive) for cache efficiency.
  */
 function computeDFT(frame: Float32Array, numBins: number): number[] {
   const N = frame.length
+  // Use FFT if N is a power of 2; fall back to direct DFT for non-power-of-2.
+  if ((N & (N - 1)) === 0 && N > 0) {
+    return fftMagnitude(frame, numBins)
+  }
+  // Fallback: direct DFT (for non-power-of-2 frame sizes)
   const spectrum = new Array(numBins).fill(0)
   for (let k = 0; k < numBins; k++) {
     let real = 0
@@ -498,6 +504,72 @@ function computeDFT(frame: Float32Array, numBins: number): number[] {
       imag += (frame[n] ?? 0) * Math.sin(angle)
     }
     spectrum[k] = Math.sqrt(real * real + imag * imag) / N
+  }
+  return spectrum
+}
+
+/**
+ * Iterative radix-2 FFT (Cooley-Tukey).
+ * Returns magnitude spectrum (first numBins bins, normalized by N).
+ * Requires N to be a power of 2.
+ */
+function fftMagnitude(frame: Float32Array, numBins: number): number[] {
+  const N = frame.length
+  // Separate real and imaginary parts
+  const re = new Float64Array(N)
+  const im = new Float64Array(N)
+  for (let i = 0; i < N; i++) {
+    re[i] = frame[i] ?? 0
+  }
+
+  // Bit-reversal permutation
+  let j = 0
+  for (let i = 1; i < N; i++) {
+    let bit = N >> 1
+    while (j & bit) {
+      j ^= bit
+      bit >>= 1
+    }
+    j ^= bit
+    if (i < j) {
+      const tr = re[i]
+      re[i] = re[j]
+      re[j] = tr
+      const ti = im[i]
+      im[i] = im[j]
+      im[j] = ti
+    }
+  }
+
+  // Butterfly operations
+  for (let len = 2; len <= N; len <<= 1) {
+    const halfLen = len >> 1
+    const angle = -2 * Math.PI / len
+    const wRe = Math.cos(angle)
+    const wIm = Math.sin(angle)
+    for (let i = 0; i < N; i += len) {
+      let curRe = 1
+      let curIm = 0
+      for (let k = 0; k < halfLen; k++) {
+        const idx1 = i + k
+        const idx2 = i + k + halfLen
+        const tRe = curRe * re[idx2]! - curIm * im[idx2]!
+        const tIm = curRe * im[idx2]! + curIm * re[idx2]!
+        re[idx2] = re[idx1]! - tRe
+        im[idx2] = im[idx1]! - tIm
+        re[idx1] = re[idx1]! + tRe
+        im[idx1] = im[idx1]! + tIm
+        const nextRe = curRe * wRe - curIm * wIm
+        curIm = curRe * wIm + curIm * wRe
+        curRe = nextRe
+      }
+    }
+  }
+
+  // Compute magnitude (first numBins bins)
+  const spectrum = new Array(numBins).fill(0)
+  for (let k = 0; k < numBins && k < N; k++) {
+    spectrum[k] = Math.sqrt(re[k]! * re[k]! + im[k]! * im[k]!) / N
   }
   return spectrum
 }
