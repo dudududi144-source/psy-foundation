@@ -22,6 +22,7 @@ namespace psy4 {
 class LeadVoice;
 class BassVoice;
 class PadVoice;
+class AcidVoice; // Phase E: 13th voice
 
 //==============================================================================
 class PluginProcessor : public juce::AudioProcessor
@@ -85,6 +86,7 @@ private:
     std::array<std::unique_ptr<LeadVoice>, 8> leadVoices;
     std::array<std::unique_ptr<BassVoice>, 2> bassVoices;
     std::array<std::unique_ptr<PadVoice>, 2> padVoices;
+    std::unique_ptr<AcidVoice> acidVoice; // Phase E: 13th voice
     int leadVoiceIndex = 0;
     int bassVoiceIndex = 0;
     int padVoiceIndex = 0;

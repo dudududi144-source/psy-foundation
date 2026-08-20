@@ -28,10 +28,12 @@ const juce::String PluginProcessor::PARAM_MACRO2 = "macro2";
 const juce::String PluginProcessor::PARAM_MACRO3 = "macro3";
 
 // ── Lead Voice ──
+// Phase E: now with per-voice pan and noteOff support
 class LeadVoice {
 public:
-    LeadVoice() : freq(440.0f), cutoff(3000.0f), res(0.3f), gain(0.6f), active(false) {}
-    
+    LeadVoice() : freq(440.0f), cutoff(3000.0f), res(0.3f), gain(0.6f), active(false),
+                  pan(0.0f), gainL(0.707f), gainR(0.707f) {}
+
     void noteOn(int midi, float velocity) {
         freq = 440.0f * std::pow(2.0f, (midi - 69) / 12.0f);
         saw.reset();
@@ -40,33 +42,47 @@ public:
         env.trigger(velocity);
         active = true;
     }
-    
-    float process(float sr) {
-        if (!active) return 0.0f;
+
+    void noteOff() { active = false; }
+
+    // Phase E: process returns stereo [L, R]
+    void process(float sr, float& outL, float& outR) {
+        if (!active) { outL = 0.0f; outR = 0.0f; return; }
         float e = env.process(sr);
-        if (e < 0.001f) { active = false; return 0.0f; }
+        if (e < 0.001f) { active = false; outL = 0.0f; outR = 0.0f; return; }
         float s = saw.process(freq / sr);
         float f = filter.process(s, cutoff, res, sr);
-        return f * e * gain;
+        float sig = f * e * gain;
+        outL = sig * gainL;
+        outR = sig * gainR;
     }
-    
+
     bool isActive() const { return active; }
     void setCutoff(float c) { cutoff = c; }
     void setResonance(float r) { res = r; }
-    
+    void setPan(float p) {
+        pan = p;
+        float angle = (p + 1.0f) * 0.25f * M_PI;
+        gainL = std::cos(angle);
+        gainR = std::sin(angle);
+    }
+
 private:
     BLSaw saw;
     ZDFSVF filter;
     DecayEnv env;
     float freq, cutoff, res, gain;
+    float pan, gainL, gainR;
     bool active;
 };
 
 // ── Bass Voice ──
+// Phase E: stereo + noteOff
 class BassVoice {
 public:
-    BassVoice() : freq(82.0f), subPhase(0.0f), cutoff(800.0f), res(0.3f), gain(0.5f), active(false) {}
-    
+    BassVoice() : freq(82.0f), subPhase(0.0f), cutoff(800.0f), res(0.3f), gain(0.5f), active(false),
+                  gainL(0.707f), gainR(0.707f) {}
+
     void noteOn(int midi, float velocity) {
         freq = 440.0f * std::pow(2.0f, (midi - 69) / 12.0f);
         subPhase = 0.0f;
@@ -76,34 +92,41 @@ public:
         env.trigger(velocity);
         active = true;
     }
-    
-    float process(float sr) {
-        if (!active) return 0.0f;
+
+    void noteOff() { active = false; }
+
+    void process(float sr, float& outL, float& outR) {
+        if (!active) { outL = 0.0f; outR = 0.0f; return; }
         float e = env.process(sr);
-        if (e < 0.001f) { active = false; return 0.0f; }
+        if (e < 0.001f) { active = false; outL = 0.0f; outR = 0.0f; return; }
         subPhase += (2.0f * M_PI * freq) / sr;
         if (subPhase > 2.0f * M_PI) subPhase -= 2.0f * M_PI;
         float sub = std::sin(subPhase) * 0.5f;
         float sawOut = saw.process(freq / sr) * 0.5f;
         float f = filter.process(sub + sawOut, cutoff, res, sr);
-        return f * e * gain;
+        float sig = f * e * gain;
+        outL = sig * gainL;
+        outR = sig * gainR;
     }
-    
+
     bool isActive() const { return active; }
-    
+
 private:
     BLSaw saw;
     ZDFSVF filter;
     DecayEnv env;
     float freq, subPhase, cutoff, res, gain;
+    float gainL, gainR;
     bool active;
 };
 
 // ── Pad Voice ──
+// Phase E: stereo + noteOff
 class PadVoice {
 public:
-    PadVoice() : freq(220.0f), cutoff(600.0f), res(0.2f), gain(0.3f), active(false) {}
-    
+    PadVoice() : freq(220.0f), cutoff(600.0f), res(0.2f), gain(0.3f), active(false),
+                 gainL(0.707f), gainR(0.707f) {}
+
     void noteOn(int midi, float velocity) {
         freq = 440.0f * std::pow(2.0f, (midi - 69) / 12.0f);
         saw1.reset();
@@ -113,24 +136,78 @@ public:
         env.trigger(velocity * 0.5f);
         active = true;
     }
-    
-    float process(float sr) {
-        if (!active) return 0.0f;
+
+    void noteOff() { active = false; }
+
+    void process(float sr, float& outL, float& outR) {
+        if (!active) { outL = 0.0f; outR = 0.0f; return; }
         float e = env.process(sr);
-        if (e < 0.001f) { active = false; return 0.0f; }
+        if (e < 0.001f) { active = false; outL = 0.0f; outR = 0.0f; return; }
         float s1 = saw1.process(freq / sr);
-        float s2 = saw2.process(freq * 1.005f / sr); // detune
+        float s2 = saw2.process(freq * 1.005f / sr);
         float f = filter.process((s1 + s2) * 0.5f, cutoff, res, sr);
-        return f * e * gain;
+        float sig = f * e * gain;
+        outL = sig * gainL;
+        outR = sig * gainR;
     }
-    
+
     bool isActive() const { return active; }
-    
+
 private:
     BLSaw saw1, saw2;
     ZDFSVF filter;
     DecayEnv env;
     float freq, cutoff, res, gain;
+    float gainL, gainR;
+    bool active;
+};
+
+// ── Acid Voice (Phase E: 13th voice — TB-303 style) ──
+class AcidVoice {
+public:
+    AcidVoice() : freq(220.0f), phase(0.0f), cutoff(500.0f), res(0.8f),
+                  filterEnvAmount(2000.0f), gain(0.5f), active(false),
+                  gainL(0.707f), gainR(0.707f) {}
+
+    void noteOn(int midi, float velocity) {
+        freq = 440.0f * std::pow(2.0f, (midi - 69) / 12.0f);
+        phase = 0.0f;
+        filter.reset();
+        env.setDecay(0.3f);
+        filterEnv.setDecay(0.2f);
+        env.trigger(velocity);
+        filterEnv.trigger(1.0f);
+        active = true;
+    }
+
+    void noteOff() { active = false; }
+
+    void process(float sr, float& outL, float& outR) {
+        if (!active) { outL = 0.0f; outR = 0.0f; return; }
+        float e = env.process(sr);
+        if (e < 0.001f) { active = false; outL = 0.0f; outR = 0.0f; return; }
+        float fe = filterEnv.process(sr);
+        float dynamicCutoff = cutoff + fe * filterEnvAmount;
+        // Square wave (naive — Phase F will add BLSquare to C++ headers)
+        phase += freq / sr;
+        if (phase >= 1.0f) phase -= 1.0f;
+        float sq = (phase < 0.5f) ? 1.0f : -1.0f;
+        float f = filter.process(sq, dynamicCutoff, res, sr);
+        float sig = f * e * gain;
+        outL = sig * gainL;
+        outR = sig * gainR;
+    }
+
+    bool isActive() const { return active; }
+    void setCutoff(float c) { cutoff = c; }
+    void setResonance(float r) { res = r; }
+
+private:
+    ZDFSVF filter;
+    DecayEnv env;
+    DecayEnv filterEnv;
+    float freq, phase, cutoff, res, filterEnvAmount, gain;
+    float gainL, gainR;
     bool active;
 };
 
@@ -163,13 +240,18 @@ PluginProcessor::PluginProcessor()
               juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f),
       })
 {
-    // Initialize 3 voice types with real DSP
-    for (auto& voice : leadVoices)
+    // Initialize voice types with real DSP
+    for (auto& voice : leadVoices) {
         voice = std::make_unique<LeadVoice>();
+        // Phase E: spread lead voices across stereo field
+        static const float leadPans[] = {-0.6f, -0.3f, -0.1f, 0.1f, 0.3f, 0.5f, -0.4f, 0.6f};
+        voice->setPan(leadPans[&voice - &leadVoices[0]]);
+    }
     for (auto& voice : bassVoices)
         voice = std::make_unique<BassVoice>();
     for (auto& voice : padVoices)
         voice = std::make_unique<PadVoice>();
+    acidVoice = std::make_unique<AcidVoice>(); // Phase E: 13th voice
 }
 
 PluginProcessor::~PluginProcessor()
@@ -231,35 +313,74 @@ void PluginProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         voice->setResonance(resonance);
     }
 
-    // Render all voices
+    // Render all voices — Phase E: stereo + acidVoice + master chain
     float* channelL = buffer.getWritePointer(0);
     float* channelR = buffer.getWritePointer(1);
-    
+
     for (int i = 0; i < buffer.getNumSamples(); i++)
     {
-        float sample = 0.0f;
-        
-        // Lead voices
-        for (auto& voice : leadVoices)
-            if (voice->isActive())
-                sample += voice->process(currentSampleRate);
-        
-        // Bass voices
-        for (auto& voice : bassVoices)
-            if (voice->isActive())
-                sample += voice->process(currentSampleRate);
-        
-        // Pad voices
-        for (auto& voice : padVoices)
-            if (voice->isActive())
-                sample += voice->process(currentSampleRate);
-        
-        // Master gain + soft clip
-        sample *= 0.3f;
-        sample = std::tanh(sample); // soft saturation
-        
-        channelL[i] = sample;
-        channelR[i] = sample;
+        // Phase E: stereo rendering with per-voice pan
+        float mixL = 0.0f;
+        float mixR = 0.0f;
+
+        // Lead voices (8) with spread pan
+        for (auto& voice : leadVoices) {
+            if (voice->isActive()) {
+                float vl, vr;
+                voice->process(currentSampleRate, vl, vr);
+                mixL += vl;
+                mixR += vr;
+            }
+        }
+
+        // Bass voices (2) — center
+        for (auto& voice : bassVoices) {
+            if (voice->isActive()) {
+                float vl, vr;
+                voice->process(currentSampleRate, vl, vr);
+                mixL += vl;
+                mixR += vr;
+            }
+        }
+
+        // Pad voices (2) — wide
+        for (auto& voice : padVoices) {
+            if (voice->isActive()) {
+                float vl, vr;
+                voice->process(currentSampleRate, vl, vr);
+                mixL += vl;
+                mixR += vr;
+            }
+        }
+
+        // Acid voice (1) — center
+        if (acidVoice->isActive()) {
+            float vl, vr;
+            acidVoice->process(currentSampleRate, vl, vr);
+            mixL += vl;
+            mixR += vr;
+        }
+
+        // Master gain + soft saturation
+        mixL *= 0.3f;
+        mixR *= 0.3f;
+        mixL = std::tanh(mixL * 1.2f) * 0.7f + mixL * 0.3f;
+        mixR = std::tanh(mixR * 1.2f) * 0.7f + mixR * 0.3f;
+
+        // M/S stereo widener
+        float mid = (mixL + mixR) * 0.5f;
+        float side = (mixL - mixR) * 0.5f * 1.3f;
+        mixL = mid + side;
+        mixR = mid - side;
+
+        // Simple limiter (brickwall at 0.89 = -1dBTP)
+        if (mixL > 0.89f) mixL = 0.89f;
+        else if (mixL < -0.89f) mixL = -0.89f;
+        if (mixR > 0.89f) mixR = 0.89f;
+        else if (mixR < -0.89f) mixR = -0.89f;
+
+        channelL[i] = mixL;
+        channelR[i] = mixR;
     }
 }
 
@@ -280,7 +401,12 @@ void PluginProcessor::noteOn (int midiNote, float velocity)
 
 void PluginProcessor::noteOff (int midiNote)
 {
-    // Voices use decay envelopes — noteOff is implicit when env < 0.001
+    // Phase E: noteOff support for all voices
+    (void)midiNote; // unused — all voices get noteOff
+    for (auto& voice : leadVoices) voice->noteOff();
+    for (auto& voice : bassVoices) voice->noteOff();
+    for (auto& voice : padVoices) voice->noteOff();
+    acidVoice->noteOff();
 }
 
 //==============================================================================

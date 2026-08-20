@@ -3533,3 +3533,53 @@ Stage Summary:
 - LUFS correction now 100% (was 50% — never hit target).
 - ISP-safe ceiling tightened to 0.65 (ffmpeg dBTP = -0.9 ✅).
 - 717 tests pass, 0 regressions.
+
+
+---
+Task ID: PHASE-E
+Agent: PSY Engineer
+Task: Phase E — real VST (stereo + 13 voices + master chain).
+
+Work Log:
+
+E1: Fixed VST voice classes:
+- All voices now have noteOff() method (was implicit via decay only)
+- All voices now process stereo (outL, outR) instead of mono (single sample)
+- LeadVoice has setPan() with equal-power pan law
+
+E2: Added AcidVoice (13th voice) in C++:
+- TB-303 style: naive square + resonant filter with envelope sweep
+- Uses ZDFSVF from DSP/ZDFSVF.h
+- Uses DecayEnv for both amp and filter envelopes
+- Has setPan (centered by default)
+
+E3: Updated PluginProcessor.h:
+- Added AcidVoice forward declaration
+- Added std::unique_ptr<AcidVoice> acidVoice member
+
+E4: Updated processBlock to stereo + master chain:
+- Per-voice stereo rendering (each voice outputs L+R separately)
+- Lead voices spread across stereo field (8 pans from -0.6 to +0.6)
+- Bass/Pad centered
+- Acid centered
+- Master chain: gain → soft saturation → M/S widener → brickwall limiter
+- L ≠ R (was: channelL = channelR = sample)
+
+E5: Updated noteOff to actually silence all voices (was no-op)
+
+VST now has:
+- 13 voices (8 lead + 2 bass + 2 pad + 1 acid) ✅
+- Stereo output (L ≠ R) ✅
+- noteOff support ✅
+- Per-voice pan ✅
+- Master chain (saturation + M/S + limiter) ✅
+
+Verification:
+- bun test: 717 pass, 14 skip, 0 fail
+- 414,864 expect() calls across 43 files
+
+Stage Summary:
+- Phase E COMPLETE: VST is now 13-voice stereo with master chain.
+- Was: mono, 12 voices, no master chain, no noteOff
+- Now: stereo, 13 voices, master chain, noteOff, per-voice pan
+- 717 tests pass, 0 regressions.
