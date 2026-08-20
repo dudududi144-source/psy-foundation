@@ -43,6 +43,21 @@ export async function GET(req: NextRequest) {
     ? (formatParam as ExportFormat)
     : 'wav'
 
+  // Phase C: progression + bassMode + style parameters
+  const progression = req.nextUrl.searchParams.get('progression') ?? undefined
+  const bassMode = req.nextUrl.searchParams.get('bassMode') ?? undefined
+  const style = req.nextUrl.searchParams.get('style') ?? undefined
+
+  // Style presets: ?style=full-on|darkpsy|progressive
+  const stylePresets: Record<string, { scale: string; bpm: number; progression: string; bassMode?: string }> = {
+    'full-on': { scale: 'phrygian-dominant', bpm: 145, progression: 'psy-dominant' },
+    'darkpsy': { scale: 'phrygian', bpm: 150, progression: 'dark', bassMode: '16th' },
+    'progressive': { scale: 'minor', bpm: 134, progression: 'uplifting' },
+    'forest': { scale: 'phrygian', bpm: 155, progression: 'dark', bassMode: '16th' },
+    'hypnotic': { scale: 'phrygian-dominant', bpm: 138, progression: 'hypnotic' },
+  }
+  const stylePreset = style ? stylePresets[style] : undefined
+
   // Preset support: ?preset=Full-On+Lead applies preset params to render config
   const presetName = req.nextUrl.searchParams.get('preset')
   let renderConfig = { ...BEST_CONFIG }
@@ -66,9 +81,9 @@ export async function GET(req: NextRequest) {
 
   const ctx = {
     tonic: 4,
-    scaleName: 'phrygian-dominant',
+    scaleName: stylePreset?.scale ?? 'phrygian-dominant',
     octave: 4,
-    bpm: 145,
+    bpm: stylePreset?.bpm ?? 145,
     beatsPerBar: 4,
     beatPosition: 0,
     barPosition: 0,
@@ -77,9 +92,12 @@ export async function GET(req: NextRequest) {
     density: 0.7,
     energy: 0.7,
     tension: 0.3,
-    sectionRole: 'full-on',
+    sectionRole: style ?? 'full-on',
     repetitionPressure: 0.3,
     noveltyPressure: 0.5,
+    // Phase C: progression and bassMode from query params or style preset
+    progressionName: progression ?? stylePreset?.progression ?? 'psy-dominant',
+    bassMode: bassMode ?? stylePreset?.bassMode ?? 'standard',
   }
 
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
@@ -91,7 +109,7 @@ export async function GET(req: NextRequest) {
   try {
     result = await renderFoundationSection(section, {
       useSamples,
-      bpm: 145,
+      bpm: ctx.bpm,
       config: renderConfig,
       stems: stem !== null,
     })
@@ -99,7 +117,7 @@ export async function GET(req: NextRequest) {
     console.error('Render failed, retrying without samples:', (e as Error).message)
     result = await renderFoundationSection(section, {
       useSamples: false,
-      bpm: 145,
+      bpm: ctx.bpm,
       config: renderConfig,
       stems: stem !== null,
     })

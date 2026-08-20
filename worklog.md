@@ -3449,3 +3449,42 @@ Stage Summary:
 - Worklet now has: per-voice pan, sidechain, saturation, M/S widener, limiter.
 - Still missing vs offline: multiband, OTT, LUFS targeting (Phase D).
 - 712 tests pass, 0 regressions.
+
+
+---
+Task ID: PHASE-C
+Agent: PSY Engineer
+Task: Phase C — wire composition engine (progressions + bassMode + style API).
+
+Work Log:
+
+C1: Connected PSYTRANCE_PROGRESSIONS to composition engine:
+- Added progressionName? and bassMode? fields to MusicalContext interface
+- composition-engine.ts: passes this.context.progressionName to buildHarmonicPlan
+- packages/music/src/index.ts: exported PSYTRANCE_PROGRESSIONS
+
+C2: Added API parameters to render-forensic/route.ts:
+- ?progression= (hypnotic, dark, uplifting, epic, classic, minor, psy-dominant, t-s-t-d)
+- ?bassMode= (standard, 16th, alternating)
+- ?style= (full-on, darkpsy, progressive, forest, hypnotic)
+- Style presets combine scale + bpm + progression + bassMode
+- bpm now comes from context (was hardcoded 145)
+- scaleName comes from style preset (was hardcoded phrygian-dominant)
+
+C3: Tests:
+- phase-c.test.ts: 5 tests verifying progressions defined, buildHarmonicPlan accepts progressionName, default produces valid plan, rollingBass16th produces 16 notes, alternating mode uses fifth
+
+Known limitation (Phase D):
+- buildHarmonicPlan computes progression degrees but doesn't fully use them for chord root selection
+- Chord tones still determined by harmonic function (TONIC/SUBDOMINANT/DOMINANT)
+- Phase D will fix: use degree to select actual chord root from scale
+
+Verification:
+- bun test: 717 pass, 14 skip, 0 fail (was 712, +5 new)
+- 414,864 expect() calls across 43 files
+
+Stage Summary:
+- Phase C COMPLETE: composition engine wired with all 8 progressions + style API.
+- API now supports ?progression=, ?bassMode=, ?style= parameters.
+- 5 style presets: full-on, darkpsy, progressive, forest, hypnotic.
+- 717 tests pass, 0 regressions.

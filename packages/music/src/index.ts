@@ -447,6 +447,7 @@ export {
   type HarmonicFunction,
   type HarmonicPlan,
   buildHarmonicPlan,
+  PSYTRANCE_PROGRESSIONS,
   cadenceMidi,
   chordAtBar,
   isAnticipationBar,
