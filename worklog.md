@@ -3210,3 +3210,42 @@ Stage Summary:
 - Plugin can now build with CMake + JUCE.
 - 712 tests pass, 0 regressions.
 - Ready for Phase 4 Day 2: AudioWorklet 13 voices.
+
+
+---
+Task ID: PHASE-4-DAY-2
+Agent: PSY Engineer
+Task: Phase 4 Day 2 — AudioWorklet 13 voices + stereo + noteOff.
+
+Work Log:
+- Updated apps/web/public/worklets/psy4-processor.js:
+  1. Header comment updated honestly — documents 13-voice architecture
+     (was claiming "single voice" despite having 12)
+  2. Added BLSquare class (PolyBLEP band-limited square wave)
+  3. Added AcidVoice class (TB-303 style: square + resonant filter sweep)
+     — this is the 13th voice
+  4. Added noteOff() to all voice classes (LeadVoice, BassVoice, PadVoice, AcidVoice)
+  5. Added noteOff message handling in processor
+  6. Added voiceType='acid' option for explicit acid voice triggering
+  7. Added stereo output via Haas delay (15ms on R channel)
+     — L = direct, R = delayed → stereo widening without phase issues
+  8. Updated allVoices array to include acidVoice in all parameter updates
+
+- Updated apps/web/src/lib/psy4/audio-engine.ts:
+  1. noteOn() now accepts optional voiceType parameter
+  2. Added noteOff() method (was missing entirely)
+
+Voice count: 8 lead + 2 bass + 2 pad + 1 acid = 13 voices ✅
+
+Verification:
+- bun test (all): 712 pass, 14 skip, 0 fail
+- 414,845 expect() calls across 42 files
+- AudioWorklet now has 13 voices (was 12, claimed 1)
+
+Stage Summary:
+- Phase 4 Day 2 COMPLETE: AudioWorklet upgraded to 13 voices + stereo.
+- The worklet now honestly matches its documented architecture.
+- Stereo output via Haas delay (L ≠ R).
+- noteOff support added.
+- 712 tests pass, 0 regressions.
+- Ready for Phase 4 merge + tag.

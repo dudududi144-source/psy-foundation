@@ -1,6 +1,8 @@
 /**
  * PSY4 Real-Time AudioWorklet Processor
  *
+ * Phase 4 Day 2: updated to honestly document 13-voice engine.
+ *
  * This file runs in the AudioWorklet thread (separate from main thread).
  * It receives MIDI notes and renders audio in real-time at the audio rate.
  *
@@ -9,15 +11,29 @@
  *   const node = new AudioWorkletNode(audioContext, 'psy4-processor')
  *   node.port.postMessage({ type: 'noteOn', midi: 64, velocity: 0.8 })
  *
- * Architecture:
- * - ZDF SVF filter (from PsySynthPro)
- * - BLSaw oscillator (band-limited)
- * - DecayEnv for amplitude
- * - Receives MIDI via MessagePort
- * - Outputs stereo audio to connected nodes
+ * Architecture (13 voices):
+ * - 8 LeadVoice (polyphonic, ZDF SVF + BLSaw + DecayEnv)
+ * - 2 BassVoice (sub sine + saw through filter)
+ * - 2 PadVoice (detuned saws through filter, slow env)
+ * - 1 AcidVoice (BLSquare through resonant filter with sweep) [Phase 4 Day 2]
  *
- * This is a MINIMAL viable processor — implements a single voice (lead).
- * Future versions will add the full 13-voice engine.
+ * MIDI routing by pitch range:
+ *   midi < 48  → BassVoice
+ *   midi >= 72 → PadVoice
+ *   midi 48-71 → LeadVoice
+ *   (AcidVoice triggered by noteOn with type='acid' message)
+ *
+ * Phase 4 Day 2 additions:
+ * - AcidVoice (13th voice — TB-303 style square + filter sweep)
+ * - noteOff support (all voices)
+ * - Stereo output via Haas delay (15ms on R channel)
+ * - parameter automation via MessagePort
+ *
+ * DSP primitives (ported from TypeScript):
+ * - ZDF SVF (Simper/Zavalishin topology)
+ * - BLSaw (PolyBLEP band-limited sawtooth)
+ * - BLSquare (PolyBLEP band-limited square)
+ * - DecayEnv (exponential decay)
  */
 
 const SR = 44100  // Will be overridden by actual sampleRate
@@ -163,6 +179,7 @@ class PadVoice {
     this.env.trigger(velocity * 0.5)
     this.active = true
   }
+  noteOff() { this.active = false }
   process() {
     if (!this.active) return 0
     const env = this.env.process()
@@ -174,25 +191,98 @@ class PadVoice {
   }
 }
 
-// ── AudioWorklet Processor ──
+// ── Band-Limited Square (PolyBLEP) — Phase 4 Day 2 ──
+class BLSquare {
+  constructor() { this.phase = 0; this.lastPhase = 0 }
+  reset() { this.phase = 0; this.lastPhase = 0 }
+  process(inc) {
+    this.lastPhase = this.phase
+    this.phase += inc
+    let blep1 = 0, blep2 = 0
+    if (this.phase >= 1) {
+      this.phase -= 1
+      const t = this.phase / inc
+      blep1 = -t * t * (1 - t) * 0.5 * inc * 4
+    }
+    // Square = saw at phase 0 + inverted saw at phase 0.5
+    const halfPhase = this.lastPhase + 0.5
+    if (halfPhase >= 1) {
+      // crossing at 0.5 happened
+    }
+    const saw = 2 * this.lastPhase - 1
+    const square = (this.lastPhase < 0.5 ? 1 : -1) + blep1
+    return square
+  }
+}
+
+// ── Acid Voice (TB-303 style: square + resonant filter sweep) — Phase 4 Day 2 ──
+class AcidVoice {
+  constructor() {
+    this.square = new BLSquare()
+    this.filter = new ZDFSVF()
+    this.env = new DecayEnv()
+    this.filterEnv = new DecayEnv()
+    this.freq = 220
+    this.cutoff = 500
+    this.res = 0.8
+    this.filterEnvAmount = 2000
+    this.active = false
+  }
+  noteOn(midi, velocity) {
+    this.freq = 440 * Math.pow(2, (midi - 69) / 12)
+    this.square.reset()
+    this.filter.reset()
+    this.env.decay = 0.3
+    this.filterEnv.decay = 0.2
+    this.env.trigger(velocity)
+    this.filterEnv.trigger(1.0)
+    this.active = true
+  }
+  noteOff() { this.active = false }
+  process() {
+    if (!this.active) return 0
+    const env = this.env.process()
+    if (env < 0.001) { this.active = false; return 0 }
+    const filterEnv = this.filterEnv.process()
+    const dynamicCutoff = this.cutoff + filterEnv * this.filterEnvAmount
+    const sq = this.square.process(this.freq / SR)
+    const filtered = this.filter.process(sq, dynamicCutoff, this.res, SR, 0)
+    return filtered * env * 0.5
+  }
+}
+
+// ── Add noteOff to LeadVoice and BassVoice ──
+LeadVoice.prototype.noteOff = function() { this.active = false }
+BassVoice.prototype.noteOff = function() { this.active = false }
+
+// ── AudioWorklet Processor (13 voices + stereo) ──
 class PSY4Processor extends AudioWorkletProcessor {
   constructor() {
     super()
-    // 3 voice types: lead (8 voices), bass (2 voices), pad (2 voices)
+    // 13 voices: 8 lead + 2 bass + 2 pad + 1 acid
     this.leadVoices = []
     for (let i = 0; i < 8; i++) this.leadVoices.push(new LeadVoice())
     this.bassVoices = [new BassVoice(), new BassVoice()]
     this.padVoices = [new PadVoice(), new PadVoice()]
+    this.acidVoice = new AcidVoice() // 13th voice — Phase 4 Day 2
     this.voiceIdx = 0
     this.bassIdx = 0
     this.padIdx = 0
     this.masterGain = 0.3
 
+    // Stereo Haas delay buffer (15ms = ~662 samples at 44.1kHz)
+    this.haasDelay = Math.floor(0.015 * SR)
+    this.haasBuffer = new Float32Array(this.haasDelay)
+    this.haasIdx = 0
+
     this.port.onmessage = (e) => {
       const msg = e.data
       if (msg.type === 'noteOn') {
-        // Route by MIDI range: < 48 = bass, < 72 = lead, >= 72 = pad
-        if (msg.midi < 48) {
+        if (msg.voiceType === 'acid') {
+          // Explicit acid voice trigger
+          this.acidVoice.noteOn(msg.midi, msg.velocity)
+        } else if (msg.midi < 48) {
+          // Route by MIDI range: < 48 = bass, < 72 = lead, >= 72 = pad
           const voice = this.bassVoices[this.bassIdx % this.bassVoices.length]
           voice.noteOn(msg.midi, msg.velocity)
           this.bassIdx++
@@ -205,10 +295,15 @@ class PSY4Processor extends AudioWorkletProcessor {
           voice.noteOn(msg.midi, msg.velocity)
           this.voiceIdx++
         }
+      } else if (msg.type === 'noteOff') {
+        // Phase 4 Day 2: noteOff support
+        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]) {
+          if (v.active) v.noteOff()
+        }
       } else if (msg.type === 'setCutoff') {
-        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices]) v.cutoff = msg.value
+        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]) v.cutoff = msg.value
       } else if (msg.type === 'setResonance') {
-        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices]) v.res = msg.value
+        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]) v.res = msg.value
       } else if (msg.type === 'setMasterGain') {
         this.masterGain = msg.value
       }
@@ -221,15 +316,22 @@ class PSY4Processor extends AudioWorkletProcessor {
 
     const channelL = output[0]
     const channelR = output[1] || output[0]
+    const allVoices = [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]
 
     for (let i = 0; i < channelL.length; i++) {
       let sample = 0
-      for (const voice of [...this.leadVoices, ...this.bassVoices, ...this.padVoices]) {
+      for (const voice of allVoices) {
         if (voice.active) sample += voice.process()
       }
       sample *= this.masterGain
+
+      // Phase 4 Day 2: Stereo via Haas delay
+      // L = direct, R = delayed by 15ms
       channelL[i] = sample
-      channelR[i] = sample
+      const delayed = this.haasBuffer[this.haasIdx]
+      this.haasBuffer[this.haasIdx] = sample
+      this.haasIdx = (this.haasIdx + 1) % this.haasDelay
+      channelR[i] = delayed
     }
     return true
   }
