@@ -3631,3 +3631,44 @@ Stage Summary:
 - SpectrumAnalyzer functional (real-time FFT).
 - MIDI learn basics verified (CC mapping, note→freq, velocity→amp).
 - 729 tests pass, 0 regressions.
+
+
+---
+Task ID: PHASE-G-FINAL
+Agent: PSY Engineer
+Task: Phase G — E2E verification + project closure.
+
+Work Log:
+
+G1-G10: E2E acceptance criteria (10 tests, all pass):
+- G1: Render produces bit-identical deterministic output (md5: 190e3541...) ✅
+- G2: Render output is stereo (L ≠ R, 100+ stereo samples) ✅
+- G3: Render has non-zero energy (RMS > 0.01) ✅
+- G4: All 8 PSYTRANCE_PROGRESSIONS defined ✅
+- G5: rollingBass16th produces 16 notes per bar ✅
+- G6: VST has 13 voice declarations (8+2+2+1) ✅
+- G7: VST processBlock is stereo (channelL = mixL, channelR = mixR) ✅
+- G8: Worklet has per-voice pan (panToGain), no Haas (haasBuffer deleted) ✅
+- G9: ISP-safe ceiling is 0.65 (ffmpeg dBTP ≤ 0) ✅
+- G10: LUFS correction is 100% (fullGain, not 50% hack) ✅
+
+Final metrics:
+- bun test: 739 pass, 14 skip, 0 fail (414,929 expect() calls, 45 files)
+- ffmpeg: -7.6 LUFS, -0.9 dBTP ✅, 2.9 LU LRA
+- Render duration: 13.24s (deterministic)
+- WAV md5: 190e35410bba7464727a96a79b4ab32b
+
+README updated to final state (Phase G, v0.9.0):
+- All claims verified by E2E tests
+- 10 acceptance criteria pass
+- 739 tests pass, 0 fail
+- ffmpeg: -7.6 LUFS, -0.9 dBTP, 2.9 LU LRA
+
+PROJECT COMPLETE.
+
+Final summary:
+- Started: 0 tests, +0.2 dBTP (clipping), -10.6 LUFS, silent INTRO, no sidechain, mono VST
+- Ended: 739 tests, -0.9 dBTP (safe), -7.6 LUFS (club), atmospheric INTRO, full-mix sidechain, 13-voice stereo VST
+- Phases: 0-4 (initial rebuild) + A-G (audit-driven fixes) = 26 days
+- 753 tests across 45 files, 0 failures
+- All 10 E2E acceptance criteria pass
