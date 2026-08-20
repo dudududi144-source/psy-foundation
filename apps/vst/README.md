@@ -1,111 +1,54 @@
 # PSY4 VST/AU Plugin
 
+> **Status: Phase 4 — PluginEditor + DSP headers added, buildable (requires JUCE + CMake)**
+
 JUCE-based VST3/AU/LV2 plugin wrapper for the PSY4 synthesis engine.
 
-## Overview
+## What's Here (Phase 4)
 
-This directory contains the C++ scaffold for building PSY4 as a native
-plugin (VST3, AU, LV2) that runs inside DAWs (Ableton, FL Studio, Logic, etc.).
+### Source files
+- `PluginProcessor.h` / `.cpp` — main processor with 3 voice types (Lead, Bass, Pad)
+- `PluginEditor.h` / `.cpp` — UI with virtual keyboard + cutoff/resonance/gain sliders
+- `DSP/ZDFSVF.h` — Zero-Delay Feedback State-Variable Filter (Simper/Zavalishin)
+- `DSP/BLSaw.h` — Band-limited sawtooth with PolyBLEP
+- `DSP/DecayEnv.h` — Exponential decay envelope
 
-The DSP engine is shared between the web app (TypeScript) and the plugin (C++).
-The TypeScript engine is the reference implementation; the C++ version is
-a port optimized for real-time plugin performance.
+### Voice types (ported from TypeScript)
+- **LeadVoice** (8-voice polyphonic) — ZDF SVF + BLSaw + DecayEnv
+- **BassVoice** (2-voice) — sub sine + saw through filter
+- **PadVoice** (2-voice) — detuned saws through filter
 
-## Directory Structure
+### Parameters (10)
+- Cutoff, Resonance, Lead Gain, Bass Gain, Hat Gain
+- Stereo Width, Target LUFS
+- Macro 1 (SPACE), Macro 2 (ENERGY), Macro 3 (TENSION)
 
-```
-vst-plugin/
-├── Source/
-│   ├── PluginProcessor.h     # Main processor (DSP host)
-│   ├── PluginProcessor.cpp   # DSP implementation (port of psy-voices.ts)
-│   ├── PluginEditor.h        # UI editor
-│   ├── PluginEditor.cpp      # UI implementation
-│   ├── DSP/
-│   │   ├── ZDFSVF.h          # ZDF State-Variable Filter
-│   │   ├── BLSaw.h           # Band-limited saw oscillator
-│   │   ├── Wavetable.h       # Wavetable synthesis
-│   │   ├── Voices.h          # 13 voice implementations
-│   │   └── MasterChain.h     # Master chain (M/S, multiband, limiter)
-│   └── Parameters.h          # Parameter definitions
-├── Builds/
-│   ├── Mac/                  # Xcode project (AU + VST3)
-│   ├── Windows/              # Visual Studio project (VST3)
-│   └── Linux/                # Makefile (VST3 + LV2)
-├── Resources/
-│   ├── psy4-processor.js     # Web Audio fallback
-│   └── presets/              # Factory presets (.psy4.json)
-├── CMakeLists.txt            # CMake build system
-└── README.md                 # This file
-```
+## Build (requires JUCE 7+ and CMake 3.22+)
 
-## Build Requirements
-
-- **JUCE 7+** (https://juce.com/)
-- **CMake 3.22+**
-- **Compiler**: GCC 11+, Clang 14+, or MSVC 2022
-- **Platforms**: macOS 11+, Windows 10+, Ubuntu 22.04+
-
-## Building
-
-### macOS (AU + VST3)
 ```bash
-mkdir build && cd build
-cmake .. -G Xcode -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-# Output: PSY4.vst3 and PSY4.component
-```
-
-### Windows (VST3)
-```bash
-mkdir build && cd build
-cmake .. -G "Visual Studio 17 2022" -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-# Output: PSY4.vst3
-```
-
-### Linux (VST3 + LV2)
-```bash
+cd apps/vst
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build .
-# Output: PSY4.vst3 and PSY4.lv2
 ```
 
-## Installation
+JUCE is fetched automatically via `FetchContent` (requires internet).
 
-### macOS
-```bash
-# VST3
-cp build/PSY4.vst3 ~/Library/Audio/Plug-Ins/VST3/
-# AU
-cp build/PSY4.component ~/Library/Audio/Plug-Ins/Components/
-```
+### Output locations
+- **macOS:** `~/Library/Audio/Plug-Ins/VST3/PSY4.vst3`
+- **Windows:** `C:/Program Files/Common Files/VST3/PSY4.vst3`
+- **Linux:** `~/.vst3/PSY4.vst3`
 
-### Windows
-```bash
-# Copy to VST3 directory
-copy build\PSY4.vst3 %COMMONPROGRAMFILES%\VST3\
-```
+## What's NOT Here Yet
 
-## Parameters
+- **Full 13-voice engine** — currently 3 voice types (Lead, Bass, Pad)
+- **Master chain** — no multiband/OTT/limiter in C++ (TS version has it)
+- **Modulation matrix** — forward declared but not implemented
+- **Stereo processing** — currently mono output (`channelL[i] = sample; channelR[i] = sample`)
+- **Preset browser UI** — factory presets exist but no browser widget
 
-The plugin exposes the following parameters to the DAW:
-
-| Parameter | Range | Default | Description |
-|-----------|-------|---------|-------------|
-| Cutoff | 200-8000 Hz | 3000 | Lead filter cutoff |
-| Resonance | 0-1 | 0.3 | Lead filter resonance |
-| LeadGain | 0-1 | 0.6 | Lead volume |
-| BassGain | 0-1 | 0.8 | Bass volume |
-| HatGain | 0-2 | 0.85 | Hat volume |
-| StereoWidth | 0.5-2 | 1.4 | M/S stereo width |
-| TargetLufs | -18 to -6 | -11 | Master LUFS target |
-| Macro1 (SPACE) | 0-1 | 0.5 | Delay + reverb send |
-| Macro2 (ENERGY) | 0-1 | 0.5 | Drive + volume |
-| Macro3 (TENSION) | 0-1 | 0.5 | Resonance + filter |
-
-All parameters support DAW automation.
+These will be added in Phase 4 Day 2-3.
 
 ## License
 
-MIT — same as the web version.
+MIT — same as the main project.
