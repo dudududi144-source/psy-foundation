@@ -1,0 +1,19 @@
+{
+  "name": "@psy-foundation/learning",
+  "version": "0.1.0",
+  "description": "Contextual learning for the PSY family. CONTEXT + ACTION + OUTCOME + REWARD. DO NOTHING is a legal action. Not a neural net — contextual bandit with abstention.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "bun test",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "@psy-foundation/music": "workspace:*",
+    "@psy-foundation/protocol": "workspace:*"
+  },
+  "devDependencies": { "typescript": "^5.6.0" }
+}

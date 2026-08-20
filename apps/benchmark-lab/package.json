@@ -1,0 +1,25 @@
+{
+  "name": "@psy-foundation/benchmark-lab",
+  "version": "0.1.0",
+  "description": "Benchmark lab — timing, runtime, music, and learning benchmarks. Real numbers, never console.log claims.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "bun test",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome check src",
+    "run": "bun src/index.ts"
+  },
+  "dependencies": {
+    "@psy-foundation/transport": "workspace:*",
+    "@psy-foundation/protocol": "workspace:*",
+    "@psy-foundation/analysis": "workspace:*",
+    "@psy-foundation/scheduler": "workspace:*",
+    "@psy-foundation/music": "workspace:*",
+    "@psy-foundation/learning": "workspace:*",
+    "@psy-foundation/fixtures": "workspace:*"
+  },
+  "devDependencies": { "typescript": "^5.6.0", "@types/bun": "latest" }
+}
