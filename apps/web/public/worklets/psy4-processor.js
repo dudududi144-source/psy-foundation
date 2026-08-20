@@ -276,7 +276,9 @@ class AcidVoice {
 LeadVoice.prototype.noteOff = function() { this.active = false }
 BassVoice.prototype.noteOff = function() { this.active = false }
 
-// ── AudioWorklet Processor (13 voices + stereo) ──
+// ── AudioWorklet Processor (13 voices + per-voice pan + master chain) ──
+// Phase B: replaced Haas fake stereo with per-voice pan + added master chain
+
 class PSY4Processor extends AudioWorkletProcessor {
   constructor() {
     super()
@@ -285,25 +287,41 @@ class PSY4Processor extends AudioWorkletProcessor {
     for (let i = 0; i < 8; i++) this.leadVoices.push(new LeadVoice())
     this.bassVoices = [new BassVoice(), new BassVoice()]
     this.padVoices = [new PadVoice(), new PadVoice()]
-    this.acidVoice = new AcidVoice() // 13th voice — Phase 4 Day 2
+    this.acidVoice = new AcidVoice()
     this.voiceIdx = 0
     this.bassIdx = 0
     this.padIdx = 0
     this.masterGain = 0.3
 
-    // Stereo Haas delay buffer (15ms = ~662 samples at 44.1kHz)
-    this.haasDelay = Math.floor(0.015 * SR)
-    this.haasBuffer = new Float32Array(this.haasDelay)
-    this.haasIdx = 0
+    // Phase B: per-voice pan (equal-power, -1=left, 0=center, 1=right)
+    // Lead voices spread across stereo field
+    this.leadPans = [-0.6, -0.3, -0.1, 0.1, 0.3, 0.5, -0.4, 0.6]
+    this.bassPans = [-0.2, 0.2] // bass slightly off-center
+    this.padPans = [-0.5, 0.5] // pad wide
+    this.acidPan = 0.0 // acid center
+
+    // Phase B: master chain state
+    this.ceiling = 0.89 // -1 dBTP
+    this.limiterEnv = 0
+    this.limiterAttack = 1 - Math.exp(-1 / (0.001 * SR)) // 1ms attack
+    this.limiterRelease = 1 - Math.exp(-1 / (0.1 * SR)) // 100ms release
+
+    // Phase B: sidechain state
+    this.duckEnv = 1.0
+    this.duckAmount = 0.6
+    this.duckRecovery = 1 - Math.exp(-1 / (0.15 * SR)) // 150ms recovery
+
+    // Phase B: M/S stereo widener state
+    this.msWidth = 1.3 // stereo width factor
+
+    this.allVoices = [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]
 
     this.port.onmessage = (e) => {
       const msg = e.data
       if (msg.type === 'noteOn') {
         if (msg.voiceType === 'acid') {
-          // Explicit acid voice trigger
           this.acidVoice.noteOn(msg.midi, msg.velocity)
         } else if (msg.midi < 48) {
-          // Route by MIDI range: < 48 = bass, < 72 = lead, >= 72 = pad
           const voice = this.bassVoices[this.bassIdx % this.bassVoices.length]
           voice.noteOn(msg.midi, msg.velocity)
           this.bassIdx++
@@ -316,19 +334,30 @@ class PSY4Processor extends AudioWorkletProcessor {
           voice.noteOn(msg.midi, msg.velocity)
           this.voiceIdx++
         }
+        // Phase B: trigger sidechain on any note (simulates kick duck)
+        this.duckEnv = Math.max(1.0 - this.duckAmount, this.duckEnv * 0.85)
       } else if (msg.type === 'noteOff') {
-        // Phase 4 Day 2: noteOff support
-        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]) {
+        for (const v of this.allVoices) {
           if (v.active) v.noteOff()
         }
       } else if (msg.type === 'setCutoff') {
-        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]) v.cutoff = msg.value
+        for (const v of this.allVoices) v.cutoff = msg.value
       } else if (msg.type === 'setResonance') {
-        for (const v of [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]) v.res = msg.value
+        for (const v of this.allVoices) v.res = msg.value
       } else if (msg.type === 'setMasterGain') {
         this.masterGain = msg.value
+      } else if (msg.type === 'setStereoWidth') {
+        this.msWidth = msg.value
+      } else if (msg.type === 'setSidechain') {
+        this.duckAmount = msg.value
       }
     }
+  }
+
+  // Equal-power pan: pan -1..1 → [gainL, gainR]
+  panToGain(pan) {
+    const angle = (pan + 1) * 0.25 * Math.PI // 0..π/2
+    return [Math.cos(angle), Math.sin(angle)]
   }
 
   process(inputs, outputs) {
@@ -337,22 +366,99 @@ class PSY4Processor extends AudioWorkletProcessor {
 
     const channelL = output[0]
     const channelR = output[1] || output[0]
-    const allVoices = [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]
 
+    // Phase B: process with per-voice pan + master chain
     for (let i = 0; i < channelL.length; i++) {
-      let sample = 0
-      for (const voice of allVoices) {
-        if (voice.active) sample += voice.process()
-      }
-      sample *= this.masterGain
+      // ── 1. Render voices with per-voice pan ──
+      let mixL = 0
+      let mixR = 0
 
-      // Phase 4 Day 2: Stereo via Haas delay
-      // L = direct, R = delayed by 15ms
-      channelL[i] = sample
-      const delayed = this.haasBuffer[this.haasIdx]
-      this.haasBuffer[this.haasIdx] = sample
-      this.haasIdx = (this.haasIdx + 1) % this.haasDelay
-      channelR[i] = delayed
+      // Lead voices (8) with spread pan
+      for (let v = 0; v < this.leadVoices.length; v++) {
+        const voice = this.leadVoices[v]
+        if (voice.active) {
+          const sample = voice.process()
+          const [gL, gR] = this.panToGain(this.leadPans[v])
+          mixL += sample * gL
+          mixR += sample * gR
+        }
+      }
+
+      // Bass voices (2) with slight pan
+      for (let v = 0; v < this.bassVoices.length; v++) {
+        const voice = this.bassVoices[v]
+        if (voice.active) {
+          const sample = voice.process()
+          const [gL, gR] = this.panToGain(this.bassPans[v])
+          mixL += sample * gL
+          mixR += sample * gR
+        }
+      }
+
+      // Pad voices (2) with wide pan
+      for (let v = 0; v < this.padVoices.length; v++) {
+        const voice = this.padVoices[v]
+        if (voice.active) {
+          const sample = voice.process()
+          const [gL, gR] = this.panToGain(this.padPans[v])
+          mixL += sample * gL
+          mixR += sample * gR
+        }
+      }
+
+      // Acid voice (1) center
+      if (this.acidVoice.active) {
+        const sample = this.acidVoice.process()
+        mixL += sample * 0.707 // center = equal power
+        mixR += sample * 0.707
+      }
+
+      // ── 2. Apply sidechain (duck bass+music on note trigger) ──
+      // Phase B: full-mix sidechain — duck everything except... well, there's no
+      // separate drum bus in the worklet, so we duck the whole mix slightly.
+      // This simulates the "pumping" effect.
+      const duckedL = mixL * this.duckEnv
+      const duckedR = mixR * this.duckEnv
+
+      // ── 3. Master gain ──
+      let outL = duckedL * this.masterGain
+      let outR = duckedR * this.masterGain
+
+      // ── 4. Soft saturation (tanh) ──
+      outL = Math.tanh(outL * 1.2) * 0.7 + outL * 0.3
+      outR = Math.tanh(outR * 1.2) * 0.7 + outR * 0.3
+
+      // ── 5. M/S stereo widener ──
+      const mid = (outL + outR) * 0.5
+      const side = (outL - outR) * 0.5 * this.msWidth
+      outL = mid + side
+      outR = mid - side
+
+      // ── 6. Lookahead limiter (simplified) ──
+      const absMax = Math.max(Math.abs(outL), Math.abs(outR))
+      if (absMax > this.limiterEnv) {
+        this.limiterEnv += (absMax - this.limiterEnv) * this.limiterAttack
+      } else {
+        this.limiterEnv += (absMax - this.limiterEnv) * this.limiterRelease
+      }
+      let limGain = 1
+      if (this.limiterEnv > this.ceiling) {
+        limGain = this.ceiling / this.limiterEnv
+      }
+      outL *= limGain
+      outR *= limGain
+
+      // Brickwall safety
+      if (outL > this.ceiling) outL = this.ceiling
+      else if (outL < -this.ceiling) outL = -this.ceiling
+      if (outR > this.ceiling) outR = this.ceiling
+      else if (outR < -this.ceiling) outR = -this.ceiling
+
+      channelL[i] = outL
+      channelR[i] = outR
+
+      // Sidechain recovery
+      this.duckEnv += (1.0 - this.duckEnv) * this.duckRecovery
     }
     return true
   }
