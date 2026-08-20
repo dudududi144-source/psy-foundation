@@ -3391,3 +3391,61 @@ Stage Summary:
 - Type error fixed (ROLL added to BassFunction)
 - Version numbers updated (0.8.0)
 - 712 tests pass, 0 fail
+
+
+---
+Task ID: PHASE-B
+Agent: PSY Engineer
+Task: Phase B — unify audio engines (port master chain to worklet, replace Haas with per-voice pan).
+
+Work Log:
+
+B1: Ported master chain to worklet (psy4-processor.js):
+- Added per-voice pan (equal-power, 8 lead voices spread across stereo field)
+- Bass: slight off-center pan (-0.2, +0.2)
+- Pad: wide pan (-0.5, +0.5)
+- Acid: center (0.707, 0.707)
+- Added soft saturation (tanh with 70/30 wet/dry blend)
+- Added M/S stereo widener (width = 1.3, adjustable)
+- Added lookahead limiter (1ms attack, 100ms release, ceiling=0.89)
+- Added brickwall safety clip
+- Added sidechain duck (triggered on noteOn, 150ms recovery)
+- Added setStereoWidth and setSidechain message handlers
+
+B2: Replaced Haas fake stereo:
+- Deleted haasBuffer, haasDelay, haasIdx (15ms delay line)
+- Each voice now rendered to L+R independently via panToGain()
+- Stereo image created by per-voice pan positions, not delay
+- Mono compatibility: sum(L+R) preserves all signal (no phase cancellation)
+
+B3: Updated audio-engine.ts:
+- Added setStereoWidth() method
+- Added setSidechain() method
+
+What the worklet now has (Phase B):
+1. Per-voice pan (true stereo, not Haas)
+2. Sidechain duck on noteOn
+3. Soft saturation
+4. M/S stereo widener (adjustable width)
+5. Lookahead limiter with brickwall
+6. 13 voices (8 lead + 2 bass + 2 pad + 1 acid)
+
+What the worklet still lacks vs offline renderer:
+- Multiband compressor (3-band LR4)
+- OTT expander
+- LUFS targeting
+- True ISP detection (uses simplified limiter)
+
+These will be added in Phase D (audio quality) when the worklet is further unified.
+
+Verification:
+- bun test: 712 pass, 14 skip, 0 fail
+- 414,846 expect() calls across 42 files
+- Worklet now has master chain (was: just * 0.3 + tanh)
+- Haas fake stereo deleted (was: 15ms delay line)
+
+Stage Summary:
+- Phase B COMPLETE: audio engines partially unified.
+- Worklet now has: per-voice pan, sidechain, saturation, M/S widener, limiter.
+- Still missing vs offline: multiband, OTT, LUFS targeting (Phase D).
+- 712 tests pass, 0 regressions.

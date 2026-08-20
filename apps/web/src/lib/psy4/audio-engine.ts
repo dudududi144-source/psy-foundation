@@ -87,6 +87,17 @@ export class PSY4AudioEngine {
     this.workletNode.port.postMessage({ type: 'setMasterGain', value })
   }
 
+  // Phase B: stereo width + sidechain depth controls
+  setStereoWidth(value: number): void {
+    if (!this.workletNode) return
+    this.workletNode.port.postMessage({ type: 'setStereoWidth', value })
+  }
+
+  setSidechain(value: number): void {
+    if (!this.workletNode) return
+    this.workletNode.port.postMessage({ type: 'setSidechain', value })
+  }
+
   async initMIDI(): Promise<boolean> {
     if (typeof navigator === 'undefined' || !(navigator as any).requestMIDIAccess) {
       return false
