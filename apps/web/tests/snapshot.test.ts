@@ -28,8 +28,8 @@ import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
-// Phase 2 Day 1 baseline (full-mix sidechain — duck bass+music on kick hit)
-const BASELINE_MD5 = 'ec4286b53fe74246f75be0788a4eaac2'
+// Phase 2 Day 2 baseline (OTT upward+downward expander added to master chain)
+const BASELINE_MD5 = 'd26f706b252ade27ec7e0caa5aba0288'
 const BASELINE_DURATION_SEC = 9.93
 
 // BEST_CONFIG from /api/render-forensic/route.ts

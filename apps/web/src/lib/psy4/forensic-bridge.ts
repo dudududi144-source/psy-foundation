@@ -14,6 +14,7 @@ import { lufsToGainOffset, measureLUFS } from './loudness'
 import { ModulationMatrix } from './modulation-matrix'
 import { StereoWidener } from './ms-processor'
 import { LR4Crossover, MultibandCompressor } from './multiband'
+import { OTT } from './ott'
 import { WaveguideString } from './physical/waveguide-string'
 import {
   PsyAcid,
@@ -1261,6 +1262,19 @@ export async function renderFoundationSection(
   // 1. Multiband compressor (3-band, LR4 crossovers)
   const multiband = new MultibandCompressor({ sampleRate: SR })
   multiband.processBuffer(samplesL, samplesR)
+
+  // 1b. OTT — Phase 2 Day 2: upward+downward multiband expander (genre signature)
+  // Goes after multiband compressor, before glue. Subtle mastering settings.
+  const ott = new OTT({
+    sampleRate: SR,
+    depth: 0.3, // 30% depth — gentle, not full OTT
+    upwardGainDb: 2,
+    downwardGainDb: -2,
+    thresholdDb: -24, // lower threshold = less effect on peaks
+    attackMs: 2,
+    releaseMs: 100,
+  })
+  ott.processBuffer(samplesL, samplesR)
 
   // 2. Glue compression (PSY3: thr=0.6, ratio=2, att=4ms, rel=120ms, makeup=1.3)
   // Feed-forward compressor on the sum

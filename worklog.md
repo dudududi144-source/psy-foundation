@@ -2937,3 +2937,45 @@ Stage Summary:
 - This is the most audible psytrance signature — the "pump" on every kick.
 - 708 tests pass, 0 regressions.
 - Ready for Phase 2 Day 2: OTT (upward+downward expander, genre signature).
+
+
+---
+Task ID: PHASE-2-DAY-2
+Agent: PSY Engineer
+Task: Phase 2 Day 2 — OTT upward+downward multiband expander.
+
+Work Log:
+- Created apps/web/src/lib/psy4/ott.ts (200 lines):
+  - OTT class: 3-band LR4 crossover split (200Hz, 2000Hz)
+  - BandExpander class: per-band upward+downward expansion
+    - Downward: reduces signals above threshold (like compression)
+    - Upward: boosts signals below threshold (makes quiet parts louder)
+  - L and R processed independently (preserves stereo image)
+  - Makeup gain compensates for level loss (1.0 + depth * 0.5)
+  - Configurable: depth, upwardGainDb, downwardGainDb, thresholdDb, attack, release
+
+- Wired OTT into forensic-bridge.ts master chain:
+  - Position: after multiband compressor, before glue
+  - Settings: depth=0.3 (30% — gentle mastering, not full OTT)
+    upwardGainDb=2, downwardGainDb=-2, thresholdDb=-24
+    attackMs=2, releaseMs=100
+
+- Tuning iterations:
+  1. Initial: depth=0.5, ±4dB → LUFS dropped to -11.7 (too much reduction)
+  2. Reduced: depth=0.3, ±2dB → LUFS -11.8 (still too quiet)
+  3. Fixed: stereo processing (was mono average) + makeup gain → LUFS -8.5 ✅
+
+Snapshot baseline:
+- Phase 2 Day 1: ec4286b5... → -8.6 LUFS, -0.7 dBTP, 2.9 LU LRA
+- Phase 2 Day 2: d26f706b... → -8.5 LUFS, +0.0 dBTP, 2.8 LU LRA
+- OTT adds subtle upward expansion (quieter parts boosted) without killing dynamics
+
+Verification:
+- bun test (all): 708 pass, 14 skip, 0 fail
+- ffmpeg: -8.5 LUFS, +0.0 dBTP (at 0 — not exceeding), 2.8 LU LRA
+
+Stage Summary:
+- Phase 2 Day 2 COMPLETE: OTT implemented and wired into master chain.
+- The OTT is the second psytrance signature (after sidechain).
+- 708 tests pass, 0 regressions.
+- Ready for Phase 2 Day 3: harmonic-plan fix + 16th rolling bass mode.
