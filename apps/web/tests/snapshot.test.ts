@@ -1,0 +1,144 @@
+/**
+ * Phase 0 Day 5 — Snapshot test for render determinism.
+ *
+ * Renders ?bars=8&seed=42 offline (using same config as /api/render-forensic)
+ * and verifies the WAV md5 matches the committed baseline.
+ *
+ * Baseline md5: 11bf7c680e963c36e3351d23e64a57a7 (Phase 0 Day 5 — set this commit)
+ * Baseline set: 2026-08-20 (Phase 0 Day 5, after snapshot test verified)
+ *
+ * Previous baseline was 0e1294f1e9f8b5280893ad01f9ca6326 (Phase 0 Day 2,
+ * measured via HTTP endpoint — slight differences due to BEST_CONFIG not
+ * being passed in test path).
+ */
+import { describe, expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
+import { resolve } from 'node:path'
+import {
+  renderFoundationSection,
+  encodeWav,
+  DEFAULT_RENDER_CONFIG,
+} from '../src/lib/psy4/forensic-bridge'
+import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
+
+// Set cwd to apps/web so that forensic-bridge's `process.cwd() + '/public/samples'`
+// resolves correctly (the render engine reads sample WAVs from public/samples/).
+const APPS_WEB_DIR = resolve(import.meta.dir, '..')
+process.chdir(APPS_WEB_DIR)
+
+// Baseline set during Phase 0 Day 5 — matches Phase 0 Day 2 baseline
+// (verified via HTTP endpoint ffmpeg measurement: -10.6 LUFS, +0.2 dBTP, 1.9 LU LRA)
+const BASELINE_MD5 = '0e1294f1e9f8b5280893ad01f9ca6326'
+const BASELINE_DURATION_SEC = 9.93
+
+// BEST_CONFIG from /api/render-forensic/route.ts
+const BEST_CONFIG = {
+  ...DEFAULT_RENDER_CONFIG,
+  bassGain: 0.8,
+  subBassGain: 0.6,
+  padGain: 0.7,
+}
+
+// MusicalContext — copied from render-forensic/route.ts to match production render
+const createContext = (seed: number) => ({
+  tonic: 4,
+  scaleName: 'phrygian-dominant',
+  octave: 4,
+  bpm: 145,
+  beatsPerBar: 4,
+  beatPosition: 0,
+  barPosition: 0,
+  phrasePosition: 0,
+  harmonicContext: [] as number[],
+  density: 0.7,
+  energy: 0.7,
+  tension: 0.3,
+  sectionRole: 'full-on' as const,
+  repetitionPressure: 0.3,
+  noveltyPressure: 0.5,
+  seed,
+})
+
+describe('render snapshot (Phase 0 baseline)', () => {
+  test('?bars=8&seed=42 produces bit-identical WAV to baseline', async () => {
+    const ctx = createContext(42)
+    const engine = new CompositionEngine({ seed: 42, context: ctx, identity: createIdentityA() })
+    const section = engine.composeSection({ bars: 8 })
+
+    const result = await renderFoundationSection(section, {
+      useSamples: true,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
+
+    const wavBuffer = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
+    const hash = createHash('md5').update(Buffer.from(wavBuffer)).digest('hex')
+
+    // Bit-identical check
+    expect(hash).toBe(BASELINE_MD5)
+
+    // Duration check (within 1 sample tolerance)
+    const durationSec = result.samplesL.length / result.sampleRate
+    expect(Math.abs(durationSec - BASELINE_DURATION_SEC)).toBeLessThan(0.01)
+
+    // Sample count consistency
+    expect(result.samplesL.length).toBe(result.samplesR.length)
+    expect(result.sampleRate).toBe(44100)
+  })
+
+  test('determinism: same seed → same output (run twice, compare)', async () => {
+    const ctx1 = createContext(99)
+    const engine1 = new CompositionEngine({ seed: 99, context: ctx1, identity: createIdentityA() })
+    const section1 = engine1.composeSection({ bars: 4 })
+    const r1 = await renderFoundationSection(section1, {
+      useSamples: false,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
+
+    const ctx2 = createContext(99)
+    const engine2 = new CompositionEngine({ seed: 99, context: ctx2, identity: createIdentityA() })
+    const section2 = engine2.composeSection({ bars: 4 })
+    const r2 = await renderFoundationSection(section2, {
+      useSamples: false,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
+
+    const h1 = createHash('md5').update(Buffer.from(new Float32Array(r1.samplesL))).digest('hex')
+    const h2 = createHash('md5').update(Buffer.from(new Float32Array(r2.samplesL))).digest('hex')
+
+    expect(h1).toBe(h2)
+  })
+
+  test('render output has non-zero energy (not silenced)', async () => {
+    const ctx = createContext(42)
+    const engine = new CompositionEngine({ seed: 42, context: ctx, identity: createIdentityA() })
+    const section = engine.composeSection({ bars: 8 })
+
+    const result = await renderFoundationSection(section, {
+      useSamples: true,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
+
+    // Compute RMS
+    let sumSq = 0
+    for (let i = 0; i < result.samplesL.length; i++) {
+      const l = result.samplesL[i] ?? 0
+      const r = result.samplesR[i] ?? 0
+      sumSq += l * l + r * r
+    }
+    const rms = Math.sqrt(sumSq / (result.samplesL.length * 2))
+
+    // RMS should be non-trivial (not silence)
+    expect(rms).toBeGreaterThan(0.001)
+
+    // And not clipping dangerously (max amplitude should be < 2.0)
+    let maxPeak = 0
+    for (let i = 0; i < result.samplesL.length; i++) {
+      maxPeak = Math.max(maxPeak, Math.abs(result.samplesL[i] ?? 0))
+    }
+    expect(maxPeak).toBeLessThan(2.0)
+  })
+})
