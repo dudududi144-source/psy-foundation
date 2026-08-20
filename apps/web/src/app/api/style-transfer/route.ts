@@ -3,7 +3,6 @@ import {
   encodeWav,
   renderFoundationSection,
 } from '@/lib/psy4/forensic-bridge'
-import { NeuralStyleTransfer } from '@/lib/psy4/neural/latent-decoder'
 import { CompositionEngine } from '@psy-foundation/music'
 import { createIdentityA } from '@psy-foundation/music'
 import { type NextRequest, NextResponse } from 'next/server'
@@ -19,24 +18,25 @@ const BEST_CONFIG = {
 }
 
 /**
- * Style Transfer API — applies reference track's spectral style to PSY4 render.
+ * Style Transfer API — HONEST STATUS:
  *
- * GET /api/style-transfer?bars=8&seed=42&blend=0.3
+ * Phase F closure: NeuralStyleTransfer was a spectral approximation (not neural)
+ * that used the render as its own reference (self-reference no-op).
  *
- * This endpoint:
- * 1. Renders a PSY4 section (like render-forensic)
- * 2. Applies NeuralStyleTransfer to the render
- * 3. Returns the styled WAV
+ * The module has been moved to research/neural/ and is no longer imported.
+ * This endpoint now returns the plain render with a note that style transfer
+ * is not available until trained models exist.
  *
- * Note: Without a real reference file upload, this uses the render itself
- * as a "self-reference" (style applied to itself = no-op at blend=0).
- * To use a real reference, POST the reference audio to /api/style-transfer
- * with multipart form data.
+ * To activate real style transfer:
+ * 1. Train RAVE model (see research/neural/training/)
+ * 2. Fix onnx-inference missing await
+ * 3. Wire ?reference=<hash> to upload-reference store
+ * 4. Replace this endpoint with ONNX-based inference
  */
+
 export async function GET(req: NextRequest) {
   const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
   const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
-  const blend = Number.parseFloat(req.nextUrl.searchParams.get('blend') ?? '0.3')
   const useSamples = req.nextUrl.searchParams.get('samples') !== 'false'
 
   const ctx = {
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
 
-  let result
+  let result: Awaited<ReturnType<typeof renderFoundationSection>> | undefined
   try {
     result = await renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
   } catch {
@@ -71,38 +71,15 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // Apply style transfer (mono for now — use left channel as reference)
-  // In a real implementation, the reference would come from an uploaded file.
-  // Here we demonstrate the API: the render is both source and reference.
-  const st = new NeuralStyleTransfer()
-  st.loadReference(result.samplesL, result.sampleRate)
-  st.setBlendAmount(blend)
-
-  // Process in blocks
-  const blockSize = 2048
-  const styledL = new Float32Array(result.samplesL.length)
-  const styledR = new Float32Array(result.samplesR.length)
-  for (let i = 0; i < result.samplesL.length; i += blockSize) {
-    const end = Math.min(i + blockSize, result.samplesL.length)
-    const blockL = result.samplesL.subarray(i, end)
-    const blockR = result.samplesR.subarray(i, end)
-    const styledBlockL = st.transfer(blockL, result.sampleRate)
-    const styledBlockR = st.transfer(blockR, result.sampleRate)
-    for (let j = 0; j < styledBlockL.length; j++) {
-      styledL[i + j] = styledBlockL[j] ?? 0
-      styledR[i + j] = styledBlockR[j] ?? 0
-    }
-  }
-
-  const wav = encodeWav(styledL, styledR, result.sampleRate)
+  // Phase F: style transfer is not available — return plain render
+  const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
 
   return new NextResponse(wav, {
+    status: 200,
     headers: {
       'Content-Type': 'audio/wav',
-      'Content-Length': wav.byteLength.toString(),
-      'Cache-Control': 'no-cache',
-      'X-Style-Blend': blend.toString(),
-      'X-Has-Reference': st.hasReference().toString(),
+      'Content-Disposition': 'attachment; filename="psy4-render.wav"',
+      'X-Style-Transfer': 'unavailable — no trained models. See research/neural/',
     },
   })
 }

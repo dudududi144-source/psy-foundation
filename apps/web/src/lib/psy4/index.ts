@@ -105,20 +105,9 @@ export { GrainCloud } from './granular'
 // Physical modeling (Phase 2)
 export { WaveguideString } from './physical/waveguide-string'
 
-// Neural synthesis (Phase 3)
-export { DDSPHarmonic } from './neural/ddsp-harmonic'
-export { DDSPNoise } from './neural/ddsp-noise'
-export { LatentDecoder, NeuralStyleTransfer } from './neural/latent-decoder'
-export type { LatentVector } from './neural/latent-decoder'
-
-// ONNX inference (Phase 3 — trained model support)
-export {
-  ONNXDDSPDecoder,
-  ONNXRAVEEncoder,
-  ONNXRAVEDecoder,
-  ONNXStyleTransfer,
-  checkModelAvailability,
-} from './neural/onnx-inference'
+// Neural synthesis — moved to research/ (not integrated, not trained)
+// See apps/web/src/lib/psy4/research/neural/ for experimental code.
+// To activate: train models, fix onnx-inference missing await, wire to API.
 
 // AI Arrangement (Phase 4)
 export { ArrangementGenerator, planToSpec } from './arrangement/ArrangementGenerator'

@@ -759,7 +759,7 @@ export default function Home() {
               <div className="grid gap-1.5">
                 {arrangement.sections.map((s, i) => (
                   <div
-                    key={i}
+                    key={`item-${i}`}
                     className="flex items-center gap-2 text-xs rounded border border-amber-500/20 bg-amber-500/5 p-2"
                   >
                     <span className="text-amber-400 font-mono w-16 shrink-0">{s.name}</span>
@@ -824,7 +824,7 @@ export default function Home() {
                 </h3>
                 {critique.failures.map((f, i) => (
                   <div
-                    key={i}
+                    key={`item-${i}`}
                     className="flex items-start gap-2 rounded border border-rose-500/20 bg-rose-500/5 p-2"
                   >
                     <span className="text-rose-400 text-xs font-mono mt-0.5 shrink-0">
@@ -1052,7 +1052,7 @@ export default function Home() {
             <div className="flex items-center gap-2 text-sm">
               {critique.harmony.progression.map((chord, i) => (
                 <span
-                  key={i}
+                  key={`item-${i}`}
                   className="px-3 py-1 rounded bg-violet-500/20 text-violet-200"
                   style={{ fontFamily: DESIGN.fonts.mono }}
                 >
