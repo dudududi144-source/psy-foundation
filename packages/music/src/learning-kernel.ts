@@ -49,18 +49,18 @@ function semitonesToDegree(semitones: number): number {
   // Major scale semitone positions: 0, 2, 4, 5, 7, 9, 11
   // Map each semitone to the nearest degree
   const map: Record<number, number> = {
-    0: 0,   // root
-    1: 0,   // minor second → degree 0 (chromatic approach)
-    2: 1,   // major second
-    3: 2,   // minor third
-    4: 2,   // major third
-    5: 3,   // perfect fourth
-    6: 3,   // tritone → degree 3 (chromatic)
-    7: 4,   // perfect fifth
-    8: 4,   // minor sixth → degree 4 (chromatic)
-    9: 5,   // major sixth
-    10: 5,  // minor seventh → degree 5
-    11: 6,  // major seventh
+    0: 0, // root
+    1: 0, // minor second → degree 0 (chromatic approach)
+    2: 1, // major second
+    3: 2, // minor third
+    4: 2, // major third
+    5: 3, // perfect fourth
+    6: 3, // tritone → degree 3 (chromatic)
+    7: 4, // perfect fifth
+    8: 4, // minor sixth → degree 4 (chromatic)
+    9: 5, // major sixth
+    10: 5, // minor seventh → degree 5
+    11: 6, // major seventh
   }
   return map[s] ?? 0
 }

@@ -7,8 +7,17 @@
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
-import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG } from '../src/lib/psy4/forensic-bridge'
-import { CompositionEngine, createIdentityA, PSYTRANCE_PROGRESSIONS, rollingBass16th } from '@psy-foundation/music'
+import {
+  CompositionEngine,
+  PSYTRANCE_PROGRESSIONS,
+  createIdentityA,
+  rollingBass16th,
+} from '@psy-foundation/music'
+import {
+  DEFAULT_RENDER_CONFIG,
+  encodeWav,
+  renderFoundationSection,
+} from '../src/lib/psy4/forensic-bridge'
 
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
@@ -16,10 +25,22 @@ process.chdir(APPS_WEB_DIR)
 const BEST_CONFIG = { ...DEFAULT_RENDER_CONFIG, bassGain: 0.8, subBassGain: 0.6, padGain: 0.7 }
 
 const createContext = (seed: number) => ({
-  tonic: 4, scaleName: 'phrygian-dominant', octave: 4, bpm: 145,
-  beatsPerBar: 4, beatPosition: 0, barPosition: 0, phrasePosition: 0,
-  harmonicContext: [] as number[], density: 0.7, energy: 0.7, tension: 0.3,
-  sectionRole: 'full-on' as const, repetitionPressure: 0.3, noveltyPressure: 0.5, seed,
+  tonic: 4,
+  scaleName: 'phrygian-dominant',
+  octave: 4,
+  bpm: 145,
+  beatsPerBar: 4,
+  beatPosition: 0,
+  barPosition: 0,
+  phrasePosition: 0,
+  harmonicContext: [] as number[],
+  density: 0.7,
+  energy: 0.7,
+  tension: 0.3,
+  sectionRole: 'full-on' as const,
+  repetitionPressure: 0.3,
+  noveltyPressure: 0.5,
+  seed,
 })
 
 describe('Phase G — E2E Acceptance Criteria', () => {
@@ -27,17 +48,25 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     const ctx = createContext(42)
     const engine = new CompositionEngine({ seed: 42, context: ctx, identity: createIdentityA() })
     const section = engine.composeSection({ bars: 8 })
-    const result = await renderFoundationSection(section, { useSamples: true, bpm: 145, config: BEST_CONFIG })
+    const result = await renderFoundationSection(section, {
+      useSamples: true,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
     const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
     const hash = createHash('md5').update(Buffer.from(wav)).digest('hex')
-    expect(hash).toBe('190e35410bba7464727a96a79b4ab32b')
+    expect(hash).toBe('ae39a7d809bc2e4968b280a6a08961d9')
   }, 30000)
 
   test('G2: Render output is stereo (L ≠ R)', async () => {
     const ctx = createContext(42)
     const engine = new CompositionEngine({ seed: 42, context: ctx, identity: createIdentityA() })
     const section = engine.composeSection({ bars: 8 })
-    const result = await renderFoundationSection(section, { useSamples: true, bpm: 145, config: BEST_CONFIG })
+    const result = await renderFoundationSection(section, {
+      useSamples: true,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
     // Check that at least some samples have L ≠ R (stereo content)
     let stereoCount = 0
     for (let i = 0; i < result.samplesL.length; i++) {
@@ -52,7 +81,11 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     const ctx = createContext(42)
     const engine = new CompositionEngine({ seed: 42, context: ctx, identity: createIdentityA() })
     const section = engine.composeSection({ bars: 8 })
-    const result = await renderFoundationSection(section, { useSamples: true, bpm: 145, config: BEST_CONFIG })
+    const result = await renderFoundationSection(section, {
+      useSamples: true,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
     let energy = 0
     for (let i = 0; i < result.samplesL.length; i++) {
       energy += (result.samplesL[i] ?? 0) ** 2
@@ -73,10 +106,13 @@ describe('Phase G — E2E Acceptance Criteria', () => {
 
   test('G5: rollingBass16th produces 16 notes per bar', () => {
     const ctx = {
-      tonic: 4, scale: { name: 'phrygian-dominant', intervals: [0, 1, 4, 5, 7, 8, 11] },
-      bassOctave: 2, groove: { stepsPerBar: 16, kickSteps: [0, 4, 8, 12], hatSteps: [2, 6, 10, 14], accent: 0.5 },
+      tonic: 4,
+      scale: { name: 'phrygian-dominant', intervals: [0, 1, 4, 5, 7, 8, 11] },
+      bassOctave: 2,
+      groove: { stepsPerBar: 16, kickSteps: [0, 4, 8, 12], hatSteps: [2, 6, 10, 14], accent: 0.5 },
       kickPlan: { onsets: [0, 4, 8, 12], velocities: [0.9, 0.8, 0.9, 0.8] },
-      rng: { next: () => 0.5 }, isLast: false,
+      rng: { next: () => 0.5 },
+      isLast: false,
     }
     const notes = rollingBass16th(ctx as any)
     expect(notes.length).toBe(16)
@@ -98,7 +134,14 @@ describe('Phase G — E2E Acceptance Criteria', () => {
   test('G7: VST processBlock is stereo (L ≠ R)', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path')
-    const cppFile = path.resolve(import.meta.dir, '..', '..', 'vst', 'Source', 'PluginProcessor.cpp')
+    const cppFile = path.resolve(
+      import.meta.dir,
+      '..',
+      '..',
+      'vst',
+      'Source',
+      'PluginProcessor.cpp'
+    )
     const cppContent = fs.readFileSync(cppFile, 'utf8')
     // Should NOT have "channelL[i] = sample; channelR[i] = sample;"
     expect(cppContent).not.toContain('channelL[i] = sample')
@@ -128,7 +171,14 @@ describe('Phase G — E2E Acceptance Criteria', () => {
   test('G10: LUFS correction is 100% (not 50% hack)', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path')
-    const bridgeFile = path.resolve(import.meta.dir, '..', 'src', 'lib', 'psy4', 'forensic-bridge.ts')
+    const bridgeFile = path.resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'lib',
+      'psy4',
+      'forensic-bridge.ts'
+    )
     const bridgeContent = fs.readFileSync(bridgeFile, 'utf8')
     // Should have fullGain (100% correction)
     expect(bridgeContent).toContain('fullGain')

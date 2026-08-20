@@ -130,7 +130,7 @@ describe('SchroederReverb — Phase 1 Day 3 true stereo', () => {
 
   test('NaN input returns zeros (guard)', () => {
     const reverb = new SchroederReverb()
-    const [outL, outR] = reverb.process(NaN, 0.5, SR)
+    const [outL, outR] = reverb.process(Number.NaN, 0.5, SR)
     expect(outL).toBe(0)
     expect(outR).toBe(0)
   })

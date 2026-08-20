@@ -146,7 +146,8 @@ export function buildHarmonicPlan(opts: BuildHarmonicPlanOptions): HarmonicPlan 
 
   // Phase 2 Day 3: get progression degrees if specified
   const progressionName = opts.progressionName ?? 't-s-t-d'
-  const progressionDegrees = PSYTRANCE_PROGRESSIONS[progressionName] ?? PSYTRANCE_PROGRESSIONS['t-s-t-d']!
+  const progressionDegrees =
+    PSYTRANCE_PROGRESSIONS[progressionName] ?? PSYTRANCE_PROGRESSIONS['t-s-t-d']!
 
   // Determine how many chord slots the phrase gets.
   const changeRate = opts.chordChangeRate ?? 0.25
@@ -164,7 +165,11 @@ export function buildHarmonicPlan(opts: BuildHarmonicPlanOptions): HarmonicPlan 
   for (let bar = 0; bar < opts.bars; bar += barsPerChord) {
     const slotIdx = Math.floor(bar / barsPerChord)
     // Phase 2 Day 3: use progression degrees to determine chord root
-    const degree = progressionDegrees[((slotIdx % progressionDegrees.length) + progressionDegrees.length) % progressionDegrees.length] ?? 0
+    const degree =
+      progressionDegrees[
+        ((slotIdx % progressionDegrees.length) + progressionDegrees.length) %
+          progressionDegrees.length
+      ] ?? 0
     const fn = functionSeq[((slotIdx % 4) + 4) % 4] ?? 'TONIC'
 
     // Build chord tones from scale degree

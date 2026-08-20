@@ -2,8 +2,8 @@
  * Phase 1 Day 2 — TruePeakLimiter ISP fix + OversampledSaturation FIR + BLTriangle fix.
  */
 import { describe, expect, test } from 'bun:test'
+import { BLTriangle, OversampledSaturation } from '../src/lib/psy4/forensic/dsp'
 import { TruePeakLimiter } from '../src/lib/psy4/limiter'
-import { OversampledSaturation, BLTriangle } from '../src/lib/psy4/forensic/dsp'
 
 const SR = 44100
 
@@ -21,8 +21,9 @@ describe('TruePeakLimiter — Phase 1 Day 2 ISP fix', () => {
     const R = new Float32Array(n)
     for (let i = 0; i < n; i++) {
       // 1kHz at high amplitude + harmonics for steep edges
-      const s = Math.sin((2 * Math.PI * 1000 * i) / SR) * 1.5
-        + Math.sin((2 * Math.PI * 3000 * i) / SR) * 0.5
+      const s =
+        Math.sin((2 * Math.PI * 1000 * i) / SR) * 1.5 +
+        Math.sin((2 * Math.PI * 3000 * i) / SR) * 0.5
       L[i] = s
       R[i] = s
     }
@@ -112,7 +113,7 @@ describe('OversampledSaturation — Phase 1 Day 2 FIR fix', () => {
     }
     // Now the history is warm — the output should be compressed
     const out = sat.process(0.9, 5.0)
-    // With drive=5, tanh(4.5) ≈ 1.0, so output ≈ 1.0 (compressed from 0.9 input... 
+    // With drive=5, tanh(4.5) ≈ 1.0, so output ≈ 1.0 (compressed from 0.9 input...
     // actually tanh amplifies small signals and compresses large ones)
     // Just verify output is bounded and non-zero
     expect(Math.abs(out)).toBeLessThanOrEqual(1.0)
@@ -152,7 +153,8 @@ describe('BLTriangle — Phase 1 Day 2 integrated polyBLEP fix', () => {
     for (let i = 0; i < n; i++) buf[i] = osc.process(220 / SR)
 
     // DFT at 220Hz
-    let re = 0, im = 0
+    let re = 0,
+      im = 0
     const k = (220 * n) / SR
     for (let i = 0; i < n; i++) {
       const x = buf[i] ?? 0
@@ -175,7 +177,8 @@ describe('BLTriangle — Phase 1 Day 2 integrated polyBLEP fix', () => {
 
     // Measure fundamental and 3rd harmonic
     const magAt = (freq: number) => {
-      let re = 0, im = 0
+      let re = 0,
+        im = 0
       const k = (freq * n) / SR
       for (let i = 0; i < n; i++) {
         const x = buf[i] ?? 0

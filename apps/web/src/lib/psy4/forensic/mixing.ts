@@ -4,8 +4,8 @@
  * Direct port of psy4-engine.js mixing classes. Same DSP, same coefficients.
  */
 
-import { fastTanh } from './dsp'
 import { DEFAULT_SR } from '../constants'
+import { fastTanh } from './dsp'
 
 // ─── Bus Processor (compression + HP + saturation per bus) ─────────────────
 
