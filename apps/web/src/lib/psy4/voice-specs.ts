@@ -35,7 +35,7 @@ export interface KickSpec {
 
 export const KICK_SPEC: KickSpec = {
   fundamental: 38,
-  subDecay: 0.25,
+  subDecay: 0.45, // Phase 3: psytrance kick (was 0.25 — too short for genre)
   subLevel: 1.0,
   midDecay: 0.05,
   midLevel: 0.5,
@@ -325,7 +325,7 @@ export const MASTER_SPEC: MasterSpec = {
   stereoWidth: 1.3, // slightly less width = more mono compatibility
   monoBelowHz: 120,
   ceiling: 0.95, // raised = less limiting = more dynamics
-  targetLufs: -12, // lowered = less loudness = more headroom
+  targetLufs: -9, // Phase 3: club target for psytrance (was -12)
 }
 
 // ═══════════════════════════════════════════════════════════════

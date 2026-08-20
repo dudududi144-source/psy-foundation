@@ -28,8 +28,8 @@ import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
-// Phase 2 Day 4 baseline (INTRO/OUTRO bars now rendered — pad audible from bar 0)
-const BASELINE_MD5 = 'cc5c57dfad3bcaa53bf01c2cff00f2e3'
+// Phase 3 Day 1 baseline (targetLufs=-9 club target + kick subDecay=0.45)
+const BASELINE_MD5 = '847a5e532813232ccd766c946d0948a2'
 const BASELINE_DURATION_SEC = 13.24
 
 // BEST_CONFIG from /api/render-forensic/route.ts
