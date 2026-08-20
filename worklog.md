@@ -2714,3 +2714,58 @@ Stage Summary:
   - [✓] BLTriangle residual scaled by inc (was unscaled, causing overshoot)
   - [✓] 681 tests pass, 0 regressions
 - Ready for Phase 1 Day 3-4: MoogLadder + SchroederReverb fixes.
+
+
+---
+Task ID: PHASE-1-DAY-3
+Agent: PSY Engineer
+Task: Phase 1 Day 3 — MoogLadder docstring fix + SchroederReverb true stereo.
+
+Work Log:
+
+FIX 1: MoogLadder (forensic/dsp.ts:48-95)
+- Bug: docstring claimed "Huovilainen 2004. Zero-delay feedback via 1 Newton iteration"
+  but the implementation actually uses:
+  - g = 1 - exp(-2π·fc) (Stilson/Smith form, not Huovilainen tangent pre-warp)
+  - One-sample-delayed feedback (not true ZDF — would require solving y = x - k*tanh(y) on current sample)
+  - No Newton iteration (single-pass with delayed estimate)
+- Fix: docstring corrected to honestly say "Stilson-Smith derived (1999)".
+  Internal comment explains the difference and defers full Huovilainen TPT to Phase 3.
+- No code change to the filter itself — it's valid, stable, decent-sounding.
+  The fix is purely documentation honesty.
+
+FIX 2: SchroederReverb (forensic/mixing.ts:128-251)
+- Bug: FAKE STEREO. L was post-allpass output, R was pre-allpass comb sum × 0.9,
+  sharing ALL state (same combs, same allpass). Not true stereo.
+- Fix: implemented separate comb/allpass banks per channel (Freeverb-style):
+  - combDelaysL = [1687, 1601, 2053, 2251] (original Freeverb values)
+  - combDelaysR = [1747, 1663, 2113, 2311] (+60, +62, +60, +60 for decorrelation)
+  - allpassDelaysL = [347, 113]
+  - allpassDelaysR = [373, 127] (+26, +14 for decorrelation)
+- Process signature changed: process(inputL, inputR, sr) instead of process(input, sr).
+- channel-fx.ts:429 updated to pass stereo (dryL, dryR) instead of mono sum.
+
+Tests: apps/web/tests/phase1-day3.test.ts (9 tests, 2 suites):
+- MoogLadder (4): attenuates high freqs, passes low freqs, resonance boosts cutoff, finite output
+- SchroederReverb (5): stereo output L≠R, mono input similar energy, finite, NaN guard, reset
+
+Snapshot baseline:
+- Phase 1 Day 2: 0a9fef13... → -8.5 LUFS, -0.7 dBTP, 2.8 LU LRA
+- Phase 1 Day 3: 3c4695d8... → -8.5 LUFS, -0.7 dBTP, 2.8 LU LRA
+  (LUFS/dBTP/LRA unchanged — reverb is a wet/dry mix, overall levels similar)
+
+Verification:
+- bun test (all): 690 pass, 14 skip, 0 fail (was 681, +9 new)
+- 395,623 expect() calls across 39 files
+- Runtime: 44.10s
+- ffmpeg: -8.5 LUFS, -0.7 dBTP ✅, 2.8 LU LRA
+
+Stage Summary:
+- Phase 1 Day 3 COMPLETE: 2 DSP fixes applied.
+- Acceptance:
+  - [✓] MoogLadder docstring honestly says "Stilson-Smith derived" (not Huovilainen)
+  - [✓] SchroederReverb has separate L/R comb+allpass banks (true stereo)
+  - [✓] Stereo output L≠R for stereo input (decorrelation verified)
+  - [✓] ffmpeg dBTP = -0.7 (still below 0 dBFS — no regression)
+  - [✓] 690 tests pass, 0 regressions
+- Ready for Phase 1 Day 4: sample-rate parameterization (remove hard-coded SR=44100).

@@ -28,8 +28,8 @@ import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
-// Phase 1 Day 2 baseline (TruePeakLimiter ISP-safe + OversampledSaturation FIR)
-const BASELINE_MD5 = '0a9fef136b65a917d7213e692d82084a'
+// Phase 1 Day 3 baseline (MoogLadder docstring + SchroederReverb true stereo)
+const BASELINE_MD5 = '3c4695d89c6b8bb205abd9a17deeaf65'
 const BASELINE_DURATION_SEC = 9.93
 
 // BEST_CONFIG from /api/render-forensic/route.ts

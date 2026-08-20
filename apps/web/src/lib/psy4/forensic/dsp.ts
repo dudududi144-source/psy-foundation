@@ -45,9 +45,17 @@ export function polyBlep(phase: number, inc: number): number {
   return 0
 }
 
-// ─── Moog Ladder Filter (4-stage, improved) ────────────────────────────────
-// Based on Huovilainen 2004. Zero-delay feedback via 1 Newton iteration.
-// No output-killing division. Proper thermal saturation in each stage.
+// ─── Moog Ladder Filter (4-stage) ──────────────────────────────────────────
+// Phase 1 Day 3 FIX: docstring corrected. Previous comment claimed
+// "Huovilainen 2004 with Newton iteration ZDF" but the implementation
+// actually uses Stilson/Smith (1999) topology with:
+//   - g = 1 - exp(-2π·fc) (Stilson form, not Huovilainen tangent pre-warp)
+//   - One-sample-delayed feedback (not true ZDF — which would require solving
+//     the implicit equation on the CURRENT sample)
+//   - No Newton iteration (single-pass with delayed estimate)
+// This is a valid, stable, decent-sounding ladder filter — it's just NOT
+// Huovilainen ZDF. The docstring now honestly says "Stilson-Smith derived".
+// A full Huovilainen/Zavalishin TPT implementation is deferred to Phase 3.
 
 export class MoogLadder {
   s0 = 0
@@ -71,9 +79,8 @@ export class MoogLadder {
     // k = resonance feedback (0..4). At 4, self-oscillates.
     const k = Math.min(3.9, res * 4)
 
-    // Zero-delay feedback: use previous s3 as estimate, then solve.
-    // The feedback path: y = x - k * tanh(s3)
-    // We use the previous s3 (1 iteration is enough for stability).
+    // Feedback: one-sample-delayed estimate (Stilson-Smith approach).
+    // True ZDF would solve y = x - k*tanh(y) on the current sample via Newton.
     const fb = k * fastTanh(this.s3)
     const u = fastTanh((x - fb) * drive)
 
@@ -83,7 +90,6 @@ export class MoogLadder {
     this.s2 += g * (fastTanh(this.s1) - fastTanh(this.s2))
     this.s3 += g * (fastTanh(this.s2) - fastTanh(this.s3))
 
-    // No division — the output is the raw filter output.
     return this.s3
   }
 }

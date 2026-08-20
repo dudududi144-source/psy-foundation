@@ -125,31 +125,49 @@ export class MasterChain {
   }
 }
 
-// ─── Schroeder Reverb ──────────────────────────────────────────────────────
+// ─── Schroeder Reverb (Phase 1 Day 3: true stereo) ──────────────────────────
+// Phase 1 Day 3 FIX: the previous implementation had FAKE stereo — L was
+// post-allpass output, R was pre-allpass comb sum × 0.9, sharing all state.
+// Now uses separate comb banks per channel with slightly different delay
+// lengths for proper stereo decorrelation (Freeverb-style).
 
 export class SchroederReverb {
-  combDelays = [1687, 1601, 2053, 2251]
-  combBuffers: Float32Array[] = []
-  combIdx: number[] = []
+  // Phase 1 Day 3: separate delay lengths for L and R for stereo decorrelation
+  combDelaysL = [1687, 1601, 2053, 2251]
+  combDelaysR = [1747, 1663, 2113, 2311] // +60, +62, +60, +60 samples for decorrelation
+  combBuffersL: Float32Array[] = []
+  combBuffersR: Float32Array[] = []
+  combIdxL: number[] = []
+  combIdxR: number[] = []
   combFeedback = 0.84
   combDamping = 0.2
-  combLP: number[] = []
-  allpassDelays = [347, 113]
-  allpassBuffers: Float32Array[] = []
-  allpassIdx: number[] = []
+  combLPL: number[] = []
+  combLPR: number[] = []
+  // Allpass delays also differ per channel
+  allpassDelaysL = [347, 113]
+  allpassDelaysR = [373, 127] // +26, +14 samples for decorrelation
+  allpassBuffersL: Float32Array[] = []
+  allpassBuffersR: Float32Array[] = []
+  allpassIdxL: number[] = []
+  allpassIdxR: number[] = []
   allpassFeedback = 0.7
   wet = 0.45
   inputGain = 0.15
 
   constructor() {
     for (let i = 0; i < 4; i++) {
-      this.combBuffers.push(new Float32Array(this.combDelays[i]))
-      this.combIdx.push(0)
-      this.combLP.push(0)
+      this.combBuffersL.push(new Float32Array(this.combDelaysL[i]))
+      this.combBuffersR.push(new Float32Array(this.combDelaysR[i]))
+      this.combIdxL.push(0)
+      this.combIdxR.push(0)
+      this.combLPL.push(0)
+      this.combLPR.push(0)
     }
     for (let i = 0; i < 2; i++) {
-      this.allpassBuffers.push(new Float32Array(this.allpassDelays[i]))
-      this.allpassIdx.push(0)
+      this.allpassBuffersL.push(new Float32Array(this.allpassDelaysL[i]))
+      this.allpassBuffersR.push(new Float32Array(this.allpassDelaysR[i]))
+      this.allpassIdxL.push(0)
+      this.allpassIdxR.push(0)
     }
   }
 
@@ -160,39 +178,75 @@ export class SchroederReverb {
     this.inputGain = g
   }
 
-  process(input: number, _sr: number): [number, number] {
-    // Guard: prevent NaN/Infinity from entering feedback loops
-    if (!isFinite(input)) return [0, 0]
-    const inSample = input * this.inputGain
-    let combSum = 0
+  /** Process a stereo input → stereo output. L and R have independent
+   *  comb/allpass banks with slightly different delays for decorrelation. */
+  process(inputL: number, inputR: number, _sr: number): [number, number] {
+    if (!isFinite(inputL) || !isFinite(inputR)) return [0, 0]
+    const inL = inputL * this.inputGain
+    const inR = inputR * this.inputGain
+
+    // Left channel combs
+    let combSumL = 0
     for (let i = 0; i < 4; i++) {
-      const buf = this.combBuffers[i]
-      const idx = this.combIdx[i]
-      const delayed = buf[idx]
-      this.combLP[i] = delayed + this.combDamping * (this.combLP[i] - delayed)
-      const out = inSample + this.combLP[i] * this.combFeedback
+      const buf = this.combBuffersL[i]!
+      const idx = this.combIdxL[i]!
+      const delayed = buf[idx]!
+      this.combLPL[i] = delayed + this.combDamping * (this.combLPL[i]! - delayed)
+      const out = inL + this.combLPL[i]! * this.combFeedback
       buf[idx] = out
-      this.combIdx[i] = (idx + 1) % this.combDelays[i]
-      combSum += out
+      this.combIdxL[i] = (idx + 1) % this.combDelaysL[i]!
+      combSumL += out
     }
-    combSum *= 0.25
-    let ap = combSum
+    combSumL *= 0.25
+
+    // Right channel combs
+    let combSumR = 0
+    for (let i = 0; i < 4; i++) {
+      const buf = this.combBuffersR[i]!
+      const idx = this.combIdxR[i]!
+      const delayed = buf[idx]!
+      this.combLPR[i] = delayed + this.combDamping * (this.combLPR[i]! - delayed)
+      const out = inR + this.combLPR[i]! * this.combFeedback
+      buf[idx] = out
+      this.combIdxR[i] = (idx + 1) % this.combDelaysR[i]!
+      combSumR += out
+    }
+    combSumR *= 0.25
+
+    // Left allpasses
+    let apL = combSumL
     for (let i = 0; i < 2; i++) {
-      const buf = this.allpassBuffers[i]
-      const idx = this.allpassIdx[i]
-      const delayed = buf[idx]
-      const out = -ap * this.allpassFeedback + delayed
-      buf[idx] = ap + delayed * this.allpassFeedback
-      this.allpassIdx[i] = (idx + 1) % this.allpassDelays[i]
-      ap = out
+      const buf = this.allpassBuffersL[i]!
+      const idx = this.allpassIdxL[i]!
+      const delayed = buf[idx]!
+      const out = -apL * this.allpassFeedback + delayed
+      buf[idx] = apL + delayed * this.allpassFeedback
+      this.allpassIdxL[i] = (idx + 1) % this.allpassDelaysL[i]!
+      apL = out
     }
-    return [ap * this.wet, combSum * this.wet * 0.9]
+
+    // Right allpasses
+    let apR = combSumR
+    for (let i = 0; i < 2; i++) {
+      const buf = this.allpassBuffersR[i]!
+      const idx = this.allpassIdxR[i]!
+      const delayed = buf[idx]!
+      const out = -apR * this.allpassFeedback + delayed
+      buf[idx] = apR + delayed * this.allpassFeedback
+      this.allpassIdxR[i] = (idx + 1) % this.allpassDelaysR[i]!
+      apR = out
+    }
+
+    return [apL * this.wet, apR * this.wet]
   }
 
   reset(): void {
-    for (const buf of this.combBuffers) buf.fill(0)
-    for (const buf of this.allpassBuffers) buf.fill(0)
-    this.combLP.fill(0)
+    for (const buf of this.combBuffersL) buf.fill(0)
+    for (const buf of this.combBuffersR) buf.fill(0)
+    for (const buf of this.allpassBuffersL) buf.fill(0)
+    for (const buf of this.allpassBuffersR) buf.fill(0)
+    this.combLPL.fill(0)
+    this.combLPR.fill(0)
   }
 }
 

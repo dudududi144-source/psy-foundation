@@ -423,10 +423,10 @@ export class ChannelFX {
       dryR = sig * (1 - this.delayMix) + readR * this.delayMix
     }
 
-    // 3) Reverb (stereo) — mono sum in, stereo out, wet/dry mix
+    // 3) Reverb (stereo) — stereo in, stereo out, wet/dry mix
+    // Phase 1 Day 3: SchroederReverb now takes stereo input for true decorrelation
     if (this.reverbMix > 0) {
-      const reverbIn = (dryL + dryR) * 0.5
-      const [wL, wR] = this.reverb.process(reverbIn)
+      const [wL, wR] = this.reverb.process(dryL, dryR, 44100)
       const wet = this.reverbMix
       const dry = 1 - wet
       dryL = dryL * dry + wL * wet
