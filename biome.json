@@ -34,10 +34,28 @@
         "noUnusedVariables": "error",
         "noUnusedImports": "error",
         "noUnreachable": "error",
-        "noUnsafeFinally": "error"
+        "noUnsafeFinally": "error",
+        "useExhaustiveDependencies": "warn"
       },
-      "suspicious": { "noExplicitAny": "warn" },
-      "style": { "useImportType": "warn", "noNonNullAssertion": "off" }
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noImplicitAnyLet": "warn",
+        "noArrayIndexKey": "warn"
+      },
+      "style": {
+        "useImportType": "warn",
+        "noNonNullAssertion": "off",
+        "useTemplate": "warn",
+        "useSingleVarDeclarator": "warn"
+      },
+      "complexity": {
+        "noForEach": "warn",
+        "noUselessFragments": "warn"
+      },
+      "a11y": {
+        "useMediaCaption": "warn",
+        "useButtonType": "warn"
+      }
     }
   },
   "javascript": {

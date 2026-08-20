@@ -21,7 +21,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 interface SpectrumAnalyzerProps {
-  audioEngine: any | null
+  audioEngine: { noteOn: (midi: number, vel?: number) => void; noteOff: () => void; setCutoff: (v: number) => void; setResonance: (v: number) => void; setMasterGain: (v: number) => void; init: () => Promise<boolean>; resume: () => Promise<void> } | null | null
   width?: number
   height?: number
   color?: 'cyan' | 'violet' | 'emerald'
@@ -127,7 +127,7 @@ export function SpectrumAnalyzer({
         const peakHeight = peaks[i]! * height * 0.9
 
         // Color gradient based on frequency
-        const hue = (i / bufferLength) * 360
+        const _hue = (i / bufferLength) * 360
         let fillColor: string
         if (freq < 250) {
           fillColor = colors.start

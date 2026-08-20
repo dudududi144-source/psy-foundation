@@ -165,7 +165,7 @@ export function buildHarmonicPlan(opts: BuildHarmonicPlanOptions): HarmonicPlan 
   for (let bar = 0; bar < opts.bars; bar += barsPerChord) {
     const slotIdx = Math.floor(bar / barsPerChord)
     // Phase 2 Day 3: use progression degrees to determine chord root
-    const degree =
+    const _degree =
       progressionDegrees[
         ((slotIdx % progressionDegrees.length) + progressionDegrees.length) %
           progressionDegrees.length

@@ -172,7 +172,7 @@ export class ArrangementGenerator {
 
     // Phase 1 Day 5 FIX: ensure outro exists and respect targetBars
     if (sections[sections.length - 1]!.type !== 'outro') {
-      const outroBars = Math.max(2, targetBars - totalBars)
+      const _outroBars = Math.max(2, targetBars - totalBars)
       sections.push(this.generateSection('outro'))
       // Override the outro's bars to fit within target
       const outro = sections[sections.length - 1]!

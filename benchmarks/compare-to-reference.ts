@@ -161,7 +161,7 @@ async function main() {
   console.log()
 
   let allPass = true
-  for (const [key, ref] of Object.entries(REFERENCE_TARGETS)) {
+  for (const [_key, ref] of Object.entries(REFERENCE_TARGETS)) {
     const comparison = compareMetrics(metrics, ref)
     const status = comparison.pass ? '✅ PASS' : '❌ FAIL'
     console.log(`  ${ref.name}`)

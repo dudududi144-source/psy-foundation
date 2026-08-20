@@ -123,7 +123,7 @@ describe('BLSaw — Band-Limited Sawtooth', () => {
     const aliasDb = 20 * Math.log10(aliasRatio + 1e-12)
 
     // Phase F: PolyBLEP clamped → aliasing should be reduced
-    expect(isFinite(aliasDb)).toBe(true)
+    expect(Number.isFinite(aliasDb)).toBe(true)
     expect(aliasDb).toBeLessThan(10) // was +9, now should be < 10
   })
 })

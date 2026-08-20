@@ -74,8 +74,8 @@ class KWeightFilter {
     const Ga = 3.999843853973347
     const Qa = 0.7071752369554196
     const Ka = Math.tan((Math.PI * f0a) / sampleRate)
-    const Vha = Math.pow(10, Ga / 20)
-    const Vba = Math.pow(Vha, 0.5)
+    const Vha = 10 ** (Ga / 20)
+    const Vba = Vha ** 0.5
     const a0a = 1 + Ka / Qa + Ka * Ka * Vha
     this.s1_b0 = (Vha + Vba * Ka + Ka * Ka * Vha) / a0a
     this.s1_b1 = (-2 * (Vha - Ka * Ka * Vha)) / a0a
@@ -330,5 +330,5 @@ export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number
  * Deterministic.
  */
 export function lufsToGainOffset(currentLUFS: number, targetLUFS: number): number {
-  return Math.pow(10, (targetLUFS - currentLUFS) / 20)
+  return 10 ** ((targetLUFS - currentLUFS) / 20)
 }

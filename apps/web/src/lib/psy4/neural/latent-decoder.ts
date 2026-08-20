@@ -76,10 +76,10 @@ export class LatentDecoder {
     for (let b = 0; b < BARK_BANDS; b++) {
       const bandPos = b / (BARK_BANDS - 1)
       const freq = Math.exp(logMin + bandPos * (logMax - logMin))
-      const bin = Math.floor((freq * N) / sampleRate)
+      const _bin = Math.floor((freq * N) / sampleRate)
       // Goertzel-like: compute magnitude at this frequency
-      let real = 0,
-        imag = 0
+      let real = 0
+      let imag = 0
       const omega = (2 * Math.PI * freq) / sampleRate
       for (let i = 0; i < N; i++) {
         const s = samples[i] ?? 0
@@ -94,8 +94,8 @@ export class LatentDecoder {
 
     const centroid = totalEnergy > 0 ? weightedFreq / totalEnergy : 1000
     // Spectral flatness: geometric mean / arithmetic mean (0=tonal, 1=noise)
-    let logSum = 0,
-      linSum = 0
+    let logSum = 0
+    let linSum = 0
     for (let b = 0; b < BARK_BANDS; b++) {
       const m = Math.exp(bands[b]!) - 1
       logSum += Math.log(Math.max(0.0001, m))
@@ -212,8 +212,8 @@ export class NeuralStyleTransfer {
 
     // Average the latents
     const avgBands = new Float32Array(BARK_BANDS)
-    let avgCentroid = 0,
-      avgFlatness = 0
+    let avgCentroid = 0
+    let avgFlatness = 0
     for (const l of latents) {
       for (let b = 0; b < BARK_BANDS; b++) avgBands[b]! += l.bands[b]
       avgCentroid += l.centroid

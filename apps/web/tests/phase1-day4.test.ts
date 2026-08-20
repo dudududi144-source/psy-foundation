@@ -41,7 +41,7 @@ describe('Phase 1 Day 4 — sample-rate parameterization', () => {
     let maxAbs = 0
     for (let i = 0; i < n; i++) {
       const v = output[i] ?? 0
-      expect(isFinite(v)).toBe(true)
+      expect(Number.isFinite(v)).toBe(true)
       maxAbs = Math.max(maxAbs, Math.abs(v))
     }
     expect(maxAbs).toBeGreaterThan(0)
@@ -62,7 +62,7 @@ describe('Phase 1 Day 4 — sample-rate parameterization', () => {
     let maxAbs = 0
     for (let i = 0; i < n; i++) {
       const v = output[i] ?? 0
-      expect(isFinite(v)).toBe(true)
+      expect(Number.isFinite(v)).toBe(true)
       maxAbs = Math.max(maxAbs, Math.abs(v))
     }
     expect(maxAbs).toBeGreaterThan(0)
@@ -78,7 +78,7 @@ describe('Phase 1 Day 4 — sample-rate parameterization', () => {
     }
     // Should produce finite output
     for (let i = 0; i < n; i++) {
-      expect(isFinite(buf[i] ?? 0)).toBe(true)
+      expect(Number.isFinite(buf[i] ?? 0)).toBe(true)
     }
   })
 

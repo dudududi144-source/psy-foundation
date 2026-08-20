@@ -48,7 +48,7 @@ describe('StereoWidener — Phase 1 Day 1 fix', () => {
     }
 
     const origL = new Float32Array(L)
-    const origR = new Float32Array(R)
+    const _origR = new Float32Array(R)
 
     sw.processBuffer(L, R)
 
@@ -157,7 +157,7 @@ describe('MasterChain — Phase 1 Day 1 fix', () => {
     // But the glue compressor should still reduce it somewhat
     // Just verify it doesn't NaN/Infinity
     expect(maxOutput).toBeGreaterThan(0)
-    expect(isFinite(maxOutput)).toBe(true)
+    expect(Number.isFinite(maxOutput)).toBe(true)
   })
 
   test('output is finite for finite input', () => {
@@ -165,7 +165,7 @@ describe('MasterChain — Phase 1 Day 1 fix', () => {
     for (let i = 0; i < 100; i++) {
       const input = Math.sin(i * 0.1) * 0.5
       const out = mc.process(input, SR)
-      expect(isFinite(out)).toBe(true)
+      expect(Number.isFinite(out)).toBe(true)
     }
   })
 

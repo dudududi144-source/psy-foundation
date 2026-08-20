@@ -62,7 +62,7 @@ export const DESIGN = {
     `,
 
     // OLED display — dark cyan glow
-    oled: `linear-gradient(180deg, #03131a 0%, #020a0f 100%)`,
+    oled: 'linear-gradient(180deg, #03131a 0%, #020a0f 100%)',
 
     // Wood cheeks
     wood: `

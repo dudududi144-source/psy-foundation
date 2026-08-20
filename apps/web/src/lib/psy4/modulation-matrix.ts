@@ -137,8 +137,7 @@ export class ModulationMatrix {
       const amount = route.amount
       switch (route.destination) {
         case 'pitch':
-          if (params.pitch !== undefined)
-            params.pitch *= Math.pow(2, (sourceValue * amount * 0.1) / 12)
+          if (params.pitch !== undefined) params.pitch *= 2 ** ((sourceValue * amount * 0.1) / 12)
           break
         case 'cutoff':
           if (params.cutoff !== undefined) params.cutoff *= 1 + sourceValue * amount * 0.5

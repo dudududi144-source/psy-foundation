@@ -91,7 +91,7 @@ export class Wavetable {
       // Square wave with slight resonant peak near the transition
       const sq = phase < 0.5 ? 1 : -1
       // Add a resonant "squelch" bump near phase 0.5
-      const resPeak = Math.exp(-Math.pow((phase - 0.5) * 20, 2)) * 0.3
+      const resPeak = Math.exp(-(((phase - 0.5) * 20) ** 2)) * 0.3
       t[i] = Math.max(-1, Math.min(1, sq + resPeak))
     }
     return new Wavetable([t])

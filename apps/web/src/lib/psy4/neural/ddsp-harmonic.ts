@@ -125,7 +125,7 @@ export class DDSPHarmonic {
       case 'organ':
         // Odd harmonics with decreasing amplitude
         for (let n = 0; n < N; n++) {
-          this.harmonics[n] = n % 2 === 0 ? 1 / Math.pow(n + 1, 0.7) : 0
+          this.harmonics[n] = n % 2 === 0 ? 1 / (n + 1) ** 0.7 : 0
         }
         break
       case 'bell':

@@ -70,7 +70,7 @@ describe('MoogLadder — Phase 1 Day 3 honest docstring', () => {
     for (let i = 0; i < 1000; i++) {
       const x = Math.sin((2 * Math.PI * 440 * i) / SR) * 0.5
       const out = filter.process(x, 1000, 0.7, 1.0, SR)
-      expect(isFinite(out)).toBe(true)
+      expect(Number.isFinite(out)).toBe(true)
     }
   })
 })
@@ -123,8 +123,8 @@ describe('SchroederReverb — Phase 1 Day 3 true stereo', () => {
     const reverb = new SchroederReverb()
     for (let i = 0; i < 1000; i++) {
       const [outL, outR] = reverb.process(0.5, 0.5, SR)
-      expect(isFinite(outL)).toBe(true)
-      expect(isFinite(outR)).toBe(true)
+      expect(Number.isFinite(outL)).toBe(true)
+      expect(Number.isFinite(outR)).toBe(true)
     }
   })
 

@@ -90,8 +90,8 @@ export class GrainCloud {
       this.sampleCount = 0
     }
 
-    let outL = 0,
-      outR = 0
+    let outL = 0
+    let outR = 0
     for (let i = this.grains.length - 1; i >= 0; i--) {
       const g = this.grains[i]!
       if (g.age >= g.dur) {

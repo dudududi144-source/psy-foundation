@@ -161,7 +161,7 @@ describe('Phase F — MIDI learn (basic)', () => {
 
   test('MIDI note to frequency conversion is correct', () => {
     // Standard MIDI to frequency: f = 440 * 2^((n-69)/12)
-    const midiToFreq = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12)
+    const midiToFreq = (midi: number) => 440 * 2 ** ((midi - 69) / 12)
     expect(midiToFreq(69)).toBeCloseTo(440, 1) // A4 = 440 Hz
     expect(midiToFreq(60)).toBeCloseTo(261.63, 1) // C4 = middle C
     expect(midiToFreq(81)).toBeCloseTo(880, 1) // A5 = 880 Hz
