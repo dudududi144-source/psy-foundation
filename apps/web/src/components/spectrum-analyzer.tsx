@@ -21,7 +21,8 @@
 import { useEffect, useRef, useState } from 'react'
 
 interface SpectrumAnalyzerProps {
-  audioEngine: any | null | null
+  // biome-ignore lint/suspicious/noExplicitAny: PSY4AudioEngine has dynamic methods
+  audioEngine: any | null
   width?: number
   height?: number
   color?: 'cyan' | 'violet' | 'emerald'

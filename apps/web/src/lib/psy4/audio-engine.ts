@@ -18,6 +18,7 @@ import { DEFAULT_SR } from './constants'
 // Minimal MIDI types (avoiding DOM lib dependency issues)
 interface MIDIInput {
   name: string
+  // biome-ignore lint/suspicious/noExplicitAny: MIDI message is dynamic
   onmidimessage: ((message: any) => void) | null
 }
 
@@ -99,11 +100,18 @@ export class PSY4AudioEngine {
   }
 
   async initMIDI(): Promise<boolean> {
-    if (typeof navigator === 'undefined' || !(navigator as any).requestMIDIAccess) {
+    if (
+      typeof navigator === 'undefined' ||
+      !(
+        // biome-ignore lint/suspicious/noExplicitAny: Web MIDI API
+        (navigator as any).requestMIDIAccess
+      )
+    ) {
       return false
     }
     try {
-      this.midiAccess = (await (navigator as any).requestMIDIAccess()) as MIDIAccess
+      this.midiAccess = (await // biome-ignore lint/suspicious/noExplicitAny: Web MIDI API
+      (navigator as any).requestMIDIAccess()) as MIDIAccess
       this.midiAccess.onstatechange = () => {
         // Could emit event for UI update
       }

@@ -22,6 +22,7 @@ export const maxDuration = 60
  */
 
 // In-memory storage for reference latents (production: use Supabase)
+// biome-ignore lint/suspicious/noExplicitAny: latent vector is dynamic
 const referenceStore = new Map<string, { latent: any; name: string; uploadedAt: number }>()
 
 // Simple WAV parser (mono, 16-bit PCM)
@@ -171,6 +172,7 @@ export async function POST(req: NextRequest) {
 }
 
 /** Get a stored reference latent by hash (for style-transfer route) */
+// biome-ignore lint/suspicious/noExplicitAny: returns dynamic latent
 export function getReferenceLatent(hash: string): any | null {
   const ref = referenceStore.get(hash)
   return ref ? ref.latent : null

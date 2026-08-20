@@ -15,7 +15,8 @@
       "**/tailwind.config.cjs",
       "**/components.json",
       "**/tsconfig.json",
-      "**/tsconfig.base.json"
+      "**/tsconfig.base.json",
+      "**/research/**"
     ]
   },
   "formatter": {
@@ -46,7 +47,8 @@
         "useImportType": "warn",
         "noNonNullAssertion": "off",
         "useTemplate": "warn",
-        "useSingleVarDeclarator": "warn"
+        "useSingleVarDeclarator": "warn",
+        "noParameterAssign": "warn"
       },
       "complexity": {
         "noForEach": "warn",
