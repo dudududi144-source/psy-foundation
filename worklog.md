@@ -3488,3 +3488,48 @@ Stage Summary:
 - API now supports ?progression=, ?bassMode=, ?style= parameters.
 - 5 style presets: full-on, darkpsy, progressive, forest, hypnotic.
 - 717 tests pass, 0 regressions.
+
+
+---
+Task ID: PHASE-D
+Agent: PSY Engineer
+Task: Phase D — audio quality (fix specs, LUFS targeting, ISP ceiling).
+
+Work Log:
+
+D1: Fixed voice specs (voice-specs.ts):
+- KICK fundamental: 38 → 50 Hz (was below PA sub cutoff)
+- KICK subDecay: 0.45 → 0.65 (proper full-on sustain)
+- BASS pluckDecay: 0.08 → 0.12 (16th note overlap at 145 BPM)
+- LEAD cutoff: 5200 → 9000 Hz (proper brightness)
+- BUS_GAINS.music: 2.5 → 1.2 (was +8dB clip risk)
+
+D2: Fixed LUFS targeting (forensic-bridge.ts:1312-1321):
+- Was: 50% correction (1.0 + (fullGain - 1.0) * 0.5) — never hit target
+- Now: 100% correction (fullGain) — actually targets -9 LUFS
+- Limiter afterward ensures we don't exceed ceiling
+
+D3: Tightened ISP-safe ceiling (limiter.ts:242):
+- Was: ceiling * 0.85 (1.4 dB headroom) — ffmpeg measured +0.5 dBTP with full LUFS
+- Phase D attempt 1: 0.75 — still +0.4 dBTP
+- Phase D attempt 2: 0.65 — finally -0.9 dBTP ✅
+- This gives ~3.7 dB headroom for inter-sample peaks measured by ffmpeg's 48-tap FIR
+
+Measurement:
+- Phase C: -6.5 LUFS, -0.3 dBTP, 2.5 LU LRA
+- Phase D: -7.6 LUFS, -0.9 dBTP ✅, 2.9 LU LRA
+- LUFS closer to target -9 (was -6.5, now -7.6)
+- dBTP safely below 0 (was -0.3, now -0.9)
+- LRA improved (was 2.5, now 2.9 — more dynamic range)
+
+Verification:
+- bun test: 717 pass, 14 skip, 0 fail
+- 414,864 expect() calls across 43 files
+- ffmpeg: -7.6 LUFS, -0.9 dBTP ✅, 2.9 LU LRA
+
+Stage Summary:
+- Phase D COMPLETE: audio quality improved.
+- Kick at 50 Hz (audible on PA), bass overlaps 16ths, lead brighter, bus safe.
+- LUFS correction now 100% (was 50% — never hit target).
+- ISP-safe ceiling tightened to 0.65 (ffmpeg dBTP = -0.9 ✅).
+- 717 tests pass, 0 regressions.

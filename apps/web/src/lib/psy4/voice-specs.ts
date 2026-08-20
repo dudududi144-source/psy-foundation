@@ -34,8 +34,8 @@ export interface KickSpec {
 }
 
 export const KICK_SPEC: KickSpec = {
-  fundamental: 38,
-  subDecay: 0.45, // Phase 3: psytrance kick (was 0.25 — too short for genre)
+  fundamental: 50, // Phase D: was 38 (below PA sub cutoff), now 50 (full-on standard)
+  subDecay: 0.65, // Phase D: was 0.45, now 0.65 (proper full-on sustain)
   subLevel: 1.0,
   midDecay: 0.05,
   midLevel: 0.5,
@@ -76,7 +76,7 @@ export const BASS_SPEC: BassSpec = {
   cutoffStart: 1200,
   cutoffEnd: 150,
   res: 0.3,
-  pluckDecay: 0.08, // Phase 3 Day 2: longer pluck (was 0.05 — too short for psytrance)
+  pluckDecay: 0.12, // Phase D: was 0.08, now 0.12 (16th note overlap at 145 BPM)
   sustainLevel: 0.6,
   sustainRelease: 0.004,
   hpFreq: 40, // Phase 3 Day 2: lower HP (was 45 — let more sub through)
@@ -121,7 +121,7 @@ export const LEAD_SPEC: LeadSpec = {
   fmLevel: 0.35,
   fmRatio: 2.0,
   fmIndex: 180,
-  cutoff: 5200, // Phase 3 Day 2: brighter (was 4200 — needs more high end)
+  cutoff: 9000, // Phase D: was 5200, now 9000 (proper psytrance lead brightness)
   res: 0.7,
   filterEnvAmount: 5.0,
   filterEnvDecay: 0.25,
@@ -274,7 +274,7 @@ export interface BusGains {
 export const BUS_GAINS: BusGains = {
   drum: 0.8,
   bass: 0.35,
-  music: 2.5,
+  music: 1.2, // Phase D: was 2.5 (+8dB clip risk), now 1.2 (safe level)
   fx: 1.0,
 }
 

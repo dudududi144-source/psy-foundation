@@ -1309,21 +1309,21 @@ export async function renderFoundationSection(
   // 5. Measure LUFS
   const lufsResult = measureLUFS(samplesL, samplesR, SR)
 
-  // 6. Apply LUFS gain targeting — partial correction preserves dynamic contrast
-  // Fix: was applying full normalization which cancels the energy contour.
-  // Now applies only 50% correction to keep dynamic range.
+  // 6. Apply LUFS gain targeting
+  // Phase D: was 50% correction (never hit target). Now 100% correction.
+  // The limiter afterward ensures we don't exceed ceiling.
   const gainOffset = lufsToGainOffset(lufsResult.integratedLUFS, targetLufs)
   const fullGain = Math.max(0.1, Math.min(8.0, gainOffset))
-  const safeGain = 1.0 + (fullGain - 1.0) * 0.5 // 50% correction
+  // Phase D: full correction (was 50% — never reached target LUFS)
   for (let i = 0; i < totalSamples; i++) {
-    samplesL[i] = (samplesL[i] ?? 0) * safeGain
-    samplesR[i] = (samplesR[i] ?? 0) * safeGain
+    samplesL[i] = (samplesL[i] ?? 0) * fullGain
+    samplesR[i] = (samplesR[i] ?? 0) * fullGain
   }
 
   // 7. True-peak limiter (4x oversampled)
   // Phase 3 Day 2: tightened ceiling to -1.0 dBTP for safe streaming + club playback.
   // Was -0.2 dBTP but ffmpeg measured +0.1 (ISP overshoot). Now -1.0 ensures ≤ 0.
-  const limiter = new TruePeakLimiter({ thresholdDb: -1.5, ceilingDb: -1.0, sampleRate: SR })
+  const limiter = new TruePeakLimiter({ thresholdDb: -2.0, ceilingDb: -1.5, sampleRate: SR })
   limiter.processBuffer(samplesL, samplesR)
 
   // Final safety clamp
