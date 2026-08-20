@@ -3030,3 +3030,41 @@ Stage Summary:
 - Both are API additions — available for Phase 3 tuning.
 - 708 tests pass, 0 regressions.
 - Ready for Phase 2 Day 4: texture voice + transition FX.
+
+
+---
+Task ID: PHASE-2-DAY-4
+Agent: PSY Engineer
+Task: Phase 2 Day 4 — texture voice (INTRO not silent) + render all bars.
+
+Work Log:
+
+FIX: Render all bars including INTRO/OUTRO (forensic-bridge.ts:188-194)
+- Bug: INTRO and OUTRO bars were filtered out (lines 189-195), producing silence.
+  The filter was: `b.arrangementState !== 'INTRO' && b.arrangementState !== 'OUTRO'`
+- Fix: removed the filter. Now ALL bars are rendered.
+  `const renderBars = rawScore.bars` (was: filtered to only kick+bass bars)
+- Impact: INTRO bars now have pad/texture content audible.
+
+FIX: Pad voice from bar 0 (forensic-bridge.ts:399-401)
+- Bug: `playPad = phase >= 1 && phase !== 6` — pad started at bar 1, not bar 0.
+  INTRO bars (phase 0) had no pad → silence even when rendered.
+- Fix: `playPad = phase !== 6` — pad from bar 0 (except break).
+  Now INTRO has atmospheric pad from the first bar.
+
+Measurement changes:
+- Duration: 9.93s → 13.24s (+33% — INTRO/OUTRO bars now included)
+- LUFS: -8.5 → -7.5 (louder — more content, pad adds energy)
+- dBTP: +0.0 (at edge — limiter still catching)
+- LRA: 2.8 → 2.7 (slightly less dynamic — pad fills quiet sections)
+- Bars: 8 (same count, but all rendered now vs. 6 before)
+
+Verification:
+- bun test (all): 708 pass, 14 skip, 0 fail
+- ffmpeg: -7.5 LUFS, +0.0 dBTP, 2.7 LU LRA
+
+Stage Summary:
+- Phase 2 Day 4 COMPLETE: INTRO no longer silent.
+- Pad voice audible from bar 0 — atmospheric intro.
+- 708 tests pass, 0 regressions.
+- Ready for Phase 2 Day 5: transition FX + merge to main.

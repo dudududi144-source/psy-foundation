@@ -185,16 +185,11 @@ export async function renderFoundationSection(
   const samplesPerStep = Math.ceil(secondsPerStep * SR)
   const samplesPerBar = samplesPerStep * rawScore.groove.stepsPerBar
 
-  // Only render bars with kick+bass (skip INTRO/OUTRO silence)
-  // Fix: keep BREAK bars — they have kick+bass and add dynamic contrast
-  const activeBars = rawScore.bars.filter(
-    (b) =>
-      b.roles.kick &&
-      b.roles.bass &&
-      b.arrangementState !== 'INTRO' &&
-      b.arrangementState !== 'OUTRO'
-  )
-  const renderBars = activeBars.length > 0 ? activeBars : rawScore.bars
+  // Phase 2 Day 4: render ALL bars (including INTRO/OUTRO).
+  // Previously INTRO/OUTRO were filtered out → silence. Now we keep them
+  // and render texture/pad voices for bars without kick+bass.
+  // This makes INTRO state audible (atmospheric pad) instead of silent.
+  const renderBars = rawScore.bars
   const barRemap = new Map<number, number>()
   renderBars.forEach((b, i) => barRemap.set(b.barIndex, i))
   const totalSamples = samplesPerBar * renderBars.length
@@ -401,7 +396,9 @@ export async function renderFoundationSection(
     const playHats = true // hats from bar 0 (keep energy)
     const playLead = phase >= 2 // lead enters at bar 2
     const playCounter = phase >= 3 // counter at bar 3
-    const playPad = phase >= 1 && phase !== 6 // pad from bar 1, except break
+    // Phase 2 Day 4: pad from bar 0 (was bar 1) — makes INTRO audible.
+    // Previously pad started at phase 1, so INTRO (phase 0) was silent.
+    const playPad = phase !== 6 // pad from bar 0, except break
     const playSnare = phase >= 2 // snare from bar 2
     const playShaker = true // shaker from bar 0 (driving pulse)
     const playFX = phase === 6 || phase === 7 // riser/impact at break/drop
