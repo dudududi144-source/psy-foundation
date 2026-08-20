@@ -117,7 +117,11 @@ export class MasterChain {
       limGain = this.ceiling / this.env
     }
     s *= limGain * this.gain
-    return Math.max(-1, Math.min(1, s))
+    // Phase 1 Day 1 FIX: removed hard clip `Math.max(-1, Math.min(1, s))`.
+    // The TruePeakLimiter at the end of the chain handles brickwall limiting.
+    // Hard clipping here aliases ungracefully and was causing fizz on transients.
+    // If sample exceeds [-1, 1], it will be caught by TruePeakLimiter.processBuffer.
+    return s
   }
 }
 

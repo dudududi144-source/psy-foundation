@@ -1,15 +1,17 @@
 /**
- * Phase 0 Day 5 — Snapshot test for render determinism.
+ * Snapshot test for render determinism.
  *
  * Renders ?bars=8&seed=42 offline (using same config as /api/render-forensic)
  * and verifies the WAV md5 matches the committed baseline.
  *
- * Baseline md5: 11bf7c680e963c36e3351d23e64a57a7 (Phase 0 Day 5 — set this commit)
- * Baseline set: 2026-08-20 (Phase 0 Day 5, after snapshot test verified)
+ * Phase 1 Day 1 baseline: a4368f62fd733ebf6495fb48b0e6e3c3
+ *   Set: 2026-08-20 (after StereoWidener fix + MasterChain hard-clip removal)
+ *   ffmpeg: -8.6 LUFS, -0.0 dBTP, 2.9 LU LRA
  *
- * Previous baseline was 0e1294f1e9f8b5280893ad01f9ca6326 (Phase 0 Day 2,
- * measured via HTTP endpoint — slight differences due to BEST_CONFIG not
- * being passed in test path).
+ * Phase 0 Day 2 baseline: 0e1294f1e9f8b5280893ad01f9ca6326
+ *   Set: 2026-08-19 (commercial samples replaced with procedural)
+ *   ffmpeg: -10.6 LUFS, +0.2 dBTP, 1.9 LU LRA
+ *   (Replaced because Phase 1 DSP fixes changed the output.)
  */
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
@@ -26,9 +28,8 @@ import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
-// Baseline set during Phase 0 Day 5 — matches Phase 0 Day 2 baseline
-// (verified via HTTP endpoint ffmpeg measurement: -10.6 LUFS, +0.2 dBTP, 1.9 LU LRA)
-const BASELINE_MD5 = '0e1294f1e9f8b5280893ad01f9ca6326'
+// Phase 1 Day 1 baseline (StereoWidener fixed + MasterChain hard-clip removed)
+const BASELINE_MD5 = 'a4368f62fd733ebf6495fb48b0e6e3c3'
 const BASELINE_DURATION_SEC = 9.93
 
 // BEST_CONFIG from /api/render-forensic/route.ts
