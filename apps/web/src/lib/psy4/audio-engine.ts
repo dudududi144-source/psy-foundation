@@ -61,9 +61,15 @@ export class PSY4AudioEngine {
     }
   }
 
-  noteOn(midi: number, velocity = 0.8): void {
+  noteOn(midi: number, velocity = 0.8, voiceType?: string): void {
     if (!this.workletNode) return
-    this.workletNode.port.postMessage({ type: 'noteOn', midi, velocity })
+    this.workletNode.port.postMessage({ type: 'noteOn', midi, velocity, voiceType })
+  }
+
+  // Phase 4 Day 2: noteOff support
+  noteOff(_midi?: number): void {
+    if (!this.workletNode) return
+    this.workletNode.port.postMessage({ type: 'noteOff' })
   }
 
   setCutoff(value: number): void {
