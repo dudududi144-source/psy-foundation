@@ -103,13 +103,18 @@ export default function Home() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [critique, setCritique] = useState<CritiqueData | null>(null)
   const [optReport, setOptReport] = useState<OptReport | null>(null)
+  // biome-ignore lint/suspicious/noExplicitAny: UI state needs dynamic types
   const [arrangement, setArrangement] = useState<any>(null)
   const [audioReady, setAudioReady] = useState(false)
+  // biome-ignore lint/suspicious/noExplicitAny: UI state needs dynamic types
   const [presets, setPresets] = useState<any[]>([])
   const [showPresets, setShowPresets] = useState(false)
   const [uploadingRef, setUploadingRef] = useState(false)
+  // biome-ignore lint/suspicious/noExplicitAny: UI state needs dynamic types
   const [referenceInfo, setReferenceInfo] = useState<any>(null)
+  // biome-ignore lint/suspicious/noExplicitAny: UI state needs dynamic types
   const audioEngineRef = useRef<any>(null)
+  // biome-ignore lint/suspicious/noExplicitAny: UI state needs dynamic types
   const presetMgrRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
@@ -155,6 +160,7 @@ export default function Home() {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — only run once
   useEffect(() => {
     // Initialize preset manager and load factory presets
     import('@/lib/psy4/preset-manager').then(({ PresetManager }) => {
@@ -272,7 +278,13 @@ export default function Home() {
           </div>
           {audioUrl && (
             <div className="mt-4">
-              <audio ref={audioRef} controls src={audioUrl} className="w-full" />
+              <audio
+                crossOrigin="anonymous"
+                ref={audioRef}
+                controls
+                src={audioUrl}
+                className="w-full"
+              />
               <p className="mt-2 text-xs text-zinc-500">
                 <a
                   href={audioUrl}
@@ -759,6 +771,7 @@ export default function Home() {
               <div className="grid gap-1.5">
                 {arrangement.sections.map((s, i) => (
                   <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: index is stable for these lists
                     key={`item-${i}`}
                     className="flex items-center gap-2 text-xs rounded border border-amber-500/20 bg-amber-500/5 p-2"
                   >
@@ -824,6 +837,7 @@ export default function Home() {
                 </h3>
                 {critique.failures.map((f, i) => (
                   <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: index is stable for these lists
                     key={`item-${i}`}
                     className="flex items-start gap-2 rounded border border-rose-500/20 bg-rose-500/5 p-2"
                   >
@@ -1052,6 +1066,7 @@ export default function Home() {
             <div className="flex items-center gap-2 text-sm">
               {critique.harmony.progression.map((chord, i) => (
                 <span
+                  // biome-ignore lint/suspicious/noArrayIndexKey: index is stable for these lists
                   key={`item-${i}`}
                   className="px-3 py-1 rounded bg-violet-500/20 text-violet-200"
                   style={{ fontFamily: DESIGN.fonts.mono }}
