@@ -95,7 +95,7 @@ describe('OversampledSaturation — Phase 1 Day 2 FIR fix', () => {
   })
 
   test('at drive=0, output ≈ input (no saturation)', () => {
-    const sat = new OversampledSaturation()
+    const _sat = new OversampledSaturation()
     // Drive=0 means fastTanh(x * 0) = fastTanh(0) = 0 → output = 0
     // So let's test with drive=1 and small input instead
     const sat2 = new OversampledSaturation()
@@ -153,8 +153,8 @@ describe('BLTriangle — Phase 1 Day 2 integrated polyBLEP fix', () => {
     for (let i = 0; i < n; i++) buf[i] = osc.process(220 / SR)
 
     // DFT at 220Hz
-    let re = 0,
-      im = 0
+    let re = 0
+    let im = 0
     const k = (220 * n) / SR
     for (let i = 0; i < n; i++) {
       const x = buf[i] ?? 0
@@ -177,8 +177,8 @@ describe('BLTriangle — Phase 1 Day 2 integrated polyBLEP fix', () => {
 
     // Measure fundamental and 3rd harmonic
     const magAt = (freq: number) => {
-      let re = 0,
-        im = 0
+      let re = 0
+      let im = 0
       const k = (freq * n) / SR
       for (let i = 0; i < n; i++) {
         const x = buf[i] ?? 0
@@ -191,7 +191,7 @@ describe('BLTriangle — Phase 1 Day 2 integrated polyBLEP fix', () => {
 
     const fund = magAt(220)
     const third = magAt(660) // 3rd harmonic
-    const fifth = magAt(1100) // 5th harmonic
+    const _fifth = magAt(1100) // 5th harmonic
 
     // Triangle has odd harmonics only, at ratios 1/n²
     // 3rd harmonic = 1/9 of fundamental, 5th = 1/25

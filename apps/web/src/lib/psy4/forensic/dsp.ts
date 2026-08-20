@@ -43,7 +43,8 @@ export function polyBlep(phase: number, inc: number): number {
   if (phase < safeInc) {
     const t = phase / safeInc
     return 2 * t - t * t - 1
-  } else if (phase > 1 - safeInc) {
+  }
+  if (phase > 1 - safeInc) {
     const t = (phase - 1) / safeInc
     return t * t + 2 * t + 1
   }
@@ -248,7 +249,7 @@ export class LR4Highpass {
     const omega = (2 * Math.PI * cutoff) / sr
     const cosOmega = Math.cos(omega)
     const sinOmega = Math.sin(omega)
-    const q = 0.7071067811865476 // 1/sqrt(2) — Butterworth
+    const q = Math.SQRT1_2 // 1/sqrt(2) — Butterworth
     const alpha = sinOmega / (2 * q)
     const a0 = 1 + alpha
     // RBJ highpass
@@ -514,7 +515,7 @@ export class BLTriangle {
 export class SineOsc {
   phase = 0
 
-  setFreq(f: number): void {
+  setFreq(_f: number): void {
     /* freq passed to process */
   }
 

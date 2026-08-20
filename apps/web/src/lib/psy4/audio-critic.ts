@@ -911,11 +911,11 @@ function computePitchStability(pcm: Float32Array, sampleRate: number): number {
   const bassHighBin = Math.ceil((120 * fftSize) / sampleRate)
 
   let maxMag = 0
-  let maxBin = bassLowBin
+  let _maxBin = bassLowBin
   for (let i = bassLowBin; i <= bassHighBin && i < window.length / 2; i++) {
     // Simple DFT at this bin
-    let real = 0,
-      imag = 0
+    let real = 0
+    let imag = 0
     const omega = (2 * Math.PI * i) / fftSize
     for (let j = 0; j < window.length; j++) {
       real += (window[j] ?? 0) * Math.cos(omega * j)
@@ -924,7 +924,7 @@ function computePitchStability(pcm: Float32Array, sampleRate: number): number {
     const mag = Math.sqrt(real * real + imag * imag)
     if (mag > maxMag) {
       maxMag = mag
-      maxBin = i
+      _maxBin = i
     }
   }
 
@@ -932,8 +932,8 @@ function computePitchStability(pcm: Float32Array, sampleRate: number): number {
   // Normalize: a strong peak (high crest factor) = stable pitch
   let totalEnergy = 0
   for (let i = bassLowBin; i <= bassHighBin && i < window.length / 2; i++) {
-    let real = 0,
-      imag = 0
+    let real = 0
+    let imag = 0
     const omega = (2 * Math.PI * i) / fftSize
     for (let j = 0; j < Math.min(window.length, 1024); j++) {
       real += (window[j] ?? 0) * Math.cos(omega * j)
@@ -1035,14 +1035,14 @@ function computeKickBassLock(
   pcm: Float32Array,
   onsets: number[],
   sampleRate: number,
-  bpm: number
+  _bpm: number
 ): number {
   // Fix: was identical to pocketConsistency (just called the same function).
   // Now measures actual kick-bass synchronization: how much the bass energy
   // peaks align with kick onsets. High = tight kick-bass lock.
   if (onsets.length < 4) return 0.5
   const samplesPerStep = Math.floor(pcm.length / onsets.length)
-  const bassLowBin = 60 // approximate — we measure energy in time domain
+  const _bassLowBin = 60 // approximate — we measure energy in time domain
 
   // For each onset, measure bass-band energy in the 50ms after the onset
   const postWindow = Math.floor(sampleRate * 0.05) // 50ms
@@ -1162,9 +1162,9 @@ function computeMelodicClarity(pcm: Float32Array, sampleRate: number): number {
   // Spectral crest factor = max(bin) / mean(bin) in the lead range (500-5000Hz)
   const lowBin = Math.floor((500 * fftSize) / sampleRate)
   const highBin = Math.ceil((5000 * fftSize) / sampleRate)
-  let maxBin = 0,
-    sumBins = 0,
-    binCount = 0
+  let maxBin = 0
+  let sumBins = 0
+  let binCount = 0
   for (let i = lowBin; i <= highBin && i < spectrum.length; i++) {
     const v = spectrum[i] ?? 0
     if (v > maxBin) maxBin = v
@@ -1220,9 +1220,9 @@ function computeRepetitionBalance(pcm: Float32Array, sampleRate: number, bpm: nu
   let totalPairs = 0
   for (let i = 0; i < profiles.length; i++) {
     for (let j = i + 1; j < profiles.length; j++) {
-      let dot = 0,
-        normI = 0,
-        normJ = 0
+      let dot = 0
+      let normI = 0
+      let normJ = 0
       for (let k = 0; k < subWindows; k++) {
         dot += profiles[i]![k]! * profiles[j]![k]!
         normI += profiles[i]![k]! ** 2
@@ -1255,7 +1255,7 @@ function computeRoughness(spectrum: number[], sampleRate: number, fftSize: numbe
   return total > 0 ? mid / total : 0
 }
 
-function computeNoisiness(spectrum: number[], sampleRate: number, fftSize: number): number {
+function computeNoisiness(spectrum: number[], _sampleRate: number, _fftSize: number): number {
   // Noisiness = ratio of high-frequency noise to harmonic content.
   // Fix: was identical to highEndPresence (both measured high/total).
   // Now measures noise floor: how much energy is in the gaps between harmonics.
@@ -1416,9 +1416,9 @@ function computeMotifIdentity(pcm: Float32Array, sampleRate: number, bpm: number
   for (const lagBars of [1, 2, 4]) {
     const lag = lagBars * samplesPerBar
     if (pcm.length < lag * 2) continue
-    let dot = 0,
-      normA = 0,
-      normB = 0
+    let dot = 0
+    let normA = 0
+    let normB = 0
     const windowSize = Math.min(pcm.length - lag, samplesPerBar * 4)
     for (let i = 0; i < windowSize; i++) {
       const a = pcm[i] ?? 0

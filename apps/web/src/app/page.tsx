@@ -103,14 +103,14 @@ export default function Home() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [critique, setCritique] = useState<CritiqueData | null>(null)
   const [optReport, setOptReport] = useState<OptReport | null>(null)
-  const [arrangement, setArrangement] = useState<any | null>(null)
+  const [arrangement, setArrangement] = useState<unknown>(null)
   const [audioReady, setAudioReady] = useState(false)
-  const [presets, setPresets] = useState<any[]>([])
+  const [presets, setPresets] = useState<unknown[]>([])
   const [showPresets, setShowPresets] = useState(false)
   const [uploadingRef, setUploadingRef] = useState(false)
-  const [referenceInfo, setReferenceInfo] = useState<any | null>(null)
-  const audioEngineRef = useRef<any>(null)
-  const presetMgrRef = useRef<any>(null)
+  const [referenceInfo, setReferenceInfo] = useState<unknown>(null)
+  const audioEngineRef = useRef<unknown>(null)
+  const presetMgrRef = useRef<unknown>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const render = async () => {
@@ -792,84 +792,78 @@ export default function Home() {
         )}
 
         {critique && (
-          <>
-            <section
-              className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5"
-              style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}
-            >
-              <div className="flex items-baseline gap-3 mb-4">
-                <h2
-                  className="text-lg font-semibold text-zinc-100"
-                  style={{ fontFamily: DESIGN.fonts.mono }}
-                >
-                  AudioCritic
-                </h2>
-                <span className={`text-3xl font-bold tabular-nums ${scoreColor}`}>
-                  {(critique.overallScore * 100).toFixed(0)}
-                </span>
-                <span className="text-sm text-zinc-500">/ 100</span>
-                <span
-                  className="ml-auto text-xs text-zinc-600"
-                  style={{ fontFamily: DESIGN.fonts.mono }}
-                >
-                  {critique.failures.length} failures ·{' '}
-                  {critique.renderInfo.stereo ? 'stereo' : 'mono'} ·{' '}
-                  {critique.renderInfo.samples ? 'samples' : 'synth'}
-                </span>
-              </div>
+          <section
+            className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5"
+            style={{ background: DESIGN.gradients.oled, boxShadow: DESIGN.shadows.oled }}
+          >
+            <div className="flex items-baseline gap-3 mb-4">
+              <h2
+                className="text-lg font-semibold text-zinc-100"
+                style={{ fontFamily: DESIGN.fonts.mono }}
+              >
+                AudioCritic
+              </h2>
+              <span className={`text-3xl font-bold tabular-nums ${scoreColor}`}>
+                {(critique.overallScore * 100).toFixed(0)}
+              </span>
+              <span className="text-sm text-zinc-500">/ 100</span>
+              <span
+                className="ml-auto text-xs text-zinc-600"
+                style={{ fontFamily: DESIGN.fonts.mono }}
+              >
+                {critique.failures.length} failures ·{' '}
+                {critique.renderInfo.stereo ? 'stereo' : 'mono'} ·{' '}
+                {critique.renderInfo.samples ? 'samples' : 'synth'}
+              </span>
+            </div>
 
-              {critique.failures.length > 0 && (
-                <div className="space-y-2 mb-4">
-                  <h3 className="text-xs uppercase tracking-wider text-zinc-500">
-                    Diagnosed Failures
-                  </h3>
-                  {critique.failures.map((f, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2 rounded border border-rose-500/20 bg-rose-500/5 p-2"
-                    >
-                      <span className="text-rose-400 text-xs font-mono mt-0.5 shrink-0">
-                        {f.code}
-                      </span>
-                      <div className="min-w-0">
-                        <span className="text-xs text-zinc-400">{f.diagnosis}</span>
-                        <span className="text-xs text-emerald-400/70 block mt-0.5">
-                          → {f.correctionHint}
-                        </span>
-                      </div>
-                      <span className="text-xs text-rose-300 tabular-nums shrink-0 ml-auto">
-                        {(f.severity * 100).toFixed(0)}%
+            {critique.failures.length > 0 && (
+              <div className="space-y-2 mb-4">
+                <h3 className="text-xs uppercase tracking-wider text-zinc-500">
+                  Diagnosed Failures
+                </h3>
+                {critique.failures.map((f, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2 rounded border border-rose-500/20 bg-rose-500/5 p-2"
+                  >
+                    <span className="text-rose-400 text-xs font-mono mt-0.5 shrink-0">
+                      {f.code}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="text-xs text-zinc-400">{f.diagnosis}</span>
+                      <span className="text-xs text-emerald-400/70 block mt-0.5">
+                        → {f.correctionHint}
                       </span>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <MetricBar label="Kick Clarity" value={critique.metrics.kickClarity} />
-                <MetricBar label="Bass Clarity" value={critique.metrics.bassClarity} />
-                <MetricBar label="K/B Separation" value={critique.metrics.kickBassSeparation} />
-                <MetricBar label="Sub Mud" value={critique.metrics.subMud} invert />
-                <MetricBar label="Punch" value={critique.metrics.punch} />
-                <MetricBar label="Attack Sharp" value={critique.metrics.attackSharpness} />
-                <MetricBar
-                  label="Bass Decay Ovlp"
-                  value={critique.metrics.bassDecayOverlap}
-                  invert
-                />
-                <MetricBar label="Note Separation" value={critique.metrics.noteSeparation} />
-                <MetricBar label="Onset Clarity" value={critique.metrics.onsetClarity} />
-                <MetricBar label="K/B Lock" value={critique.metrics.kickBassLock} />
-                <MetricBar label="Lead Articulation" value={critique.metrics.leadArticulation} />
-                <MetricBar label="Melodic Clarity" value={critique.metrics.melodicClarity} />
-                <MetricBar label="Brightness" value={critique.metrics.brightness} />
-                <MetricBar label="Spectral Movement" value={critique.metrics.spectralMovement} />
-                <MetricBar label="Low-Mid Mud" value={critique.metrics.lowMidMud} invert />
-                <MetricBar label="Masking" value={critique.metrics.masking} invert />
-                <MetricBar label="Dynamic Range" value={critique.metrics.dynamicRange} />
+                    <span className="text-xs text-rose-300 tabular-nums shrink-0 ml-auto">
+                      {(f.severity * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
               </div>
-            </section>
-          </>
+            )}
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <MetricBar label="Kick Clarity" value={critique.metrics.kickClarity} />
+              <MetricBar label="Bass Clarity" value={critique.metrics.bassClarity} />
+              <MetricBar label="K/B Separation" value={critique.metrics.kickBassSeparation} />
+              <MetricBar label="Sub Mud" value={critique.metrics.subMud} invert />
+              <MetricBar label="Punch" value={critique.metrics.punch} />
+              <MetricBar label="Attack Sharp" value={critique.metrics.attackSharpness} />
+              <MetricBar label="Bass Decay Ovlp" value={critique.metrics.bassDecayOverlap} invert />
+              <MetricBar label="Note Separation" value={critique.metrics.noteSeparation} />
+              <MetricBar label="Onset Clarity" value={critique.metrics.onsetClarity} />
+              <MetricBar label="K/B Lock" value={critique.metrics.kickBassLock} />
+              <MetricBar label="Lead Articulation" value={critique.metrics.leadArticulation} />
+              <MetricBar label="Melodic Clarity" value={critique.metrics.melodicClarity} />
+              <MetricBar label="Brightness" value={critique.metrics.brightness} />
+              <MetricBar label="Spectral Movement" value={critique.metrics.spectralMovement} />
+              <MetricBar label="Low-Mid Mud" value={critique.metrics.lowMidMud} invert />
+              <MetricBar label="Masking" value={critique.metrics.masking} invert />
+              <MetricBar label="Dynamic Range" value={critique.metrics.dynamicRange} />
+            </div>
+          </section>
         )}
 
         {/* Master chain metrics */}

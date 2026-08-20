@@ -142,21 +142,21 @@ export class DDSPNoise {
         // -3dB/octave
         for (let i = 0; i < N; i++) {
           const freq = i / (N - 1)
-          this.bands[i] = 0.3 * Math.pow(1 - freq * 0.7, 1)
+          this.bands[i] = 0.3 * (1 - freq * 0.7) ** 1
         }
         break
       case 'brown':
         // -6dB/octave
         for (let i = 0; i < N; i++) {
           const freq = i / (N - 1)
-          this.bands[i] = 0.3 * Math.pow(1 - freq * 0.8, 2)
+          this.bands[i] = 0.3 * (1 - freq * 0.8) ** 2
         }
         break
       case 'breath':
         // Boost 2-8kHz (breath/noise character)
         for (let i = 0; i < N; i++) {
           const freq = i / (N - 1)
-          const boost = Math.exp(-Math.pow((freq - 0.5) * 4, 2)) * 0.5
+          const boost = Math.exp(-(((freq - 0.5) * 4) ** 2)) * 0.5
           this.bands[i] = 0.2 + boost
         }
         break

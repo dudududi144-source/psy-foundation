@@ -338,7 +338,7 @@ export async function optimizeRender(
         bestConfig = { ...config }
         bestIteration = it
       }
-    } catch (e) {
+    } catch (_e) {
       iterations.push({
         iteration: it,
         configName: plan.name,

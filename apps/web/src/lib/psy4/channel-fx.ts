@@ -83,13 +83,17 @@ class BiquadShelf {
     sampleRate: number,
     slope = 1.0
   ): void {
-    const A = Math.pow(10, gainDb / 40) // sqrt(linear gain)
+    const A = 10 ** (gainDb / 40) // sqrt(linear gain)
     const w0 = (2 * Math.PI * freqHz) / sampleRate
     const cosw0 = Math.cos(w0)
     const sinw0 = Math.sin(w0)
 
-    let b0: number, b1: number, b2: number
-    let a0: number, a1: number, a2: number
+    let b0: number
+    let b1: number
+    let b2: number
+    let a0: number
+    let a1: number
+    let a2: number
 
     if (kind === 'peak') {
       // Peaking filter — RBJ cookbook, Q controls bandwidth
@@ -200,7 +204,7 @@ class CompactReverb {
     // decaying mode reaches -60 dB at decaySec. Shorter combs decay faster,
     // which is normal reverb behavior.
     const safeDecay = Math.max(0.05, decaySec)
-    let g = Math.pow(10, (-3 * longestDelaySec) / safeDecay)
+    let g = 10 ** ((-3 * longestDelaySec) / safeDecay)
     // Clamp to a sane reverb range (avoid runaway feedback / dead reverb)
     g = Math.max(0.2, Math.min(0.99, g))
     this.combFeedback = g
@@ -222,7 +226,7 @@ class CompactReverb {
   /** Process one mono input sample → stereo [L, R] reverb tail. */
   process(input: number): [number, number] {
     // Guard against NaN/Infinity entering the feedback loops
-    if (!isFinite(input)) return [0, 0]
+    if (!Number.isFinite(input)) return [0, 0]
     const inSample = input * this.inputGain
 
     // 4 parallel comb filters with damping LP in the feedback path
@@ -388,7 +392,7 @@ export class ChannelFX {
    * pair. Do NOT call it with a buffer.
    */
   process(monoIn: number): [number, number] {
-    if (!isFinite(monoIn)) monoIn = 0
+    if (!Number.isFinite(monoIn)) monoIn = 0
 
     // 1) EQ (mono) — low shelf then high shelf
     let sig = this.lowShelf.process(monoIn)

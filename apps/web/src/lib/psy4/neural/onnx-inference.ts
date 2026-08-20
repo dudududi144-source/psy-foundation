@@ -262,7 +262,7 @@ export async function checkModelAvailability(modelPath: string): Promise<boolean
   if (typeof window === 'undefined') {
     // Node.js
     try {
-      const fs = await import('fs/promises')
+      const fs = await import('node:fs/promises')
       await fs.access(modelPath)
       return true
     } catch {

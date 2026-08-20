@@ -152,9 +152,9 @@ export class BandCompressor {
   private readonly sampleRate: number
 
   constructor(opts: BandCompressorOptions) {
-    this.threshold = Math.pow(10, opts.thresholdDb / 20)
+    this.threshold = 10 ** (opts.thresholdDb / 20)
     this.ratio = Math.max(1, opts.ratio)
-    this.makeupGain = Math.pow(10, opts.makeupDb / 20)
+    this.makeupGain = 10 ** (opts.makeupDb / 20)
     this.sampleRate = opts.sampleRate
 
     // One-pole smoothing coefficients derived from analog time constants:
@@ -180,7 +180,7 @@ export class BandCompressor {
     const env = this.envFollower
     if (env > this.threshold) {
       const exponent = 1 - 1 / this.ratio
-      gr = Math.pow(this.threshold / env, exponent)
+      gr = (this.threshold / env) ** exponent
     }
     this.lastGainReductionLinear = gr
 

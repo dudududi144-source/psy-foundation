@@ -45,7 +45,7 @@ export class BusProcessor {
 
   process(sample: number, sr: number): number {
     // Guard: prevent NaN/Infinity from corrupting compressor envelope
-    if (!isFinite(sample)) return 0
+    if (!Number.isFinite(sample)) return 0
     const dt = 1 / sr
     if (this.config.hpFreq > 0) {
       const hpA = (1 / sr) * 2 * Math.PI * this.config.hpFreq
@@ -91,7 +91,7 @@ export class MasterChain {
 
   process(sample: number, sr: number): number {
     // Guard: prevent NaN/Infinity from propagating
-    if (!isFinite(sample)) return 0
+    if (!Number.isFinite(sample)) return 0
     const dt = 1 / sr
     const abs = Math.abs(sample)
     if (abs > this.glueEnv) {
@@ -182,7 +182,7 @@ export class SchroederReverb {
   /** Process a stereo input → stereo output. L and R have independent
    *  comb/allpass banks with slightly different delays for decorrelation. */
   process(inputL: number, inputR: number, _sr: number): [number, number] {
-    if (!isFinite(inputL) || !isFinite(inputR)) return [0, 0]
+    if (!Number.isFinite(inputL) || !Number.isFinite(inputR)) return [0, 0]
     const inL = inputL * this.inputGain
     const inR = inputR * this.inputGain
 
@@ -283,8 +283,8 @@ export class StereoDelay {
 
   process(leftIn: number, rightIn: number, sr: number): [number, number] {
     // Guard: prevent NaN/Infinity from entering feedback loops
-    if (!isFinite(leftIn)) leftIn = 0
-    if (!isFinite(rightIn)) rightIn = 0
+    if (!Number.isFinite(leftIn)) leftIn = 0
+    if (!Number.isFinite(rightIn)) rightIn = 0
     const leftDelaySamples = Math.floor(this.leftDelay * sr)
     const rightDelaySamples = Math.floor(this.rightDelay * sr)
     const leftReadIdx = (this.leftIdx - leftDelaySamples + this.bufferSize) % this.bufferSize

@@ -100,8 +100,8 @@ export class TruePeakLimiter {
     const lookaheadMs = opts.lookaheadMs ?? 5.0
     this.sampleRate = opts.sampleRate ?? DEFAULT_SR
 
-    this.threshold = Math.pow(10, thresholdDb / 20)
-    this.ceiling = Math.pow(10, ceilingDb / 20)
+    this.threshold = 10 ** (thresholdDb / 20)
+    this.ceiling = 10 ** (ceilingDb / 20)
     this.lookaheadSamples = Math.max(1, Math.round((lookaheadMs * this.sampleRate) / 1000))
 
     // One-pole smoother coefficients: alpha = 1 - exp(-1 / (tc * sr))
@@ -119,11 +119,11 @@ export class TruePeakLimiter {
   // ── Configuration setters (call between render passes, not during) ──
 
   setThresholdDb(db: number): void {
-    this.threshold = Math.pow(10, db / 20)
+    this.threshold = 10 ** (db / 20)
   }
 
   setCeilingDb(db: number): void {
-    this.ceiling = Math.pow(10, db / 20)
+    this.ceiling = 10 ** (db / 20)
   }
 
   getLookaheadSamples(): number {

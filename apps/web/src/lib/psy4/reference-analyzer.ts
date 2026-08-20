@@ -93,8 +93,8 @@ export function analyzeReference(
     }
     // DFT
     for (let k = 0; k < fftSize / 2; k++) {
-      let re = 0,
-        im = 0
+      let re = 0
+      let im = 0
       for (let n = 0; n < fftSize; n++) {
         const angle = (-2 * Math.PI * k * n) / fftSize
         re += frame[n]! * Math.cos(angle)
@@ -251,10 +251,10 @@ export function compareProfiles(
     suggestions.push(
       `Increase bass — render has ${(-bassRatioDelta * 100).toFixed(0)}% less bass than reference`
     )
-  if (widthDelta > 0.3) suggestions.push(`Reduce stereo width — render is wider than reference`)
+  if (widthDelta > 0.3) suggestions.push('Reduce stereo width — render is wider than reference')
   if (widthDelta < -0.3)
-    suggestions.push(`Increase stereo width — render is narrower than reference`)
-  if (render.lowMidMud > 0.15) suggestions.push(`Reduce low-mid mud (200-500Hz) — render is muddy`)
+    suggestions.push('Increase stereo width — render is narrower than reference')
+  if (render.lowMidMud > 0.15) suggestions.push('Reduce low-mid mud (200-500Hz) — render is muddy')
 
   return {
     distance,

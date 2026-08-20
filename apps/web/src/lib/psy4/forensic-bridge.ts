@@ -44,16 +44,16 @@ import {
 import { Wavetable } from './wavetable'
 
 import { DEFAULT_SR as SR } from './constants'
-const TARGET_LUFS = MASTER_SPEC.targetLufs
+const _TARGET_LUFS = MASTER_SPEC.targetLufs
 
 // ── WAV decoder ──
 
 function decodeWav(buffer: ArrayBuffer): { data: Float32Array; sampleRate: number } {
   const view = new DataView(buffer)
   if (view.getUint32(0, false) !== 0x52494646) throw new Error('Not WAV')
-  let dataOffset = 44,
-    dataSize = 0,
-    offset = 12
+  let dataOffset = 44
+  let dataSize = 0
+  let offset = 12
   while (offset < buffer.byteLength - 8) {
     const chunkId = view.getUint32(offset, false)
     const chunkSize = view.getUint32(offset + 4, true)
@@ -273,8 +273,8 @@ export async function renderFoundationSection(
 
   if (options.useSamples) {
     try {
-      const fs = await import('fs/promises')
-      const path = await import('path')
+      const fs = await import('node:fs/promises')
+      const path = await import('node:path')
       // Phase 0 Day 2: commercial 909/MD/Nord samples removed (license violation,
       // per project manifest). Using procedural CC0 samples in public/samples/.
       // Phase 2 will replace these with proper DSP-synthesized 909 emulation.
@@ -391,11 +391,11 @@ export async function renderFoundationSection(
     // Arrangement: which voices play in this bar
     // 8-bar phrase: groove(0-1) → build(2-3) → full(4-5) → break(6) → drop(7)
     const phase = barIdx % 8
-    const playKick = true
-    const playBass = true
+    const _playKick = true
+    const _playBass = true
     const playHats = true // hats from bar 0 (keep energy)
     const playLead = phase >= 2 // lead enters at bar 2
-    const playCounter = phase >= 3 // counter at bar 3
+    const _playCounter = phase >= 3 // counter at bar 3
     // Phase 2 Day 4: pad from bar 0 (was bar 1) — makes INTRO audible.
     // Previously pad started at phase 1, so INTRO (phase 0) was silent.
     const playPad = phase !== 6 // pad from bar 0, except break
@@ -715,7 +715,7 @@ export async function renderFoundationSection(
       const chordRoot = rootMidi - 24 // 2 octaves down for pad
       const progression = buildProgression(chordRoot, 'phrygianDominant', progDegrees)
       const chord = progression[chordIdx]!
-      const freqs = chord.notes.map((midi: number) => 440 * Math.pow(2, (midi - 69) / 12))
+      const freqs = chord.notes.map((midi: number) => 440 * 2 ** ((midi - 69) / 12))
       events.push({ pos: barStart, type: 'pad', vel: 0.12, dur: samplesPerBar * 2, freqs })
     }
 
@@ -774,9 +774,9 @@ export async function renderFoundationSection(
 
     // Texture: atmospheric bed in break + intro sections
     if (isBreak || phase === 0) {
-      const rootFreq = 440 * Math.pow(2, (rootMidi - 69) / 12)
-      const thirdFreq = 440 * Math.pow(2, (rootMidi + 4 - 69) / 12)
-      const fifthFreq = 440 * Math.pow(2, (rootMidi + 7 - 69) / 12)
+      const rootFreq = 440 * 2 ** ((rootMidi - 69) / 12)
+      const thirdFreq = 440 * 2 ** ((rootMidi + 4 - 69) / 12)
+      const fifthFreq = 440 * 2 ** ((rootMidi + 7 - 69) / 12)
       events.push({
         pos: barStart,
         type: 'texture',
@@ -831,15 +831,15 @@ export async function renderFoundationSection(
   let subBassNoteOffPos = 0
   let activePad: PsyPad | null = null
   let padNoteOffPos = 0
-  let kickIdx = 0,
-    bassIdx = 0,
-    leadIdx = 0,
-    hatIdx = 0
+  let kickIdx = 0
+  let bassIdx = 0
+  let leadIdx = 0
+  let hatIdx = 0
   let evIdx = 0
 
   // Alternating pan state for hats (per-type, driven by step grid)
-  const hatPanFlip = false
-  const openHatPanFlip = false
+  const _hatPanFlip = false
+  const _openHatPanFlip = false
 
   // Energy contour: create tension/release by modulating overall energy across bars.
   // Pattern: bars 0-3 full, bar 4 dip (70%), bars 5-6 build (85%→100%), bar 7 peak (105%).
@@ -908,13 +908,13 @@ export async function renderFoundationSection(
         }
       } else if (ev.type === 'bass' && ev.midi !== undefined) {
         if (activeBass) activeBass.noteOff()
-        const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
+        const freq = 440 * 2 ** ((ev.midi - 69) / 12)
         basses[bassIdx % 2]!.trigger(freq, cfg.bassDecay, ev.vel)
         activeBass = basses[bassIdx % 2]!
         bassNoteOffPos = i + ev.dur
         bassIdx++
       } else if (ev.type === 'lead' && ev.midi !== undefined) {
-        const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
+        const freq = 440 * 2 ** ((ev.midi - 69) / 12)
         leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, {
           cutoff: cfg.leadCutoff,
           detune: 10,
@@ -942,7 +942,7 @@ export async function renderFoundationSection(
       } else if (ev.type === 'snare') {
         snares[0]!.trigger(ev.vel)
       } else if (ev.type === 'subbass' && ev.midi !== undefined) {
-        const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
+        const freq = 440 * 2 ** ((ev.midi - 69) / 12)
         if (activeSubBass) activeSubBass.noteOff()
         subBasses[0]!.trigger(freq, ev.dur / SR, ev.vel)
         activeSubBass = subBasses[0]!
@@ -959,12 +959,12 @@ export async function renderFoundationSection(
       } else if (ev.type === 'impact') {
         impacts[0]!.trigger(ev.vel)
       } else if (ev.type === 'acid' && ev.midi !== undefined) {
-        const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
+        const freq = 440 * 2 ** ((ev.midi - 69) / 12)
         acids[0]!.trigger(freq, ev.dur / SR, ev.vel)
       } else if (ev.type === 'texture' && ev.freqs) {
         textures[0]!.trigger(ev.freqs, ev.dur / SR, ev.vel)
       } else if (ev.type === 'counter' && ev.midi !== undefined) {
-        const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
+        const freq = 440 * 2 ** ((ev.midi - 69) / 12)
         leads[(leadIdx + 2) % 4]!.trigger(freq, ev.dur / SR, ev.vel, {
           cutoff: Math.floor(cfg.leadCutoff * 0.5),
           detune: 6,
@@ -992,12 +992,12 @@ export async function renderFoundationSection(
     }
 
     // ── Render voices → per-type ChannelFX → buses ──
-    let drumL = 0,
-      drumR = 0,
-      bassL = 0,
-      bassR = 0,
-      musicL = 0,
-      musicR = 0
+    let drumL = 0
+    let drumR = 0
+    let bassL = 0
+    let bassR = 0
+    let musicL = 0
+    let musicR = 0
 
     // Kick → fxKick → drum bus
     let kickMono = 0
@@ -1196,8 +1196,8 @@ export async function renderFoundationSection(
     mixL = masterGlueL.process(mixL, SR)
     mixR = masterGlueR.process(mixR, SR)
 
-    samplesL[i] = isFinite(mixL) ? Math.max(-1.5, Math.min(1.5, mixL)) : 0
-    samplesR[i] = isFinite(mixR) ? Math.max(-1.5, Math.min(1.5, mixR)) : 0
+    samplesL[i] = Number.isFinite(mixL) ? Math.max(-1.5, Math.min(1.5, mixL)) : 0
+    samplesR[i] = Number.isFinite(mixR) ? Math.max(-1.5, Math.min(1.5, mixR)) : 0
 
     // Sidechain recovery
     duckEnv += (1.0 - duckEnv) * (1 / (0.15 * SR))

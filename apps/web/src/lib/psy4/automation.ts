@@ -118,18 +118,20 @@ export class AutomationEngine {
     switch (interp) {
       case 'linear':
         return prev.value + (next.value - prev.value) * t
-      case 'exponential':
+      case 'exponential': {
         // Exponential interpolation (good for frequency)
         const ratio = prev.value !== 0 ? next.value / prev.value : 1
-        return prev.value * Math.pow(ratio, t)
+        return prev.value * ratio ** t
+      }
       case 'step':
         return prev.value // Hold until next point
-      case 'bezier':
+      case 'bezier': {
         // Simple bezier with tension
         const tension = prev.tension ?? 0.5
         // Smoothstep interpolation
         const smoothT = t * t * (3 - 2 * t) * tension + t * (1 - tension)
         return prev.value + (next.value - prev.value) * smoothT
+      }
       default:
         return prev.value + (next.value - prev.value) * t
     }

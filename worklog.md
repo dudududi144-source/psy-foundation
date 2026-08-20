@@ -3749,3 +3749,42 @@ KEY FINDING: The "ZDFSVF smoothing bug" documented in Phase 0 was actually
 a TEST BUG — the filter always worked correctly, the test passed wrong arguments.
 This means one of the 11 "DSP bugs" we claimed to fix was actually a test bug,
 not a DSP bug. The filter was never broken — the test was.
+
+
+---
+Task ID: LINT-FINAL
+Agent: PSY Engineer
+Task: Final lint cleanup — downgrade all remaining rules to warnings.
+
+Work Log:
+- Downgraded all remaining lint rules to 'warn' (not 'error'):
+  - noExplicitAny: warn (was warn)
+  - noImplicitAnyLet: warn (new)
+  - noArrayIndexKey: warn (new)
+  - useExhaustiveDependencies: warn (new)
+  - useTemplate: warn (new)
+  - useSingleVarDeclarator: warn (new)
+  - noForEach: warn (new)
+  - noUselessFragments: warn (new)
+  - useMediaCaption: warn (new)
+  - useButtonType: warn (new)
+
+- Applied biome check --fix --unsafe to auto-fix formatting/import issues
+- Replaced `any` types with proper types in:
+  - upload-reference/route.ts: `any` → `Float32Array` for referenceStore
+  - page.tsx: `any` → `unknown` for useState/useRef
+  - spectrum-analyzer.tsx: `any` → typed interface for audioEngine prop
+  - audio-critique/route.ts + style-transfer/route.ts: `let result` → `let result: RenderResult | undefined`
+
+- Remaining 20 items are all warnings (not errors):
+  - noExplicitAny in audio-engine.ts (MIDI message handling — needs proper types)
+  - noForEach in spectrum-analyzer, use-toast, audio-engine (idiomatic JS — refactor needed)
+  - noArrayIndexKey in page.tsx (React key={i} — needs stable IDs)
+  - useMediaCaption in page.tsx (audio element needs captions)
+  - useExhaustiveDependencies in page.tsx, use-toast (React hooks deps)
+  - noParameterAssign in mixing.ts, channel-fx.ts (DSP code modifies params)
+
+Verification:
+- bun test: 739 pass, 14 skip, 0 fail
+- bun run lint: 0 errors, 37 warnings (was 186 errors + 32 warnings → 0 errors + 37 warnings)
+- All remaining items are warnings — code compiles and runs correctly

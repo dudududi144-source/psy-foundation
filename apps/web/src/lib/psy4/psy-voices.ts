@@ -190,7 +190,7 @@ export class PsyBass {
     this.saw1.reset()
     this.saw1.setFreq(freq)
     this.saw2.reset()
-    this.saw2.setFreq(freq * Math.pow(2, 5 / 1200)) // +5 cents detune
+    this.saw2.setFreq(freq * 2 ** (5 / 1200)) // +5 cents detune
     // Character square
     this.charSquare.reset()
     this.charSquare.setFreq(freq * 2) // octave up
@@ -253,7 +253,7 @@ export class PsyBass {
     // ── Layer 2: BODY — 2 detuned saws through Moog ──
     const inc = this.freq / SR
     const sawOut1 = this.saw1.process(inc)
-    const sawOut2 = this.saw2.process((this.freq * Math.pow(2, 5 / 1200)) / SR)
+    const sawOut2 = this.saw2.process((this.freq * 2 ** (5 / 1200)) / SR)
     const sawOut = (sawOut1 + sawOut2) * 0.5
 
     // Filter envelope: opens to 1500Hz, drops to 150Hz (PSY3 Rule 2)
@@ -446,14 +446,14 @@ export class PsyLead {
     this.pLfoDepth = params?.lfoDepth ?? LEAD_SPEC.lfoDepth
     // Fundamental saws (±pDetune cents)
     this.saw1.reset()
-    this.saw1.setFreq(freq * Math.pow(2, -this.pDetune / 1200))
+    this.saw1.setFreq(freq * 2 ** (-this.pDetune / 1200))
     this.saw2.reset()
-    this.saw2.setFreq(freq * Math.pow(2, this.pDetune / 1200))
+    this.saw2.setFreq(freq * 2 ** (this.pDetune / 1200))
     // Octave saws (±7 cents, octave up) — octave detune stays from spec
     this.octSaw1.reset()
-    this.octSaw1.setFreq(freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200))
+    this.octSaw1.setFreq(freq * 2 * 2 ** (-LEAD_SPEC.octaveDetune / 1200))
     this.octSaw2.reset()
-    this.octSaw2.setFreq(freq * 2 * Math.pow(2, LEAD_SPEC.octaveDetune / 1200))
+    this.octSaw2.setFreq(freq * 2 * 2 ** (LEAD_SPEC.octaveDetune / 1200))
     // Layer 5: 8kHz harmonic — BLSaw at 4× freq
     this.harmSaw.reset()
     this.harmSaw.setFreq(freq * 4)
@@ -501,15 +501,15 @@ export class PsyLead {
       fundSig = this.wavetable.process(inc)
     } else {
       fundSig =
-        (this.saw1.process((this.freq * Math.pow(2, -this.pDetune / 1200)) / SR) +
-          this.saw2.process((this.freq * Math.pow(2, this.pDetune / 1200)) / SR)) *
+        (this.saw1.process((this.freq * 2 ** (-this.pDetune / 1200)) / SR) +
+          this.saw2.process((this.freq * 2 ** (this.pDetune / 1200)) / SR)) *
         0.5
     }
 
     // ── Layer 2: Octave-up — 2 detuned saws, adds brightness ──
     const octSig =
-      (this.octSaw1.process((this.freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200)) / SR) +
-        this.octSaw2.process((this.freq * 2 * Math.pow(2, LEAD_SPEC.octaveDetune / 1200)) / SR)) *
+      (this.octSaw1.process((this.freq * 2 * 2 ** (-LEAD_SPEC.octaveDetune / 1200)) / SR) +
+        this.octSaw2.process((this.freq * 2 * 2 ** (LEAD_SPEC.octaveDetune / 1200)) / SR)) *
       0.5 *
       LEAD_SPEC.octaveLevel
 
@@ -866,9 +866,9 @@ export class PsyPad {
     this.releaseT = 0
     // 2 saws detuned ±7 cents
     this.saws[0]!.reset()
-    this.saws[0]!.setFreq(freqs[0]! * Math.pow(2, -PAD_SPEC.detune / 1200))
+    this.saws[0]!.setFreq(freqs[0]! * 2 ** (-PAD_SPEC.detune / 1200))
     this.saws[1]!.reset()
-    this.saws[1]!.setFreq(freqs[1] ?? freqs[0]! * Math.pow(2, PAD_SPEC.detune / 1200))
+    this.saws[1]!.setFreq(freqs[1] ?? freqs[0]! * 2 ** (PAD_SPEC.detune / 1200))
     // Triangle octave-up
     this.triOct.reset()
     this.triOct.setFreq((freqs[2] ?? freqs[0]!) * 2)
@@ -1014,13 +1014,11 @@ export class PsyAcid {
   sat = new OversampledSaturation()
   hp = new OnePoleHP()
 
-  constructor(_rng: Rng) {}
-
   setModulationMatrix(m: ModulationMatrix | null): void {
     this.matrix = m
   }
 
-  trigger(freq: number, dur: number, amp: number) {
+  trigger(freq: number, _dur: number, amp: number) {
     this.active = true
     this.t = 0
     this.freq = freq
@@ -1251,18 +1249,18 @@ export class PsyRiser {
 
     // Noise sweep: filter opens from 200Hz to 10kHz
     const n = this.noise.next()
-    const cutoff = 200 + Math.pow(progress, 1.5) * 9800
+    const cutoff = 200 + progress ** 1.5 * 9800
     const filtered = this.filter.process(n, cutoff, 0.5, SR, 0)
 
     // Pitched saw: rises from 100Hz to 800Hz exponentially
-    const sawFreq = 100 * Math.pow(8, progress) // 100→800Hz
+    const sawFreq = 100 * 8 ** progress // 100→800Hz
     this.sawPhase += sawFreq / SR
     if (this.sawPhase >= 1) this.sawPhase -= 1
     const sawSig = (2 * this.sawPhase - 1) * 0.3
 
     // Mix noise + saw, with exponential energy build
     const mixed = filtered * 0.6 + sawSig * 0.4
-    const env = Math.pow(progress, 2) * this.amp
+    const env = progress ** 2 * this.amp
     return [mixed * env, false]
   }
 }

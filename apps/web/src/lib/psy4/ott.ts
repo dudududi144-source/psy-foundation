@@ -64,9 +64,9 @@ class BandExpander {
     releaseMs: number
     sampleRate: number
   }) {
-    this.threshold = Math.pow(10, opts.thresholdDb / 20)
-    this.upwardGain = Math.pow(10, opts.upwardGainDb / 20)
-    this.downwardGain = Math.pow(10, opts.downwardGainDb / 20)
+    this.threshold = 10 ** (opts.thresholdDb / 20)
+    this.upwardGain = 10 ** (opts.upwardGainDb / 20)
+    this.downwardGain = 10 ** (opts.downwardGainDb / 20)
     this.depth = opts.depth
     this.env = 0
 
@@ -87,12 +87,12 @@ class BandExpander {
     if (this.env > this.threshold) {
       // Signal above threshold → downward expansion
       const over = this.env / this.threshold
-      gain = Math.pow(this.downwardGain, Math.log2(over))
+      gain = this.downwardGain ** Math.log2(over)
     } else if (this.env > 1e-6) {
       // Phase F fix: removed noise gate (threshold * 0.1) — all non-silent signals get upward expansion
       const under = this.threshold / Math.max(this.env, 1e-6)
       // Phase F fix: removed * 0.5 — full-strength upward expansion (was half-strength)
-      gain = Math.pow(this.upwardGain, Math.log2(under))
+      gain = this.upwardGain ** Math.log2(under)
     }
 
     // Blend between dry (depth=0) and wet (depth=1)
