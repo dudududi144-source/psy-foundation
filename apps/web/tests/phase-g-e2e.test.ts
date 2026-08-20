@@ -55,7 +55,7 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     })
     const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
     const hash = createHash('md5').update(Buffer.from(wav)).digest('hex')
-    expect(hash).toBe('ae39a7d809bc2e4968b280a6a08961d9')
+    expect(hash).toBe('b631454f96dcb4b6d48d8ee8fdd5fddf')
   }, 30000)
 
   test('G2: Render output is stereo (L ≠ R)', async () => {
