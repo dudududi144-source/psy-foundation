@@ -29,7 +29,7 @@ const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
 // Phase D baseline (kick 50Hz, bass 0.12s, lead 9000Hz, bus 1.2, full LUFS correction, ISP 0.65)
-const BASELINE_MD5 = 'ae39a7d809bc2e4968b280a6a08961d9'
+const BASELINE_MD5 = 'b631454f96dcb4b6d48d8ee8fdd5fddf'
 const BASELINE_DURATION_SEC = 13.24
 
 // BEST_CONFIG from /api/render-forensic/route.ts

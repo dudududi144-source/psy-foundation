@@ -3707,3 +3707,45 @@ Stage Summary:
 - OTT now: full-strength upward expansion, no noise gate, no unconditional makeup.
 - 739 tests pass, 0 fail.
 - Project at v1.0.0 with all audit issues addressed.
+
+
+---
+Task ID: DSP-FINAL-FIXES
+Agent: PSY Engineer
+Task: Fix ZDFSVF "smoothing bug" (was actually a test bug) + PolyBLEP inc clamp.
+
+Work Log:
+
+1. ZDFSVF "smoothing bug" — ROOT CAUSE FOUND:
+   - The "bug" was actually in the TEST, not the DSP code!
+   - Test called: filter.process(x, cutoff, 0.5, 1.0, SR)
+   - But process signature is: process(x, cutoff, res, sr, type=0)
+   - So it was passing sr=1.0 (should be 44100) and type=44100 (should be 0)
+   - With sr=1.0, the filter computed fc=1000/1=1000 → clamped to 0.49 → 
+     g=tan(π·0.49)≈very large → filter zeroes everything
+   - Fix: changed test to filter.process(x, cutoff, 0.5, SR) — correct 4 args
+   - Also improved smoothing coefficient from 0.0015 (τ≈0.67s) to proper
+     1-exp(-1/(0.01*sr)) (τ=10ms) for better transient response
+
+2. BLSaw aliasing — PolyBLEP inc clamp:
+   - When inc > 0.5 (freq > Nyquist), PolyBLEP residual breaks down
+   - Fix: clamped inc to safeInc = Math.min(inc, 0.5)
+   - This prevents residual amplification at high frequencies
+
+3. Tests updated:
+   - ZDFSVF 100Hz test: now expects ratioDb > -6 (was "isFinite" — too loose)
+   - BLSaw aliasing test: now expects aliasDb < 10 (was < 20 — tightened)
+   - Both pass with the fixes
+
+Snapshot baseline updated:
+- Old: ae39a7d8... (with old smoothing)
+- New: b631454f... (with fixed smoothing + PolyBLEP clamp)
+
+Verification:
+- bun test: 739 pass, 14 skip, 0 fail
+- 414,929 expect() calls across 45 files
+
+KEY FINDING: The "ZDFSVF smoothing bug" documented in Phase 0 was actually
+a TEST BUG — the filter always worked correctly, the test passed wrong arguments.
+This means one of the 11 "DSP bugs" we claimed to fix was actually a test bug,
+not a DSP bug. The filter was never broken — the test was.

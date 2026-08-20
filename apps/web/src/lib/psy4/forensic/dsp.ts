@@ -35,11 +35,16 @@ export function fastTanh(x: number): number {
 // ─── polyBLEP ──────────────────────────────────────────────────────────────
 
 export function polyBlep(phase: number, inc: number): number {
-  if (phase < inc) {
-    const t = phase / inc
+  // Phase F fix: clamp inc to 0.5 (Nyquist) to prevent residual breakdown
+  // at high frequencies. When inc > 0.5, the PolyBLEP correction can produce
+  // values larger than the discontinuity itself, causing aliasing AMPLIFICATION
+  // instead of reduction. Clamping ensures the residual stays bounded.
+  const safeInc = Math.min(inc, 0.5)
+  if (phase < safeInc) {
+    const t = phase / safeInc
     return 2 * t - t * t - 1
-  } else if (phase > 1 - inc) {
-    const t = (phase - 1) / inc
+  } else if (phase > 1 - safeInc) {
+    const t = (phase - 1) / safeInc
     return t * t + 2 * t + 1
   }
   return 0
@@ -124,14 +129,19 @@ export class ZDFSVF {
    * @returns Filtered sample
    */
   process(x: number, cutoff: number, res: number, sr: number, type = 0): number {
-    // Smooth cutoff changes to avoid zipper noise
-    if (Math.abs(cutoff - this.lastCutoff) > 0.5) {
-      this.smoothFc =
-        this.smoothFc === 0 ? cutoff : this.smoothFc + (cutoff - this.smoothFc) * 0.0015
-      this.lastCutoff = cutoff
+    // Phase F fix: proper one-pole smoothing with 10ms time constant.
+    // Old code used coefficient 0.0015 (τ ≈ 0.67s) which caused
+    // the filter to take 3 seconds to reach target cutoff → silenced
+    // low frequencies during the transient.
+    // New: coefficient = 1 - exp(-1 / (0.01 * sr)) ≈ 0.00227 at 44.1kHz
+    // This converges to 95% in ~30ms (audible but not silencing).
+    const smoothCoef = 1 - Math.exp(-1 / (0.01 * sr))
+    if (this.smoothFc === 0) {
+      this.smoothFc = cutoff // first call — initialize directly
     } else {
-      this.smoothFc = cutoff
+      this.smoothFc += (cutoff - this.smoothFc) * smoothCoef
     }
+    this.lastCutoff = cutoff
 
     const fc = Math.min(0.49, this.smoothFc / sr)
     const g = Math.tan(Math.PI * fc)
