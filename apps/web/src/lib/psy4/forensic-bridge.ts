@@ -222,7 +222,7 @@ export async function renderFoundationSection(
   const shakers = [new PsyShaker(rng), new PsyShaker(rng)]
   const risers = [new PsyRiser(rng)]
   const impacts = [new PsyImpact(rng)]
-  const acids = [new PsyAcid(rng), new PsyAcid(rng)]
+  const acids = [new PsyAcid(), new PsyAcid()]
   const textures = [new PsyTexture(rng)]
 
   // ── Connect synthesis engines to voices (Phase 2 integration) ──

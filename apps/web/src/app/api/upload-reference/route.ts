@@ -22,7 +22,7 @@ export const maxDuration = 60
  */
 
 // In-memory storage for reference latents (production: use Supabase)
-const referenceStore = new Map<string, { latent: Float32Array; name: string; uploadedAt: number }>()
+const referenceStore = new Map<string, { latent: any; name: string; uploadedAt: number }>()
 
 // Simple WAV parser (mono, 16-bit PCM)
 function parseWav(buffer: ArrayBuffer): { samples: Float32Array; sampleRate: number } | null {
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
 }
 
 /** Get a stored reference latent by hash (for style-transfer route) */
-export function getReferenceLatent(hash: string): Float32Array | null {
+export function getReferenceLatent(hash: string): any | null {
   const ref = referenceStore.get(hash)
   return ref ? ref.latent : null
 }

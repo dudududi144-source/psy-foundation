@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
 
-  let result: RenderResult | undefined
+  let result
   try {
     result = await renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
   } catch {

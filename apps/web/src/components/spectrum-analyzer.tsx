@@ -21,7 +21,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 interface SpectrumAnalyzerProps {
-  audioEngine: { noteOn: (midi: number, vel?: number) => void; noteOff: () => void; setCutoff: (v: number) => void; setResonance: (v: number) => void; setMasterGain: (v: number) => void; init: () => Promise<boolean>; resume: () => Promise<void> } | null | null
+  audioEngine: any | null | null
   width?: number
   height?: number
   color?: 'cyan' | 'violet' | 'emerald'
