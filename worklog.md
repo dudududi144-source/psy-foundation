@@ -3068,3 +3068,86 @@ Stage Summary:
 - Pad voice audible from bar 0 — atmospheric intro.
 - 708 tests pass, 0 regressions.
 - Ready for Phase 2 Day 5: transition FX + merge to main.
+
+
+---
+Task ID: PHASE-3-DAY-1
+Agent: PSY Engineer
+Task: Phase 3 Day 1 — set targetLufs to -9 (club) + improve kick sub-sustain.
+
+Work Log:
+- Phase 2 merged to main, tagged v0.6.0-phase-2-complete.
+- Created branch rebuild/phase-3 + tag backup/pre-phase-3-20260820.
+
+FIX 1: targetLufs -12 → -9 (voice-specs.ts:328)
+- Bug: targetLufs was -12 (neither club nor streaming — no-man's-land).
+  Club psytrance target: -6 to -8 LUFS. Streaming: -14 LUFS.
+- Fix: set to -9 (club target — the genre standard).
+- Impact: LUFS went from -7.5 to -6.3 (closer to club levels).
+
+FIX 2: Kick subDecay 0.25 → 0.45 (voice-specs.ts:38)
+- Bug: kick sub-sustain was 0.25s (too short for psytrance — sounds like techno).
+  Real psytrance kick sub-sustain: 0.4-0.8s.
+- Fix: set to 0.45s (good middle ground for full-on psytrance).
+- Impact: kick has more body and weight, locks better with bass.
+
+Measurement:
+- Phase 2: -7.5 LUFS, +0.0 dBTP, 2.7 LU LRA, 13.24s
+- Phase 3 Day 1: -6.3 LUFS, +0.1 dBTP, 2.7 LU LRA, 13.24s
+- LUFS: -7.5 → -6.3 (+1.2 LU louder — closer to club target)
+- dBTP: +0.0 → +0.1 (slightly over — Phase 3 Day 2 will tighten limiter)
+- LRA: 2.7 → 2.7 (unchanged)
+
+Verification:
+- bun test (all): 708 pass, 14 skip, 0 fail
+- ffmpeg: -6.3 LUFS, +0.1 dBTP, 2.7 LU LRA
+
+Stage Summary:
+- Phase 3 Day 1 COMPLETE: loudness target set to club standard.
+- Kick has proper psytrance weight (was too short).
+- 708 tests pass, 0 regressions.
+- Ready for Phase 3 Day 2: tighten limiter ceiling + improve bass/lead.
+
+
+---
+Task ID: PHASE-3-DAY-2
+Agent: PSY Engineer
+Task: Phase 3 Day 2 — limiter ceiling + bass/lead/pad improvements.
+
+Work Log:
+
+FIX 1: Limiter ceiling tightened (forensic-bridge.ts:1323-1326)
+- Bug: ceilingDb=-0.2 but ffmpeg measured +0.1 dBTP (ISP overshoot).
+- Fix: tightened to ceilingDb=-1.0, thresholdDb=-1.5.
+  Now ffmpeg measures -0.3 dBTP ✅ (safely below 0 dBFS).
+
+FIX 2: Bass improvements (voice-specs.ts:71-85)
+- pluckDecay: 0.05 → 0.08 (longer pluck — was too short for psytrance)
+- hpFreq: 45 → 40 (lower HP — let more sub through)
+
+FIX 3: Lead improvements (voice-specs.ts:114-135)
+- airLevel: 0.12 → 0.18 (more air — was too dark for psytrance)
+- cutoff: 4200 → 5200 (brighter — needs more high end)
+
+FIX 4: Pad improvements (voice-specs.ts:160-177)
+- chorusDepth: 0.5 → 0.7 (deeper chorus — more movement)
+- shimmerLevel: 0.3 → 0.4 (more shimmer — more air)
+- filterLfoDepth: 0.5 → 0.6 (deeper filter sweep)
+
+Measurement:
+- Phase 3 Day 1: -6.3 LUFS, +0.1 dBTP, 2.7 LU LRA
+- Phase 3 Day 2: -6.5 LUFS, -0.3 dBTP ✅, 2.5 LU LRA
+- LUFS: -6.3 → -6.5 (slightly quieter — tighter limiter)
+- dBTP: +0.1 → -0.3 (FIXED — no longer exceeds 0 dBFS)
+- LRA: 2.7 → 2.5 (slightly more compressed — tighter limiter)
+
+Verification:
+- bun test (all): 708 pass, 14 skip, 0 fail
+- ffmpeg: -6.5 LUFS, -0.3 dBTP ✅, 2.5 LU LRA
+
+Stage Summary:
+- Phase 3 Day 2 COMPLETE: limiter fixed + voices improved.
+- dBTP now safely below 0 (-0.3 dBTP).
+- LUFS at -6.5 (club target range -6 to -8).
+- 708 tests pass, 0 regressions.
+- Ready for Phase 3 Day 3: reference comparison + final polish.
