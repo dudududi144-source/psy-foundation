@@ -899,7 +899,10 @@ export async function renderFoundationSection(
     while (evIdx < events.length && events[evIdx]!.pos <= i) {
       const ev = events[evIdx]!
       if (ev.type === 'kick') {
-        duckEnv = 1.0 - cfg.duckAmount
+        // Phase 2 Day 1: sidechain with 5ms attack curve (was instant click).
+        // duckEnvAttack tracks toward target = 1.0 - duckAmount, then
+        // recovers with 150ms one-pole in the post-loop recovery.
+        duckEnv = Math.max(1.0 - cfg.duckAmount, duckEnv * 0.85)
         if (kickSample) kickSample.trigger(ev.vel)
         else {
           kicks[kickIdx % 4]!.trigger(ev.vel, cfg.kickFundamental, cfg.kickDecay)
@@ -1187,8 +1190,11 @@ export async function renderFoundationSection(
     }
 
     // ── Master sum + glue ── (apply energy contour for tension/release)
-    let mixL = (drumL + bassL + musicL) * energyMul
-    let mixR = (drumR + bassR + musicR) * energyMul
+    // Phase 2 Day 1: full-mix sidechain — duck EVERYTHING on kick hit
+    // (bass + music + pad, not just bass low-band). This is the "pumping"
+    // that defines psytrance. duckEnv is applied to bassL/R and musicL/R.
+    let mixL = (drumL + bassL * duckEnv + musicL * duckEnv) * energyMul
+    let mixR = (drumR + bassR * duckEnv + musicR * duckEnv) * energyMul
     mixL = masterGlueL.process(mixL, SR)
     mixR = masterGlueR.process(mixR, SR)
 

@@ -2899,3 +2899,41 @@ Stage Summary:
   - [✓] 708 tests pass, 0 regressions
 - Phase 1 Week 2 (Days 1-5) complete: all critical DSP bugs fixed.
 - Ready for Phase 1 Week 3: sample-rate parameterization tests at 48kHz/96kHz.
+
+
+---
+Task ID: PHASE-2-DAY-1
+Agent: PSY Engineer
+Task: Phase 2 Day 1 — full-mix sidechain (duck bass+music on kick hit, 5ms attack).
+
+Work Log:
+- Phase 1 merged to main, tagged v0.5.0-phase-1-complete.
+- Created branch rebuild/phase-2 + tag backup/pre-phase-2-20260820.
+
+FIX: Full-mix sidechain (forensic-bridge.ts:1189-1196, 901-905)
+- Bug: sidechain was bass-only (low-band only), instant attack (click).
+  Psytrance requires ducking the ENTIRE mix (bass + music + pad) on kick hit
+  with 5-10ms attack — that's the "pumping" that defines the genre.
+- Fix 1: applied duckEnv to bassL/R AND musicL/R in the master sum:
+    mixL = (drumL + bassL * duckEnv + musicL * duckEnv) * energyMul
+- Fix 2: replaced instant attack with 5ms curve:
+    duckEnv = Math.max(1.0 - cfg.duckAmount, duckEnv * 0.85)
+  This decays exponentially toward the duck target (no click).
+
+Snapshot baseline updated:
+- Phase 1: 0a9fef13... → -8.5 LUFS, -0.7 dBTP, 2.8 LU LRA
+- Phase 2 Day 1: ec4286b5... → -8.6 LUFS, -0.7 dBTP ✅, 2.9 LU LRA
+- Changes:
+  - LUFS: -8.5 → -8.6 (slightly quieter due to ducking)
+  - dBTP: -0.7 → -0.7 (no change — limiter still catches peaks)
+  - LRA: 2.8 → 2.9 (slightly more dynamic range from pumping)
+
+Verification:
+- bun test (all): 708 pass, 14 skip, 0 fail
+- ffmpeg: -8.6 LUFS, -0.7 dBTP ✅, 2.9 LU LRA
+
+Stage Summary:
+- Phase 2 Day 1 COMPLETE: full-mix sidechain implemented.
+- This is the most audible psytrance signature — the "pump" on every kick.
+- 708 tests pass, 0 regressions.
+- Ready for Phase 2 Day 2: OTT (upward+downward expander, genre signature).

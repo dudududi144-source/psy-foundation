@@ -28,9 +28,8 @@ import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
-// Phase 1 Day 4 baseline (sample-rate parameterization — output identical to Day 2
-// because DEFAULT_SR is still 44100; the change is structural, enabling future 48kHz/96kHz)
-const BASELINE_MD5 = '0a9fef136b65a917d7213e692d82084a'
+// Phase 2 Day 1 baseline (full-mix sidechain — duck bass+music on kick hit)
+const BASELINE_MD5 = 'ec4286b53fe74246f75be0788a4eaac2'
 const BASELINE_DURATION_SEC = 9.93
 
 // BEST_CONFIG from /api/render-forensic/route.ts
