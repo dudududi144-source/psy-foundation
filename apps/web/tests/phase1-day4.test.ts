@@ -7,9 +7,9 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_SR, SR_48K, SR_96K } from '../src/lib/psy4/constants'
-import { ZDFSVF, BLSaw } from '../src/lib/psy4/forensic/dsp'
-import { MultibandCompressor } from '../src/lib/psy4/multiband'
+import { BLSaw, ZDFSVF } from '../src/lib/psy4/forensic/dsp'
 import { TruePeakLimiter } from '../src/lib/psy4/limiter'
+import { MultibandCompressor } from '../src/lib/psy4/multiband'
 
 describe('Phase 1 Day 4 — sample-rate parameterization', () => {
   test('DEFAULT_SR is 44100 (audio industry standard)', () => {

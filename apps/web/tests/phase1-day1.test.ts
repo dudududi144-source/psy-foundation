@@ -6,8 +6,8 @@
  *   2. MasterChain no longer hard-clips (relies on TruePeakLimiter instead)
  */
 import { describe, expect, test } from 'bun:test'
-import { StereoWidener } from '../src/lib/psy4/ms-processor'
 import { MasterChain } from '../src/lib/psy4/forensic/mixing'
+import { StereoWidener } from '../src/lib/psy4/ms-processor'
 
 const SR = 44100
 
@@ -29,7 +29,8 @@ describe('StereoWidener — Phase 1 Day 1 fix', () => {
     // At width=1 with mono input, output should be very close to input
     // (small differences from LP filter transient are OK)
     let maxDiff = 0
-    for (let i = 100; i < n; i++) { // skip first 100 samples (LP transient)
+    for (let i = 100; i < n; i++) {
+      // skip first 100 samples (LP transient)
       maxDiff = Math.max(maxDiff, Math.abs(L[i]! - Math.sin((2 * Math.PI * 440 * i) / SR) * 0.5))
     }
     expect(maxDiff).toBeLessThan(0.01) // < 1% deviation
@@ -54,7 +55,8 @@ describe('StereoWidener — Phase 1 Day 1 fix', () => {
     // At width=1, output should be close to original (high-freq preserved)
     // Low-freq will be mono-ized, so we check high-freq content
     let maxDiff = 0
-    for (let i = 200; i < n; i++) { // skip transient
+    for (let i = 200; i < n; i++) {
+      // skip transient
       maxDiff = Math.max(maxDiff, Math.abs(L[i]! - origL[i]!))
     }
     // Should be small (< 0.1) because width=1 = no widening
@@ -75,7 +77,8 @@ describe('StereoWidener — Phase 1 Day 1 fix', () => {
 
     // At width=0, side is killed → L should equal R (mono)
     let maxDiff = 0
-    for (let i = 200; i < n; i++) { // skip transient
+    for (let i = 200; i < n; i++) {
+      // skip transient
       maxDiff = Math.max(maxDiff, Math.abs(L[i]! - R[i]!))
     }
     expect(maxDiff).toBeLessThan(0.01) // L ≈ R (mono)
@@ -168,13 +171,13 @@ describe('MasterChain — Phase 1 Day 1 fix', () => {
 
   test('NaN input returns 0 (guard)', () => {
     const mc = new MasterChain()
-    const out = mc.process(NaN, SR)
+    const out = mc.process(Number.NaN, SR)
     expect(out).toBe(0)
   })
 
   test('Infinity input returns 0 (guard)', () => {
     const mc = new MasterChain()
-    const out = mc.process(Infinity, SR)
+    const out = mc.process(Number.POSITIVE_INFINITY, SR)
     expect(out).toBe(0)
   })
 

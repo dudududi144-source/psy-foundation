@@ -49,12 +49,15 @@ export async function GET(req: NextRequest) {
   const style = req.nextUrl.searchParams.get('style') ?? undefined
 
   // Style presets: ?style=full-on|darkpsy|progressive
-  const stylePresets: Record<string, { scale: string; bpm: number; progression: string; bassMode?: string }> = {
+  const stylePresets: Record<
+    string,
+    { scale: string; bpm: number; progression: string; bassMode?: string }
+  > = {
     'full-on': { scale: 'phrygian-dominant', bpm: 145, progression: 'psy-dominant' },
-    'darkpsy': { scale: 'phrygian', bpm: 150, progression: 'dark', bassMode: '16th' },
-    'progressive': { scale: 'minor', bpm: 134, progression: 'uplifting' },
-    'forest': { scale: 'phrygian', bpm: 155, progression: 'dark', bassMode: '16th' },
-    'hypnotic': { scale: 'phrygian-dominant', bpm: 138, progression: 'hypnotic' },
+    darkpsy: { scale: 'phrygian', bpm: 150, progression: 'dark', bassMode: '16th' },
+    progressive: { scale: 'minor', bpm: 134, progression: 'uplifting' },
+    forest: { scale: 'phrygian', bpm: 155, progression: 'dark', bassMode: '16th' },
+    hypnotic: { scale: 'phrygian-dominant', bpm: 138, progression: 'hypnotic' },
   }
   const stylePreset = style ? stylePresets[style] : undefined
 

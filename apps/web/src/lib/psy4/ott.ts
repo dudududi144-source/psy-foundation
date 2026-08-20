@@ -21,8 +21,8 @@
  * Determinism: no Math.random, no I/O. Pure function of input.
  */
 
-import { LR4Crossover } from './multiband'
 import { DEFAULT_SR } from './constants'
+import { LR4Crossover } from './multiband'
 
 export interface OTTOptions {
   /** Low/mid crossover frequency (Hz). Default 200. */
@@ -87,13 +87,12 @@ class BandExpander {
     if (this.env > this.threshold) {
       // Signal above threshold → downward expansion
       const over = this.env / this.threshold
-      const targetGain = Math.pow(this.downwardGain, Math.log2(over))
-      gain = targetGain
-    } else if (this.env > this.threshold * 0.1) {
-      // Signal below threshold (but not silent) → upward expansion
+      gain = Math.pow(this.downwardGain, Math.log2(over))
+    } else if (this.env > 1e-6) {
+      // Phase F fix: removed noise gate (threshold * 0.1) — all non-silent signals get upward expansion
       const under = this.threshold / Math.max(this.env, 1e-6)
-      const targetGain = Math.pow(this.upwardGain, Math.log2(under) * 0.5)
-      gain = targetGain
+      // Phase F fix: removed * 0.5 — full-strength upward expansion (was half-strength)
+      gain = Math.pow(this.upwardGain, Math.log2(under))
     }
 
     // Blend between dry (depth=0) and wet (depth=1)
@@ -153,13 +152,12 @@ export class OTT {
   }
 
   /** Process stereo buffer IN-PLACE. Each channel processed independently
-   *  to preserve stereo image. Makeup gain compensates for level changes. */
+   *  to preserve stereo image. Phase F fix: removed unconditional makeup gain. */
   processBuffer(L: Float32Array, R: Float32Array): void {
     if (!this.enabled) return
     const N = Math.min(L.length, R.length)
-    // Makeup gain: compensate for level loss from downward expansion.
-    // 1.0 = no makeup, 1.5 = +3.5dB makeup.
-    const makeup = 1.0 + this.depth * 0.5
+    // Phase F fix: removed unconditional makeup gain (was 1.0 + depth * 0.5).
+    // Upward expansion naturally compensates for downward compression.
 
     for (let i = 0; i < N; i++) {
       const xL = L[i]!
@@ -182,9 +180,9 @@ export class OTT {
       const midOutR = this.midExpander.process(midR)
       const highOutR = this.highExpander.process(highR)
 
-      // Recombine + makeup gain
-      L[i] = (lowOutL + midOutL + highOutL) * makeup
-      R[i] = (lowOutR + midOutR + highOutR) * makeup
+      // Recombine (no makeup — upward expansion compensates)
+      L[i] = lowOutL + midOutL + highOutL
+      R[i] = lowOutR + midOutR + highOutR
     }
   }
 

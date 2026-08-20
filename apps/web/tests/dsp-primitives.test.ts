@@ -12,10 +12,10 @@
  * will fail before the render snapshot catches it.
  */
 import { describe, expect, test } from 'bun:test'
-import { ZDFSVF, BLSaw, LR4Highpass, fastTanh } from '../src/lib/psy4/forensic/dsp'
-import { MultibandCompressor } from '../src/lib/psy4/multiband'
-import { measureLUFS } from '../src/lib/psy4/loudness'
+import { BLSaw, ZDFSVF, fastTanh } from '../src/lib/psy4/forensic/dsp'
 import { TruePeakLimiter } from '../src/lib/psy4/limiter'
+import { measureLUFS } from '../src/lib/psy4/loudness'
+import { MultibandCompressor } from '../src/lib/psy4/multiband'
 
 const SR = 44100
 

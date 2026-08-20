@@ -15,8 +15,8 @@
  *   const sample = wg.render()
  */
 
-import type { Rng } from '../forensic/prng'
 import { DEFAULT_SR } from '../constants'
+import type { Rng } from '../forensic/prng'
 
 export class WaveguideString {
   private delayLine: Float32Array

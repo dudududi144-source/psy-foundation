@@ -544,7 +544,7 @@ function fftMagnitude(frame: Float32Array, numBins: number): number[] {
   // Butterfly operations
   for (let len = 2; len <= N; len <<= 1) {
     const halfLen = len >> 1
-    const angle = -2 * Math.PI / len
+    const angle = (-2 * Math.PI) / len
     const wRe = Math.cos(angle)
     const wIm = Math.sin(angle)
     for (let i = 0; i < N; i += len) {

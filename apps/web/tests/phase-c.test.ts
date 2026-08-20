@@ -5,7 +5,7 @@
  * are properly accepted and produce different outputs.
  */
 import { describe, expect, test } from 'bun:test'
-import { buildHarmonicPlan, PSYTRANCE_PROGRESSIONS } from '@psy-foundation/music'
+import { PSYTRANCE_PROGRESSIONS, buildHarmonicPlan } from '@psy-foundation/music'
 import { rollingBass16th } from '@psy-foundation/music'
 
 describe('Phase C — PSYTRANCE_PROGRESSIONS wired', () => {
@@ -24,13 +24,21 @@ describe('Phase C — PSYTRANCE_PROGRESSIONS wired', () => {
 
   test('buildHarmonicPlan accepts progressionName', () => {
     const plan1 = buildHarmonicPlan({
-      bars: 8, startBar: 0, tonic: 4, scaleName: 'phrygian-dominant',
-      phraseIndex: 0, isLastPhrase: false,
+      bars: 8,
+      startBar: 0,
+      tonic: 4,
+      scaleName: 'phrygian-dominant',
+      phraseIndex: 0,
+      isLastPhrase: false,
       progressionName: 'hypnotic',
     })
     const plan2 = buildHarmonicPlan({
-      bars: 8, startBar: 0, tonic: 4, scaleName: 'phrygian-dominant',
-      phraseIndex: 0, isLastPhrase: false,
+      bars: 8,
+      startBar: 0,
+      tonic: 4,
+      scaleName: 'phrygian-dominant',
+      phraseIndex: 0,
+      isLastPhrase: false,
       progressionName: 'dark',
     })
     expect(plan1).toBeDefined()
@@ -43,8 +51,12 @@ describe('Phase C — PSYTRANCE_PROGRESSIONS wired', () => {
 
   test('default progression (t-s-t-d) produces valid plan', () => {
     const plan = buildHarmonicPlan({
-      bars: 8, startBar: 0, tonic: 4, scaleName: 'phrygian-dominant',
-      phraseIndex: 0, isLastPhrase: false,
+      bars: 8,
+      startBar: 0,
+      tonic: 4,
+      scaleName: 'phrygian-dominant',
+      phraseIndex: 0,
+      isLastPhrase: false,
     })
     expect(plan.chords.length).toBeGreaterThan(0)
   })
@@ -53,7 +65,8 @@ describe('Phase C — PSYTRANCE_PROGRESSIONS wired', () => {
 describe('Phase C — rollingBass16th wired', () => {
   test('produces 16 notes per bar', () => {
     const ctx = {
-      tonic: 4, scale: { name: 'phrygian-dominant', intervals: [0, 1, 4, 5, 7, 8, 11] },
+      tonic: 4,
+      scale: { name: 'phrygian-dominant', intervals: [0, 1, 4, 5, 7, 8, 11] },
       bassOctave: 2,
       groove: { stepsPerBar: 16, kickSteps: [0, 4, 8, 12], hatSteps: [2, 6, 10, 14], accent: 0.5 },
       kickPlan: { onsets: [0, 4, 8, 12], velocities: [0.9, 0.8, 0.9, 0.8] },
@@ -66,7 +79,8 @@ describe('Phase C — rollingBass16th wired', () => {
 
   test('alternating mode uses fifth on odd steps', () => {
     const ctx = {
-      tonic: 4, scale: { name: 'phrygian-dominant', intervals: [0, 1, 4, 5, 7, 8, 11] },
+      tonic: 4,
+      scale: { name: 'phrygian-dominant', intervals: [0, 1, 4, 5, 7, 8, 11] },
       bassOctave: 2,
       groove: { stepsPerBar: 16, kickSteps: [0, 4, 8, 12], hatSteps: [2, 6, 10, 14], accent: 0.5 },
       kickPlan: { onsets: [0, 4, 8, 12], velocities: [0.9, 0.8, 0.9, 0.8] },

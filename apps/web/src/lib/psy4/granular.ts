@@ -18,8 +18,8 @@
  *   const [left, right] = cloud.process()
  */
 
-import type { Rng } from './forensic/prng'
 import { DEFAULT_SR } from './constants'
+import type { Rng } from './forensic/prng'
 
 interface Grain {
   pos: number // position in source buffer

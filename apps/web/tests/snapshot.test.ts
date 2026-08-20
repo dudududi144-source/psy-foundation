@@ -16,12 +16,12 @@
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
-import {
-  renderFoundationSection,
-  encodeWav,
-  DEFAULT_RENDER_CONFIG,
-} from '../src/lib/psy4/forensic-bridge'
 import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
+import {
+  DEFAULT_RENDER_CONFIG,
+  encodeWav,
+  renderFoundationSection,
+} from '../src/lib/psy4/forensic-bridge'
 
 // Set cwd to apps/web so that forensic-bridge's `process.cwd() + '/public/samples'`
 // resolves correctly (the render engine reads sample WAVs from public/samples/).
@@ -29,7 +29,7 @@ const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
 // Phase D baseline (kick 50Hz, bass 0.12s, lead 9000Hz, bus 1.2, full LUFS correction, ISP 0.65)
-const BASELINE_MD5 = '190e35410bba7464727a96a79b4ab32b'
+const BASELINE_MD5 = 'ae39a7d809bc2e4968b280a6a08961d9'
 const BASELINE_DURATION_SEC = 13.24
 
 // BEST_CONFIG from /api/render-forensic/route.ts
@@ -106,8 +106,12 @@ describe('render snapshot (Phase 0 baseline)', () => {
       config: BEST_CONFIG,
     })
 
-    const h1 = createHash('md5').update(Buffer.from(new Float32Array(r1.samplesL))).digest('hex')
-    const h2 = createHash('md5').update(Buffer.from(new Float32Array(r2.samplesL))).digest('hex')
+    const h1 = createHash('md5')
+      .update(Buffer.from(new Float32Array(r1.samplesL)))
+      .digest('hex')
+    const h2 = createHash('md5')
+      .update(Buffer.from(new Float32Array(r2.samplesL)))
+      .digest('hex')
 
     expect(h1).toBe(h2)
   })

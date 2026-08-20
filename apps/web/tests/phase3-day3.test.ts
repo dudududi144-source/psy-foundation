@@ -4,8 +4,8 @@
 import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
-import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG } from '../src/lib/psy4/forensic-bridge'
 import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
+import { DEFAULT_RENDER_CONFIG, renderFoundationSection } from '../src/lib/psy4/forensic-bridge'
 
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
@@ -18,10 +18,22 @@ const BEST_CONFIG = {
 }
 
 const createContext = (seed: number) => ({
-  tonic: 4, scaleName: 'phrygian-dominant', octave: 4, bpm: 145,
-  beatsPerBar: 4, beatPosition: 0, barPosition: 0, phrasePosition: 0,
-  harmonicContext: [] as number[], density: 0.7, energy: 0.7, tension: 0.3,
-  sectionRole: 'full-on' as const, repetitionPressure: 0.3, noveltyPressure: 0.5, seed,
+  tonic: 4,
+  scaleName: 'phrygian-dominant',
+  octave: 4,
+  bpm: 145,
+  beatsPerBar: 4,
+  beatPosition: 0,
+  barPosition: 0,
+  phrasePosition: 0,
+  harmonicContext: [] as number[],
+  density: 0.7,
+  energy: 0.7,
+  tension: 0.3,
+  sectionRole: 'full-on' as const,
+  repetitionPressure: 0.3,
+  noveltyPressure: 0.5,
+  seed,
 })
 
 async function renderHash(bars: number, seed: number): Promise<string> {
@@ -29,9 +41,13 @@ async function renderHash(bars: number, seed: number): Promise<string> {
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
   const result = await renderFoundationSection(section, {
-    useSamples: false, bpm: 145, config: BEST_CONFIG,
+    useSamples: false,
+    bpm: 145,
+    config: BEST_CONFIG,
   })
-  return createHash('md5').update(Buffer.from(new Float32Array(result.samplesL).buffer)).digest('hex')
+  return createHash('md5')
+    .update(Buffer.from(new Float32Array(result.samplesL).buffer))
+    .digest('hex')
 }
 
 describe('Phase 3 Day 3 — determinism (reduced: 4 tests)', () => {
@@ -57,9 +73,17 @@ describe('Phase 3 Day 3 — determinism (reduced: 4 tests)', () => {
     const ctx = createContext(42)
     const engine = new CompositionEngine({ seed: 42, context: ctx, identity: createIdentityA() })
     const s4 = engine.composeSection({ bars: 4 })
-    const r4 = await renderFoundationSection(s4, { useSamples: false, bpm: 145, config: BEST_CONFIG })
+    const r4 = await renderFoundationSection(s4, {
+      useSamples: false,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
     const s8 = engine.composeSection({ bars: 8 })
-    const r8 = await renderFoundationSection(s8, { useSamples: false, bpm: 145, config: BEST_CONFIG })
+    const r8 = await renderFoundationSection(s8, {
+      useSamples: false,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
     expect(r8.samplesL.length).toBeGreaterThan(r4.samplesL.length)
   }, 30000)
 })

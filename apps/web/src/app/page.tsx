@@ -262,6 +262,7 @@ export default function Home() {
               <span className="text-zinc-400">909/MD samples</span>
             </label>
             <button
+              type="button"
               onClick={render}
               disabled={loading}
               className="ml-auto inline-flex items-center gap-2 rounded-md bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 hover:bg-emerald-400 disabled:opacity-50 transition-colors"
@@ -376,6 +377,7 @@ export default function Home() {
               Auto-Fixer v8.5 (Stage 9)
             </span>
             <button
+              type="button"
               onClick={runOptimize}
               disabled={optimizing}
               className="ml-auto inline-flex items-center gap-2 rounded-md bg-violet-500 px-3 py-1.5 text-xs font-semibold text-violet-950 hover:bg-violet-400 disabled:opacity-50 transition-colors"
@@ -468,6 +470,7 @@ export default function Home() {
               Real-Time Playback
             </span>
             <button
+              type="button"
               onClick={async () => {
                 try {
                   const { PSY4AudioEngine } = await import('@/lib/psy4/audio-engine')
@@ -514,6 +517,7 @@ export default function Home() {
                   const isBlack = noteNames[midi % 12].includes('#')
                   return (
                     <button
+                      type="button"
                       key={midi}
                       onPointerDown={() => {
                         audioEngineRef.current?.noteOn(midi, 0.8)
@@ -584,6 +588,7 @@ export default function Home() {
               Presets
             </span>
             <button
+              type="button"
               onClick={async () => {
                 const { PresetManager } = await import('@/lib/psy4/preset-manager')
                 if (!presetMgrRef.current) {
@@ -615,6 +620,7 @@ export default function Home() {
                     {p.description}
                   </span>
                   <button
+                    type="button"
                     onClick={() => {
                       const pm = presetMgrRef.current
                       if (pm) pm.export(p)
@@ -625,6 +631,7 @@ export default function Home() {
                   </button>
                   {!p.id.startsWith('factory-') && (
                     <button
+                      type="button"
                       onClick={() => {
                         const pm = presetMgrRef.current
                         if (pm) {
@@ -721,6 +728,7 @@ export default function Home() {
               AI Arrangement (Phase 4)
             </span>
             <button
+              type="button"
               onClick={async () => {
                 const res = await fetch(`/api/arrangement?seed=${seed}&bars=88`)
                 if (res.ok) {

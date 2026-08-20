@@ -15,16 +15,38 @@
  *   bun run benchmarks/compare-to-reference.ts --bars 32 --seed 99
  */
 
-import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG } from '../apps/web/src/lib/psy4/forensic-bridge'
-import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
+import {
+  DEFAULT_RENDER_CONFIG,
+  encodeWav,
+  renderFoundationSection,
+} from '../apps/web/src/lib/psy4/forensic-bridge'
 
 // Reference targets (from commercial psytrance releases)
 const REFERENCE_TARGETS = {
-  astrix: { name: 'Astrix — Deep Space Walk', bpm: 138, targetLufs: -8, targetDbtp: -0.5, targetLra: 4 },
-  viniVici: { name: 'Vini Vici — The Tribe', bpm: 134, targetLufs: -9, targetDbtp: -0.5, targetLra: 4 },
-  infectedMushroom: { name: 'Infected Mushroom — Becoming Insane', bpm: 145, targetLufs: -7, targetDbtp: -0.3, targetLra: 3 },
+  astrix: {
+    name: 'Astrix — Deep Space Walk',
+    bpm: 138,
+    targetLufs: -8,
+    targetDbtp: -0.5,
+    targetLra: 4,
+  },
+  viniVici: {
+    name: 'Vini Vici — The Tribe',
+    bpm: 134,
+    targetLufs: -9,
+    targetDbtp: -0.5,
+    targetLra: 4,
+  },
+  infectedMushroom: {
+    name: 'Infected Mushroom — Becoming Insane',
+    bpm: 145,
+    targetLufs: -7,
+    targetDbtp: -0.3,
+    targetLra: 3,
+  },
 }
 
 interface RenderMetrics {
@@ -36,16 +58,29 @@ interface RenderMetrics {
 
 async function renderAndMeasure(bars: number, seed: number): Promise<RenderMetrics> {
   const ctx = {
-    tonic: 4, scaleName: 'phrygian-dominant', octave: 4, bpm: 145,
-    beatsPerBar: 4, beatPosition: 0, barPosition: 0, phrasePosition: 0,
-    harmonicContext: [] as number[], density: 0.7, energy: 0.7, tension: 0.3,
-    sectionRole: 'full-on' as const, repetitionPressure: 0.3, noveltyPressure: 0.5, seed,
+    tonic: 4,
+    scaleName: 'phrygian-dominant',
+    octave: 4,
+    bpm: 145,
+    beatsPerBar: 4,
+    beatPosition: 0,
+    barPosition: 0,
+    phrasePosition: 0,
+    harmonicContext: [] as number[],
+    density: 0.7,
+    energy: 0.7,
+    tension: 0.3,
+    sectionRole: 'full-on' as const,
+    repetitionPressure: 0.3,
+    noveltyPressure: 0.5,
+    seed,
   }
 
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
   const result = await renderFoundationSection(section, {
-    useSamples: true, bpm: 145,
+    useSamples: true,
+    bpm: 145,
     config: { ...DEFAULT_RENDER_CONFIG, bassGain: 0.8, subBassGain: 0.6, padGain: 0.7 },
   })
 
@@ -79,7 +114,10 @@ async function renderAndMeasure(bars: number, seed: number): Promise<RenderMetri
   }
 }
 
-function compareMetrics(metrics: RenderMetrics, reference: typeof REFERENCE_TARGETS.astrix): {
+function compareMetrics(
+  metrics: RenderMetrics,
+  reference: typeof REFERENCE_TARGETS.astrix
+): {
   lufsDelta: number
   dbtpDelta: number
   lraDelta: number
@@ -99,8 +137,8 @@ async function main() {
   const args = process.argv.slice(2)
   const barsIdx = args.indexOf('--bars')
   const seedIdx = args.indexOf('--seed')
-  const bars = barsIdx >= 0 ? parseInt(args[barsIdx + 1] ?? '8', 10) : 8
-  const seed = seedIdx >= 0 ? parseInt(args[seedIdx + 1] ?? '42', 10) : 42
+  const bars = barsIdx >= 0 ? Number.parseInt(args[barsIdx + 1] ?? '8', 10) : 8
+  const seed = seedIdx >= 0 ? Number.parseInt(args[seedIdx + 1] ?? '42', 10) : 42
 
   console.log('═'.repeat(70))
   console.log('PSY Foundation — Reference Comparison Benchmark')
@@ -128,9 +166,11 @@ async function main() {
     const status = comparison.pass ? '✅ PASS' : '❌ FAIL'
     console.log(`  ${ref.name}`)
     console.log(`    Target: LUFS=${ref.targetLufs}, dBTP=${ref.targetDbtp}, LRA=${ref.targetLra}`)
-    console.log(`    Delta:  LUFS=${comparison.lufsDelta >= 0 ? '+' : ''}${comparison.lufsDelta.toFixed(2)}, ` +
-                `dBTP=${comparison.dbtpDelta >= 0 ? '+' : ''}${comparison.dbtpDelta.toFixed(2)}, ` +
-                `LRA=${comparison.lraDelta >= 0 ? '+' : ''}${comparison.lraDelta.toFixed(2)}`)
+    console.log(
+      `    Delta:  LUFS=${comparison.lufsDelta >= 0 ? '+' : ''}${comparison.lufsDelta.toFixed(2)}, ` +
+        `dBTP=${comparison.dbtpDelta >= 0 ? '+' : ''}${comparison.dbtpDelta.toFixed(2)}, ` +
+        `LRA=${comparison.lraDelta >= 0 ? '+' : ''}${comparison.lraDelta.toFixed(2)}`
+    )
     console.log(`    Status: ${status}`)
     console.log()
     if (!comparison.pass) allPass = false
@@ -145,15 +185,28 @@ async function main() {
   try {
     mkdirSync(outDir, { recursive: true })
     const ctx2 = {
-      tonic: 4, scaleName: 'phrygian-dominant', octave: 4, bpm: 145,
-      beatsPerBar: 4, beatPosition: 0, barPosition: 0, phrasePosition: 0,
-      harmonicContext: [] as number[], density: 0.7, energy: 0.7, tension: 0.3,
-      sectionRole: 'full-on' as const, repetitionPressure: 0.3, noveltyPressure: 0.5, seed,
+      tonic: 4,
+      scaleName: 'phrygian-dominant',
+      octave: 4,
+      bpm: 145,
+      beatsPerBar: 4,
+      beatPosition: 0,
+      barPosition: 0,
+      phrasePosition: 0,
+      harmonicContext: [] as number[],
+      density: 0.7,
+      energy: 0.7,
+      tension: 0.3,
+      sectionRole: 'full-on' as const,
+      repetitionPressure: 0.3,
+      noveltyPressure: 0.5,
+      seed,
     }
     const engine2 = new CompositionEngine({ seed, context: ctx2, identity: createIdentityA() })
     const section2 = engine2.composeSection({ bars })
     const result2 = await renderFoundationSection(section2, {
-      useSamples: true, bpm: 145,
+      useSamples: true,
+      bpm: 145,
       config: { ...DEFAULT_RENDER_CONFIG, bassGain: 0.8, subBassGain: 0.6, padGain: 0.7 },
     })
     const wav = encodeWav(result2.samplesL, result2.samplesR, result2.sampleRate)

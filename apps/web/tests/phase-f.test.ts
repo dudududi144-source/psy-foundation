@@ -5,7 +5,7 @@
  * component existence. Tests MIDI learn basic functionality.
  */
 import { describe, expect, test } from 'bun:test'
-import { PresetManager, FACTORY_PRESETS } from '../src/lib/psy4/preset-manager'
+import { FACTORY_PRESETS, PresetManager } from '../src/lib/psy4/preset-manager'
 
 describe('Phase F — PresetManager commercial features', () => {
   test('FACTORY_PRESETS has 11 presets', () => {
@@ -17,7 +17,9 @@ describe('Phase F — PresetManager commercial features', () => {
     const mockStorage: Record<string, string> = {}
     ;(globalThis as any).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
-      setItem: (key: string, value: string) => { mockStorage[key] = value },
+      setItem: (key: string, value: string) => {
+        mockStorage[key] = value
+      },
     }
     const pm = new PresetManager()
     expect(pm.count).toBeGreaterThanOrEqual(11)
@@ -28,14 +30,24 @@ describe('Phase F — PresetManager commercial features', () => {
     const mockStorage: Record<string, string> = {}
     ;(globalThis as any).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
-      setItem: (key: string, value: string) => { mockStorage[key] = value },
+      setItem: (key: string, value: string) => {
+        mockStorage[key] = value
+      },
     }
     const pm = new PresetManager()
     const initialCount = pm.count
 
-    const preset = pm.create('Test Lead', 'Lead', 'lead', {
-      cutoff: 5000, gain: 0.7, res: 0.5,
-    }, 'Test preset for Phase F')
+    const preset = pm.create(
+      'Test Lead',
+      'Lead',
+      'lead',
+      {
+        cutoff: 5000,
+        gain: 0.7,
+        res: 0.5,
+      },
+      'Test preset for Phase F'
+    )
 
     expect(preset.id).toBeDefined()
     expect(preset.name).toBe('Test Lead')
@@ -47,7 +59,9 @@ describe('Phase F — PresetManager commercial features', () => {
     const mockStorage: Record<string, string> = {}
     ;(globalThis as any).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
-      setItem: (key: string, value: string) => { mockStorage[key] = value },
+      setItem: (key: string, value: string) => {
+        mockStorage[key] = value
+      },
     }
     const pm = new PresetManager()
     const categories = pm.getCategories()
@@ -62,21 +76,30 @@ describe('Phase F — PresetManager commercial features', () => {
     const mockStorage: Record<string, string> = {}
     ;(globalThis as any).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
-      setItem: (key: string, value: string) => { mockStorage[key] = value },
+      setItem: (key: string, value: string) => {
+        mockStorage[key] = value
+      },
     }
     const pm = new PresetManager()
     const results = pm.search('kick')
     expect(results.length).toBeGreaterThan(0)
-    expect(results.every(p => p.name.toLowerCase().includes('kick') ||
-      p.description.toLowerCase().includes('kick') ||
-      p.category.toLowerCase().includes('kick'))).toBe(true)
+    expect(
+      results.every(
+        (p) =>
+          p.name.toLowerCase().includes('kick') ||
+          p.description.toLowerCase().includes('kick') ||
+          p.category.toLowerCase().includes('kick')
+      )
+    ).toBe(true)
   })
 
   test('Factory presets cannot be deleted', () => {
     const mockStorage: Record<string, string> = {}
     ;(globalThis as any).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
-      setItem: (key: string, value: string) => { mockStorage[key] = value },
+      setItem: (key: string, value: string) => {
+        mockStorage[key] = value
+      },
     }
     const pm = new PresetManager()
     const initialCount = pm.count
@@ -89,7 +112,9 @@ describe('Phase F — PresetManager commercial features', () => {
     const mockStorage: Record<string, string> = {}
     ;(globalThis as any).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
-      setItem: (key: string, value: string) => { mockStorage[key] = value },
+      setItem: (key: string, value: string) => {
+        mockStorage[key] = value
+      },
     }
     const pm = new PresetManager()
     const preset = pm.create('Delete Me', 'Custom', 'lead', { cutoff: 3000 })
@@ -102,7 +127,9 @@ describe('Phase F — PresetManager commercial features', () => {
     const mockStorage: Record<string, string> = {}
     ;(globalThis as any).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
-      setItem: (key: string, value: string) => { mockStorage[key] = value },
+      setItem: (key: string, value: string) => {
+        mockStorage[key] = value
+      },
     }
     const pm = new PresetManager()
     expect(pm.isFactory('factory-kick-fullon')).toBe(true)
@@ -122,7 +149,7 @@ describe('Phase F — MIDI learn (basic)', () => {
   test('MIDILearn class can map CC to parameter', () => {
     // Basic MIDI learn: CC number → parameter name mapping
     const midiMap = new Map<number, string>()
-    midiMap.set(74, 'cutoff')    // CC74 → cutoff (common in synths)
+    midiMap.set(74, 'cutoff') // CC74 → cutoff (common in synths)
     midiMap.set(71, 'resonance') // CC71 → resonance
     midiMap.set(7, 'masterGain') // CC7 → volume
 
@@ -135,9 +162,9 @@ describe('Phase F — MIDI learn (basic)', () => {
   test('MIDI note to frequency conversion is correct', () => {
     // Standard MIDI to frequency: f = 440 * 2^((n-69)/12)
     const midiToFreq = (midi: number) => 440 * Math.pow(2, (midi - 69) / 12)
-    expect(midiToFreq(69)).toBeCloseTo(440, 1)  // A4 = 440 Hz
+    expect(midiToFreq(69)).toBeCloseTo(440, 1) // A4 = 440 Hz
     expect(midiToFreq(60)).toBeCloseTo(261.63, 1) // C4 = middle C
-    expect(midiToFreq(81)).toBeCloseTo(880, 1)    // A5 = 880 Hz
+    expect(midiToFreq(81)).toBeCloseTo(880, 1) // A5 = 880 Hz
   })
 
   test('MIDI velocity to amplitude conversion is correct', () => {
