@@ -9,6 +9,9 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "DSP/ZDFSVF.h"
+#include "DSP/BLSaw.h"
+#include "DSP/DecayEnv.h"
 
 namespace psy4 {
 
@@ -23,76 +26,6 @@ const juce::String PluginProcessor::PARAM_TARGET_LUFS = "targetLufs";
 const juce::String PluginProcessor::PARAM_MACRO1 = "macro1";
 const juce::String PluginProcessor::PARAM_MACRO2 = "macro2";
 const juce::String PluginProcessor::PARAM_MACRO3 = "macro3";
-
-// ── ZDF State-Variable Filter (C++ port of forensic/dsp.ts) ──
-class ZDFSVF {
-public:
-    ZDFSVF() : ic1eq(0.0f), ic2eq(0.0f) {}
-    
-    void reset() { ic1eq = 0.0f; ic2eq = 0.0f; }
-    
-    float process(float x, float cutoff, float resonance, float sr) {
-        float g = std::tan(M_PI * juce::jlimit(20.0f, 20000.0f, cutoff) / sr);
-        float k = juce::jlimit(0.0f, 1.5f, resonance);
-        float a1 = 1.0f / (1.0f + g * (g + k));
-        float a2 = g * a1;
-        float a3 = g * a2;
-        float v3 = x - ic2eq;
-        float v1 = a1 * ic1eq + a2 * v3;
-        float v2 = ic2eq + a2 * ic1eq + a3 * v3;
-        ic1eq = 2.0f * v1 - ic1eq;
-        ic2eq = 2.0f * v2 - ic2eq;
-        return v2; // lowpass output
-    }
-    
-private:
-    float ic1eq, ic2eq;
-};
-
-// ── Band-Limited Saw with PolyBLEP ──
-class BLSaw {
-public:
-    BLSaw() : phase(0.0f), lastPhase(0.0f) {}
-    
-    void reset() { phase = 0.0f; lastPhase = 0.0f; }
-    
-    float process(float inc) {
-        lastPhase = phase;
-        phase += inc;
-        float blep = 0.0f;
-        if (phase >= 1.0f) {
-            phase -= 1.0f;
-            float dt = inc;
-            float t = phase / dt;
-            blep = -t * t * (1.0f - t) * 0.5f * dt * 4.0f;
-        }
-        float saw = 2.0f * lastPhase - 1.0f;
-        return saw + blep;
-    }
-    
-private:
-    float phase, lastPhase;
-};
-
-// ── Decay Envelope ──
-class DecayEnv {
-public:
-    DecayEnv() : t(0.0f), decay(0.3f), amp(0.0f) {}
-    
-    void reset() { t = 0.0f; }
-    void trigger(float velocity) { t = 0.0f; amp = velocity; }
-    void setDecay(float d) { decay = d; }
-    
-    float process(float sr) {
-        t += 1.0f / sr;
-        return std::exp(-t / decay) * amp;
-    }
-    
-    float getAmp() const { return amp; }
-    
-private:
-    float t, decay, amp;
-};
 
 // ── Lead Voice ──
 class LeadVoice {
