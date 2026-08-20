@@ -26,12 +26,14 @@
  *   synth.setHarmonics(params.harmonics)
  */
 
+import { DEFAULT_SR } from '../constants'
+
 export class DDSPHarmonic {
   private phase = 0 // 0..1
   private freq = 220 // Hz
   private harmonics: Float32Array // 0..1 amplitudes per harmonic
   private amp = 0.8 // master amplitude
-  private readonly SR = 44100
+  private readonly SR = DEFAULT_SR
   private active = false
   private ampEnv = 0 // envelope follower for smooth note on/off
 

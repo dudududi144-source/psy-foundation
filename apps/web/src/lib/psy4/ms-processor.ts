@@ -21,6 +21,8 @@
  * Determinism: no Math.random, no Date, no I/O. Pure function of input.
  */
 
+import { DEFAULT_SR } from './constants'
+
 export class StereoWidener {
   private width: number
   // Accumulated energy for mono-compatibility metric.
@@ -63,7 +65,7 @@ export class StereoWidener {
     // at width=1 (R became 2*LP(mid) - mid instead of original R).
     // New approach: LP both widened channels, replace low-freq with mono avg.
     const monoFreq = 120
-    const a = (1 / 44100) * 2 * Math.PI * monoFreq
+    const a = (1 / DEFAULT_SR) * 2 * Math.PI * monoFreq
     const lpCoef = a / (1 + a)
     let lpStateL = 0
     let lpStateR = 0

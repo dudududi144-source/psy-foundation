@@ -20,6 +20,8 @@
  * generator/synth can act on.
  */
 
+import { DEFAULT_SR } from './constants'
+
 export interface AudioCritique {
   lowEnd: {
     kickClarity: number
@@ -644,7 +646,8 @@ function computeSpectralMovement(spectra: number[][]): number {
   if (spectra.length < 2) return 0
   // Focus on the lead band (500-5000Hz) where timbral movement happens.
   // The bass/kick bins are constant and dilute the measurement.
-  const sr = 44100
+  // Phase 1 Day 4: uses DEFAULT_SR from constants (was hard-coded 44100)
+  const sr = DEFAULT_SR
   const fftSize = 2048
   const lowBin = Math.floor((500 * fftSize) / sr)
   const highBin = Math.ceil((5000 * fftSize) / sr)

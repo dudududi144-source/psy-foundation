@@ -42,7 +42,7 @@ import {
 } from './voice-specs'
 import { Wavetable } from './wavetable'
 
-const SR = 44100
+import { DEFAULT_SR as SR } from './constants'
 const TARGET_LUFS = MASTER_SPEC.targetLufs
 
 // ── WAV decoder ──

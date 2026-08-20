@@ -35,6 +35,8 @@ const BUTTERWORTH_Q = Math.SQRT1_2
 // Cookbook coefficients from the RBJ audio EQ cookbook. We only need LP and HP
 // here, but the same DF2T structure generalizes to any biquad.
 
+import { DEFAULT_SR } from './constants'
+
 export type BiquadType = 'lp' | 'hp'
 
 export class BiquadSection {
@@ -263,7 +265,7 @@ export class MultibandCompressor {
   private readonly sampleRate: number
 
   constructor(opts: MultibandCompressorOptions = {}) {
-    const sampleRate = opts.sampleRate ?? 44100
+    const sampleRate = opts.sampleRate ?? DEFAULT_SR
     const lowXoverHz = opts.lowCrossoverHz ?? 200
     const midXoverHz = opts.midCrossoverHz ?? 2000
     this.sampleRate = sampleRate

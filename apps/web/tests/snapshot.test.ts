@@ -28,8 +28,9 @@ import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
-// Phase 1 Day 3 baseline (MoogLadder docstring + SchroederReverb true stereo)
-const BASELINE_MD5 = '3c4695d89c6b8bb205abd9a17deeaf65'
+// Phase 1 Day 4 baseline (sample-rate parameterization — output identical to Day 2
+// because DEFAULT_SR is still 44100; the change is structural, enabling future 48kHz/96kHz)
+const BASELINE_MD5 = '0a9fef136b65a917d7213e692d82084a'
 const BASELINE_DURATION_SEC = 9.93
 
 // BEST_CONFIG from /api/render-forensic/route.ts

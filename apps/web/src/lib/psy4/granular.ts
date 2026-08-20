@@ -19,6 +19,7 @@
  */
 
 import type { Rng } from './forensic/prng'
+import { DEFAULT_SR } from './constants'
 
 interface Grain {
   pos: number // position in source buffer
@@ -42,12 +43,12 @@ export class GrainCloud {
   constructor(buffer: Float32Array, rng: Rng) {
     this.buffer = buffer
     this.rng = rng
-    this.samplesPerGrain = Math.floor(44100 / this.density)
+    this.samplesPerGrain = Math.floor(DEFAULT_SR / this.density)
   }
 
   setDensity(d: number): void {
     this.density = d
-    this.samplesPerGrain = Math.floor(44100 / d)
+    this.samplesPerGrain = Math.floor(DEFAULT_SR / d)
   }
 
   setGrainDuration(ms: number): void {
@@ -70,7 +71,7 @@ export class GrainCloud {
   private amp = 1.0
 
   private spawnGrain(): void {
-    const grainDur = Math.floor((44100 * this.grainDurMs) / 1000)
+    const grainDur = Math.floor((DEFAULT_SR * this.grainDurMs) / 1000)
     const posRange = this.buffer.length - grainDur - 1
     const basePos = this.rng.range(0, Math.max(1, posRange))
     this.grains.push({
@@ -124,7 +125,7 @@ export class GrainCloud {
   // ── Factory: generate source buffer procedurally ──
 
   static generateNoiseBuffer(rng: Rng, durationSec: number): Float32Array {
-    const len = Math.floor(44100 * durationSec)
+    const len = Math.floor(DEFAULT_SR * durationSec)
     const buf = new Float32Array(len)
     // Pink-ish noise (filtered white noise)
     let last = 0
@@ -137,9 +138,9 @@ export class GrainCloud {
   }
 
   static generateSawBuffer(freq: number, durationSec: number): Float32Array {
-    const len = Math.floor(44100 * durationSec)
+    const len = Math.floor(DEFAULT_SR * durationSec)
     const buf = new Float32Array(len)
-    const period = 44100 / freq
+    const period = DEFAULT_SR / freq
     for (let i = 0; i < len; i++) {
       const phase = (i % period) / period
       buf[i] = 2 * phase - 1
@@ -153,9 +154,9 @@ export class GrainCloud {
     durationSec: number,
     noiseLevel = 0.5
   ): Float32Array {
-    const len = Math.floor(44100 * durationSec)
+    const len = Math.floor(DEFAULT_SR * durationSec)
     const buf = new Float32Array(len)
-    const period = 44100 / freq
+    const period = DEFAULT_SR / freq
     let noiseState = 0
     for (let i = 0; i < len; i++) {
       const phase = (i % period) / period

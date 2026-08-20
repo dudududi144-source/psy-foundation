@@ -5,6 +5,7 @@
  */
 
 import { fastTanh } from './dsp'
+import { DEFAULT_SR } from '../constants'
 
 // ─── Bus Processor (compression + HP + saturation per bus) ─────────────────
 
@@ -253,7 +254,7 @@ export class SchroederReverb {
 // ─── Stereo Delay (ping-pong) ──────────────────────────────────────────────
 
 export class StereoDelay {
-  bufferSize = 44100 * 2
+  bufferSize = DEFAULT_SR * 2
   leftBuf: Float32Array
   rightBuf: Float32Array
   leftIdx = 0

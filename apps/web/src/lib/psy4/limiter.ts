@@ -42,6 +42,8 @@
  * Determinism: no Math.random, no I/O, no Date. Pure function of input.
  */
 
+import { DEFAULT_SR } from './constants'
+
 export interface TruePeakLimiterOptions {
   /** Limiter begins reducing gain above this level (dBTP). Default -1.0. */
   thresholdDb?: number
@@ -96,7 +98,7 @@ export class TruePeakLimiter {
     this.attackMs = opts.attackMs ?? 1.0
     this.releaseMs = opts.releaseMs ?? 100.0
     const lookaheadMs = opts.lookaheadMs ?? 5.0
-    this.sampleRate = opts.sampleRate ?? 44100
+    this.sampleRate = opts.sampleRate ?? DEFAULT_SR
 
     this.threshold = Math.pow(10, thresholdDb / 20)
     this.ceiling = Math.pow(10, ceilingDb / 20)

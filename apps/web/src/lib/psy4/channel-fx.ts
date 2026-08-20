@@ -423,10 +423,14 @@ export class ChannelFX {
       dryR = sig * (1 - this.delayMix) + readR * this.delayMix
     }
 
-    // 3) Reverb (stereo) — stereo in, stereo out, wet/dry mix
-    // Phase 1 Day 3: SchroederReverb now takes stereo input for true decorrelation
+    // 3) Reverb (stereo) — mono sum in, stereo out, wet/dry mix
+    // Note: CompactReverb (channel-fx.ts) already has true stereo decorrelation
+    // internally via separate L/R comb+allpass banks. It takes mono input and
+    // produces stereo output. The SchroederReverb (mixing.ts) was fixed in
+    // Phase 1 Day 3 for true stereo, but CompactReverb is used here.
     if (this.reverbMix > 0) {
-      const [wL, wR] = this.reverb.process(dryL, dryR, 44100)
+      const reverbIn = (dryL + dryR) * 0.5
+      const [wL, wR] = this.reverb.process(reverbIn)
       const wet = this.reverbMix
       const dry = 1 - wet
       dryL = dryL * dry + wL * wet

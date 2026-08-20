@@ -33,6 +33,8 @@
 const BARK_BANDS = 32 // bark-spaced frequency bands (psychoacoustic)
 const FFT_SIZE = 2048
 
+import { DEFAULT_SR } from '../constants'
+
 export interface LatentVector {
   bands: Float32Array // BARK_BANDS log magnitudes (the "latent" representation)
   centroid: number // spectral centroid (brightness)
@@ -58,7 +60,7 @@ export class LatentDecoder {
    * Encode an audio block into a latent vector.
    * Extracts: bark-band magnitudes, spectral centroid, spectral flatness.
    */
-  encode(samples: Float32Array, sampleRate = 44100): LatentVector {
+  encode(samples: Float32Array, sampleRate = DEFAULT_SR): LatentVector {
     const N = Math.min(samples.length, FFT_SIZE)
     // Simplified DFT (magnitude spectrum at bark-spaced frequencies)
     const bands = new Float32Array(BARK_BANDS)
@@ -120,7 +122,7 @@ export class LatentDecoder {
    * Decode the (possibly style-blended) latent back into a filter response.
    * Returns the filtered audio block.
    */
-  decode(samples: Float32Array, sampleRate = 44100): Float32Array {
+  decode(samples: Float32Array, sampleRate = DEFAULT_SR): Float32Array {
     if (!this.targetLatent) return samples
 
     // Blend current latent with target latent
@@ -193,7 +195,7 @@ export class NeuralStyleTransfer {
    * Learn the style of a reference track.
    * Analyzes multiple windows and averages the latent vectors.
    */
-  loadReference(samples: Float32Array, sampleRate = 44100): void {
+  loadReference(samples: Float32Array, sampleRate = DEFAULT_SR): void {
     const windowSize = FFT_SIZE
     const numWindows = Math.min(50, Math.floor(samples.length / windowSize))
     const latents: LatentVector[] = []
@@ -240,7 +242,7 @@ export class NeuralStyleTransfer {
    * Apply the learned style to a render block.
    * Returns the styled audio.
    */
-  transfer(samples: Float32Array, sampleRate = 44100): Float32Array {
+  transfer(samples: Float32Array, sampleRate = DEFAULT_SR): Float32Array {
     if (!this.referenceLatent) return samples
     this.decoder.encode(samples, sampleRate)
     this.decoder.applyStyle(this.referenceLatent, this.blendAmount)
@@ -251,7 +253,7 @@ export class NeuralStyleTransfer {
    * Process in real-time blocks (for streaming).
    * blockSize: typically 1024 or 2048 samples.
    */
-  *processStream(blocks: Iterable<Float32Array>, sampleRate = 44100): Generator<Float32Array> {
+  *processStream(blocks: Iterable<Float32Array>, sampleRate = DEFAULT_SR): Generator<Float32Array> {
     for (const block of blocks) {
       yield this.transfer(block, sampleRate)
     }

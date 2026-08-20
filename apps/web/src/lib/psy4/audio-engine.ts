@@ -13,6 +13,8 @@
  *   engine.setCutoff(4000)
  */
 
+import { DEFAULT_SR } from './constants'
+
 // Minimal MIDI types (avoiding DOM lib dependency issues)
 interface MIDIInput {
   name: string
@@ -35,7 +37,7 @@ export class PSY4AudioEngine {
     if (typeof window === 'undefined') return false
 
     try {
-      this.audioContext = new AudioContext({ sampleRate: 44100, latencyHint: 'interactive' })
+      this.audioContext = new AudioContext({ sampleRate: DEFAULT_SR, latencyHint: 'interactive' })
       await this.audioContext.audioWorklet.addModule('/worklets/psy4-processor.js')
 
       this.workletNode = new AudioWorkletNode(this.audioContext, 'psy4-processor', {

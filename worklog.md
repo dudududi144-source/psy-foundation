@@ -2769,3 +2769,69 @@ Stage Summary:
   - [✓] ffmpeg dBTP = -0.7 (still below 0 dBFS — no regression)
   - [✓] 690 tests pass, 0 regressions
 - Ready for Phase 1 Day 4: sample-rate parameterization (remove hard-coded SR=44100).
+
+
+---
+Task ID: PHASE-1-DAY-4
+Agent: PSY Engineer
+Task: Phase 1 Day 4 — sample-rate parameterization (remove hard-coded SR=44100).
+
+Work Log:
+- Created apps/web/src/lib/psy4/constants.ts with:
+  - DEFAULT_SR = 44100 (audio industry standard)
+  - SR_48K = 48000, SR_96K = 96000, SR_192K = 192000
+
+- Replaced hard-coded `SR = 44100` with `import { DEFAULT_SR }` in 8 files:
+  1. forensic-bridge.ts:45 — main render engine
+  2. psy-voices.ts:42 — voice implementations
+  3. physical/waveguide-string.ts:27 — Karplus-Strong
+  4. neural/ddsp-noise.ts:25 — DDSP noise synth
+  5. neural/ddsp-harmonic.ts:34 — DDSP harmonic synth
+  6. granular.ts (8 places) — grain cloud
+  7. audio-critic.ts:647 — spectral movement analysis
+  8. ms-processor.ts:66 — stereo widener LP coefficient
+
+- Replaced hard-coded `44100` defaults with `DEFAULT_SR` in:
+  - limiter.ts:99 — `opts.sampleRate ?? DEFAULT_SR`
+  - multiband.ts:266 — `opts.sampleRate ?? DEFAULT_SR`
+  - neural/latent-decoder.ts (5 places) — `sampleRate = DEFAULT_SR`
+  - psy-voices.ts:688 — PsySample.sampleRate = SR (alias)
+  - forensic/mixing.ts:256 — StereoDelay bufferSize = DEFAULT_SR * 2
+  - audio-engine.ts:38 — AudioContext sampleRate: DEFAULT_SR
+
+- Fixed CompactReverb call in channel-fx.ts:429:
+  - Reverted to mono sum input (CompactReverb takes mono, outputs stereo)
+  - Comment explains: CompactReverb already has internal stereo decorrelation
+  - SchroederReverb (mixing.ts) is the one that was fixed for true stereo in Day 3
+
+Tests: apps/web/tests/phase1-day4.test.ts (9 tests):
+- DEFAULT_SR, SR_48K, SR_96K values verified
+- ZDFSVF works at 48kHz and 96kHz
+- BLSaw works at 48kHz
+- MultibandCompressor works at 48kHz
+- TruePeakLimiter works at 48kHz
+- Meta-test: no hard-coded 44100 in psy4 source (except constants.ts)
+
+Snapshot baseline:
+- Phase 1 Day 3: 3c4695d8... (was Day 3 with SchroederReverb stereo)
+- Phase 1 Day 4: 0a9fef13... (back to Day 2 baseline — because:
+  1. DEFAULT_SR is still 44100 (same value, just centralized)
+  2. CompactReverb call reverted to mono sum (same as Day 2)
+  The change is structural — enables future 48kHz/96kHz rendering.)
+
+Verification:
+- bun test (all): 699 pass, 14 skip, 0 fail (was 690, +9 new)
+- 414,831 expect() calls across 40 files
+- Runtime: 44.05s
+- ffmpeg: -8.5 LUFS, -0.7 dBTP ✅, 2.8 LU LRA (unchanged)
+
+Stage Summary:
+- Phase 1 Day 4 COMPLETE: sample-rate parameterization done.
+- Acceptance:
+  - [✓] 0 hard-coded `SR = 44100` in psy4 source (all use DEFAULT_SR)
+  - [✓] constants.ts exports DEFAULT_SR = 44100
+  - [✓] All DSP modules accept sr parameter (ZDFSVF, BLSaw, Multiband, Limiter)
+  - [✓] Tests pass at 48kHz and 96kHz
+  - [✓] 699 tests pass, 0 regressions
+  - [✓] ffmpeg dBTP = -0.7 (no regression)
+- Ready for Phase 1 Day 5: FFT + learning-kernel fixes.
