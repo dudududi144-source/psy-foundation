@@ -13,14 +13,31 @@
  * All voices are sample-accurate, deterministic, and produce commercial-grade sound.
  */
 
-import { fastTanh, MoogLadder, ZDFSVF, BLSaw, BLSquare, BLTriangle, OnePoleHP, LR4Highpass, PinkNoise, OversampledSaturation, polyBlep } from './forensic/dsp'
+import {
+  BLSaw,
+  BLSquare,
+  BLTriangle,
+  LR4Highpass,
+  OnePoleHP,
+  OversampledSaturation,
+  PinkNoise,
+  ZDFSVF,
+} from './forensic/dsp'
 import { Rng } from './forensic/prng'
-import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, ACID_SPEC, HAT_SPEC, SNARE_SPEC } from './voice-specs'
-import type { ModulationMatrix } from './modulation-matrix'
-import { Wavetable } from './wavetable'
 import { GrainCloud } from './granular'
-import { WaveguideString } from './physical/waveguide-string'
-import { DDSPHarmonic } from './neural/ddsp-harmonic'
+import type { ModulationMatrix } from './modulation-matrix'
+import type { DDSPHarmonic } from './neural/ddsp-harmonic'
+import type { WaveguideString } from './physical/waveguide-string'
+import {
+  ACID_SPEC,
+  BASS_SPEC,
+  HAT_SPEC,
+  KICK_SPEC,
+  LEAD_SPEC,
+  PAD_SPEC,
+  SNARE_SPEC,
+} from './voice-specs'
+import type { Wavetable } from './wavetable'
 
 const SR = 44100
 
@@ -32,9 +49,9 @@ const SR = 44100
 export class PsyKick {
   active = false
   t = 0
-  phase = 0          // mid body phase
-  subPhase = 0       // sub phase
-  midPhase = 0       // mid triangle phase
+  phase = 0 // mid body phase
+  subPhase = 0 // sub phase
+  midPhase = 0 // mid triangle phase
   clickHPState = 0
   sat = new OversampledSaturation()
   noise: PinkNoise
@@ -65,7 +82,10 @@ export class PsyKick {
     this.t += 1 / SR
     // Sub tail extends well beyond mid (PSY3: sub 0.18s, mid 0.05s)
     const decayTotal = KICK_SPEC.subDecay + 0.05
-    if (this.t > decayTotal) { this.active = false; return [0, true] }
+    if (this.t > decayTotal) {
+      this.active = false
+      return [0, true]
+    }
 
     const t = this.t
     const f0 = this.fund
@@ -98,7 +118,7 @@ export class PsyKick {
 
     // ── Saturate sub + mid together (cohesive punch) ──
     let sample = this.sat.process(sub + mid, KICK_SPEC.saturation)
-    sample += click  // click is additive, not saturated
+    sample += click // click is additive, not saturated
 
     sample *= this.amp
 
@@ -126,7 +146,7 @@ export class PsyBass {
   // Waveguide (optional — when set, blends a Karplus-Strong plucked-string
   // decay with the existing bass layers. Default null = legacy behavior.)
   private waveguide: WaveguideString | null = null
-  private waveguideLevel = 0.3   // blend level 0..1
+  private waveguideLevel = 0.3 // blend level 0..1
   private waveguideDamping = 0.5 // 0=bright pluck, 1=warm sustain
   // Rng for deterministic waveguide excitation (also allows future per-note
   // variation without changing the constructor signature for callers that
@@ -137,7 +157,7 @@ export class PsyBass {
   subPhase = 0
   // Layer 2: Body (saw through Moog)
   saw1 = new BLSaw()
-  saw2 = new BLSaw()  // detuned for stereo width
+  saw2 = new BLSaw() // detuned for stereo width
   filter = new ZDFSVF()
   // Layer 3: Character (square through BP, stereo)
   charSquare = new BLSquare()
@@ -220,7 +240,10 @@ export class PsyBass {
 
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > BASS_SPEC.sustainRelease) { this.active = false; return [0, true] }
+      if (this.releaseT > BASS_SPEC.sustainRelease) {
+        this.active = false
+        return [0, true]
+      }
     }
 
     // ── Layer 1: SUB — sine at f/2, mono, clean low end ──
@@ -230,16 +253,18 @@ export class PsyBass {
     // ── Layer 2: BODY — 2 detuned saws through Moog ──
     const inc = this.freq / SR
     const sawOut1 = this.saw1.process(inc)
-    const sawOut2 = this.saw2.process(this.freq * Math.pow(2, 5 / 1200) / SR)
+    const sawOut2 = this.saw2.process((this.freq * Math.pow(2, 5 / 1200)) / SR)
     const sawOut = (sawOut1 + sawOut2) * 0.5
 
     // Filter envelope: opens to 1500Hz, drops to 150Hz (PSY3 Rule 2)
-    const cutoffEnv = (BASS_SPEC.cutoffStart - BASS_SPEC.cutoffEnd) * Math.exp(-this.t / 0.03) + BASS_SPEC.cutoffEnd
+    const cutoffEnv =
+      (BASS_SPEC.cutoffStart - BASS_SPEC.cutoffEnd) * Math.exp(-this.t / 0.03) + BASS_SPEC.cutoffEnd
     const filtered = this.filter.process(sawOut, cutoffEnv, BASS_SPEC.res, SR, 0)
 
     // ── Layer 3: CHARACTER — square through BP at 400Hz, stereo ──
     const charOut = this.charSquare.process((this.freq * 2) / SR)
-    const charFiltered = this.charFilter.process(charOut, 400, 0.7, SR, 1) * BASS_SPEC.characterLevel
+    const charFiltered =
+      this.charFilter.process(charOut, 400, 0.7, SR, 1) * BASS_SPEC.characterLevel
 
     // ── Mix layers ──
     let mixed = sub + filtered * BASS_SPEC.bodyLevel + charFiltered
@@ -257,7 +282,7 @@ export class PsyBass {
     // This removes the boxy 250-400Hz mud that builds up when the body saw
     // harmonics accumulate. ZDFSVF bandpass output is subtracted from the mix.
     const scoopSig = this.midScoop.process(mixed, 300, 0.6, SR, 1)
-    mixed = mixed - scoopSig * 0.5  // deepened: 0.35 → 0.5
+    mixed = mixed - scoopSig * 0.5 // deepened: 0.35 → 0.5
 
     // ── Saturation with oversampling ──
     mixed = this.sat.process(mixed, BASS_SPEC.saturation)
@@ -308,7 +333,14 @@ export class PsyLead {
   // ModulationMatrix (optional — wired by forensic-bridge)
   private matrix: ModulationMatrix | null = null
   // Per-sample modulation params buffer (reused to avoid allocation)
-  private _modParams: { cutoff?: number; fmIndex?: number; amp?: number; drive?: number; delaySend?: number; wavetablePos?: number } = {}
+  private _modParams: {
+    cutoff?: number
+    fmIndex?: number
+    amp?: number
+    drive?: number
+    delaySend?: number
+    wavetablePos?: number
+  } = {}
 
   // Wavetable (optional — when set, replaces the saw fundamental layer with a
   // morphable wavetable. Default null = legacy BLSaw behavior preserved.)
@@ -384,9 +416,18 @@ export class PsyLead {
     }
   }
 
-  trigger(freq: number, dur: number, amp: number, params?: {
-    cutoff?: number; detune?: number; res?: number; lfoRate?: number; lfoDepth?: number
-  }) {
+  trigger(
+    freq: number,
+    dur: number,
+    amp: number,
+    params?: {
+      cutoff?: number
+      detune?: number
+      res?: number
+      lfoRate?: number
+      lfoDepth?: number
+    }
+  ) {
     this.active = true
     this.t = 0
     this.freq = freq
@@ -439,10 +480,13 @@ export class PsyLead {
 
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > 0.05) { this.active = false; return [0, true] }
+      if (this.releaseT > 0.05) {
+        this.active = false
+        return [0, true]
+      }
     }
 
-    const attackEnv = Math.min(1, this.t / 0.001)  // faster attack: 3ms → 1ms = sharper transients
+    const attackEnv = Math.min(1, this.t / 0.001) // faster attack: 3ms → 1ms = sharper transients
 
     // ── Layer 1: Fundamental — DDSP (if connected) OR wavetable OR 2 detuned saws ──
     // Priority: DDSP > Wavetable > BLSaw (legacy)
@@ -456,17 +500,23 @@ export class PsyLead {
       const inc = this.freq / SR
       fundSig = this.wavetable.process(inc)
     } else {
-      fundSig = (this.saw1.process(this.freq * Math.pow(2, -this.pDetune / 1200) / SR) +
-                this.saw2.process(this.freq * Math.pow(2, this.pDetune / 1200) / SR)) * 0.5
+      fundSig =
+        (this.saw1.process((this.freq * Math.pow(2, -this.pDetune / 1200)) / SR) +
+          this.saw2.process((this.freq * Math.pow(2, this.pDetune / 1200)) / SR)) *
+        0.5
     }
 
     // ── Layer 2: Octave-up — 2 detuned saws, adds brightness ──
-    const octSig = (this.octSaw1.process(this.freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200) / SR) +
-                   this.octSaw2.process(this.freq * 2 * Math.pow(2, LEAD_SPEC.octaveDetune / 1200) / SR)) * 0.5 * LEAD_SPEC.octaveLevel
+    const octSig =
+      (this.octSaw1.process((this.freq * 2 * Math.pow(2, -LEAD_SPEC.octaveDetune / 1200)) / SR) +
+        this.octSaw2.process((this.freq * 2 * Math.pow(2, LEAD_SPEC.octaveDetune / 1200)) / SR)) *
+      0.5 *
+      LEAD_SPEC.octaveLevel
 
     // ── Layer 3: Air — noise through HP, adds "sheen" ──
     const n = this.noise.next()
-    const airSig = this.airHP.process(n, 8000, SR) * LEAD_SPEC.airLevel * Math.exp(-this.t / LEAD_SPEC.airDecay)
+    const airSig =
+      this.airHP.process(n, 8000, SR) * LEAD_SPEC.airLevel * Math.exp(-this.t / LEAD_SPEC.airDecay)
 
     // ── Layer 4: FM — carrier + modulator for harmonic richness ──
     const modEnv = Math.exp(-this.t / 0.08)
@@ -584,8 +634,8 @@ export class PsyHat {
     this.amp = amp
     this.open = open
     // Per-hit variation: ±2% pitch, ±10% decay (HAT_SPEC)
-    this.pitchMul = 1.0 + (this.rng.range(-1, 1) * HAT_SPEC.pitchVar)
-    this.decayMul = 1.0 + (this.rng.range(-1, 1) * 0.1)
+    this.pitchMul = 1.0 + this.rng.range(-1, 1) * HAT_SPEC.pitchVar
+    this.decayMul = 1.0 + this.rng.range(-1, 1) * 0.1
     this.decay = (open ? 0.18 : 0.04) * this.decayMul
     this.phases.fill(0)
     this.bp.reset()
@@ -597,7 +647,10 @@ export class PsyHat {
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    if (this.t > this.decay * 2) { this.active = false; return [0, true] }
+    if (this.t > this.decay * 2) {
+      this.active = false
+      return [0, true]
+    }
 
     // Sum 6 square oscillators at inharmonic frequencies (with per-hit pitch variation)
     let metallic = 0
@@ -615,7 +668,7 @@ export class PsyHat {
     // Sparkle layer: pink noise through HP at 12kHz, amplitude 0.6
     // Adds air above the metallic body — targets 5-12kHz presence band.
     const sparkleN = this.sparkleNoise.next()
-    const sparkleSig = this.sparkleHP.process(sparkleN, 12000, SR) * 1.0  // raised: 0.6 → 1.0
+    const sparkleSig = this.sparkleHP.process(sparkleN, 12000, SR) * 1.0 // raised: 0.6 → 1.0
 
     // Two-stage envelope: fast attack, exponential decay
     const env = Math.exp(-this.t / this.decay)
@@ -651,7 +704,10 @@ export class PsySample {
   render(): [number, boolean] {
     if (!this.active || !this.data) return [0, true]
     const idx = Math.floor(this.pos)
-    if (idx >= this.data.length) { this.active = false; return [0, true] }
+    if (idx >= this.data.length) {
+      this.active = false
+      return [0, true]
+    }
     const sample = (this.data[idx] ?? 0) * this.amp
     this.pos += this.playbackRate
     return [sample, false]
@@ -690,7 +746,7 @@ export class PsySnare {
     this.t = 0
     this.amp = amp
     // Per-hit variation: ±5% tone pitch
-    this.toneVar = 1.0 + (this.rng.range(-1, 1) * 0.05)
+    this.toneVar = 1.0 + this.rng.range(-1, 1) * 0.05
     this.tone1Phase = 0
     this.tone2Phase = 0
     this.noise.reset()
@@ -701,7 +757,10 @@ export class PsySnare {
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    if (this.t > 0.2) { this.active = false; return [0, true] }
+    if (this.t > 0.2) {
+      this.active = false
+      return [0, true]
+    }
 
     // ── Noise component: filtered through bandpass + highpass ──
     const n = this.noise.next()
@@ -716,7 +775,8 @@ export class PsySnare {
     this.tone2Phase += (2 * Math.PI * this.freq2 * this.toneVar) / SR
     // Tone has shorter decay (the "thwack")
     const toneEnv = Math.exp(-this.t / 0.05)
-    const toneOut = (Math.sin(this.tone1Phase) * 0.5 + Math.sin(this.tone2Phase) * 0.4) * toneEnv * 0.4
+    const toneOut =
+      (Math.sin(this.tone1Phase) * 0.5 + Math.sin(this.tone2Phase) * 0.4) * toneEnv * 0.4
 
     return [(noiseOut + toneOut) * this.amp, false]
   }
@@ -755,7 +815,10 @@ export class PsySubBass {
     this.t += 1 / SR
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > 0.1) { this.active = false; return [0, true] }
+      if (this.releaseT > 0.1) {
+        this.active = false
+        return [0, true]
+      }
     }
     this.phase += (2 * Math.PI * this.freq) / SR
     const attackEnv = Math.min(1, this.t / 0.02)
@@ -817,14 +880,20 @@ export class PsyPad {
     this.sat.reset()
   }
 
-  noteOff() { this.releasing = true; this.releaseT = 0 }
+  noteOff() {
+    this.releasing = true
+    this.releaseT = 0
+  }
 
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > PAD_SPEC.release) { this.active = false; return [0, true] }
+      if (this.releaseT > PAD_SPEC.release) {
+        this.active = false
+        return [0, true]
+      }
     }
 
     // ── Layers 1-2: Detuned saws ──
@@ -838,7 +907,9 @@ export class PsyPad {
     // ── Layer 4: Chorus — delayed detuned copy with LFO ──
     const inputSig = sawSig + triSig
     const chorusLfo = Math.sin(2 * Math.PI * PAD_SPEC.chorusRate * this.t) * PAD_SPEC.chorusDepth
-    const chorusReadPos = (this.chorusPos - Math.floor(this.chorusDelay * (1 + chorusLfo * 0.1)) + this.chorusDelay) % this.chorusDelay
+    const chorusReadPos =
+      (this.chorusPos - Math.floor(this.chorusDelay * (1 + chorusLfo * 0.1)) + this.chorusDelay) %
+      this.chorusDelay
     const chorusSig = this.chorusBuf[chorusReadPos]! * 0.3
     this.chorusBuf[this.chorusPos] = inputSig
     this.chorusPos = (this.chorusPos + 1) % this.chorusDelay
@@ -849,7 +920,7 @@ export class PsyPad {
     const shimmerSig = (2 * Math.abs(2 * this.shimmerPhase - 1) - 1) * PAD_SPEC.shimmerLevel * 0.3
 
     // ── Mix all layers ──
-    let signal = inputSig + chorusSig + shimmerSig
+    const signal = inputSig + chorusSig + shimmerSig
 
     // ── Filter: slow sweep with dual LFO ──
     const lfo1 = Math.sin(2 * Math.PI * PAD_SPEC.filterLfoRate * this.t) * PAD_SPEC.filterLfoDepth
@@ -858,7 +929,7 @@ export class PsyPad {
     const filtered = this.filter.process(signal, cutoff, PAD_SPEC.res, SR, 0)
 
     // ── Subtle saturation ──
-    let out = this.sat.process(filtered, PAD_SPEC.saturation)
+    const out = this.sat.process(filtered, PAD_SPEC.saturation)
 
     // ── Envelope: long attack + release ──
     const attackEnv = Math.min(1, this.t / PAD_SPEC.attack)
@@ -896,7 +967,7 @@ export class PsyShaker {
     this.t = 0
     this.amp = amp
     // Per-hit variation: ±200Hz bandpass center
-    this.bpFreqVar = 7000 + (this.rng.range(-1, 1) * 200)
+    this.bpFreqVar = 7000 + this.rng.range(-1, 1) * 200
     this.noise.reset()
     this.bp.reset()
     this.hp.reset()
@@ -905,7 +976,10 @@ export class PsyShaker {
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    if (this.t > 0.06) { this.active = false; return [0, true] }
+    if (this.t > 0.06) {
+      this.active = false
+      return [0, true]
+    }
     const n = this.noise.next()
     // Bandpass with per-hit frequency variation
     const bpOut = this.bp.process(n, this.bpFreqVar, 0.4, SR, 1)
@@ -970,7 +1044,10 @@ export class PsyAcid {
     this.t += 1 / SR
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > 0.1) { this.active = false; return [0, true] }
+      if (this.releaseT > 0.1) {
+        this.active = false
+        return [0, true]
+      }
     }
 
     // ── Square oscillator ──
@@ -1034,7 +1111,7 @@ export class PsyTexture {
   // with real granular synthesis. Each grain has its own position, pitch,
   // pan, and Hann envelope. Spawns grains at the configured density.
   private cloud: GrainCloud
-  private cloudAmp = 0.6      // gain applied to grain cloud output
+  private cloudAmp = 0.6 // gain applied to grain cloud output
   // Noise bed (kept — adds a low-frequency rumble layer beneath the grains)
   noise: PinkNoise
   noiseBP = new ZDFSVF()
@@ -1056,8 +1133,8 @@ export class PsyTexture {
     // Density 60 grains/sec, 40ms grains — dense evolving texture
     this.cloud.setDensity(60)
     this.cloud.setGrainDuration(40)
-    this.cloud.setPitchVar(0.15)    // +/-15% pitch variation
-    this.cloud.setPosVar(0.4)       // +/-40% position spread
+    this.cloud.setPitchVar(0.15) // +/-15% pitch variation
+    this.cloud.setPosVar(0.4) // +/-40% position spread
     this.cloud.setAmp(0.5)
     this.noise = new PinkNoise(rng)
   }
@@ -1085,14 +1162,20 @@ export class PsyTexture {
     this.sat.reset()
   }
 
-  noteOff() { this.releasing = true; this.releaseT = 0 }
+  noteOff() {
+    this.releasing = true
+    this.releaseT = 0
+  }
 
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
     if (this.releasing) {
       this.releaseT += 1 / SR
-      if (this.releaseT > 0.5) { this.active = false; return [0, true] }
+      if (this.releaseT > 0.5) {
+        this.active = false
+        return [0, true]
+      }
     }
 
     // ── Layer 1: Real granular cloud — spawns grains, applies Hann window ──
@@ -1108,7 +1191,7 @@ export class PsyTexture {
     const noiseSig = this.noiseBP.process(n, noiseSweep, 0.5, SR, 1) * 0.3
 
     // ── Mix ──
-    let signal = grainSig + noiseSig * 0.4
+    const signal = grainSig + noiseSig * 0.4
 
     // ── Filter: slow morph (0.05Hz) ──
     const morphLfo = Math.sin(2 * Math.PI * 0.05 * this.t) * 0.5
@@ -1116,7 +1199,7 @@ export class PsyTexture {
     const filtered = this.filter.process(signal, cutoff, 0.3, SR, 0)
 
     // ── Saturation ──
-    let out = this.sat.process(filtered, 1.2)
+    const out = this.sat.process(filtered, 1.2)
 
     // ── Envelope: very slow attack + long release ──
     const attackEnv = Math.min(1, this.t / 0.5) // 0.5s attack
@@ -1142,7 +1225,9 @@ export class PsyRiser {
   saw = new BLSaw()
   sawPhase = 0
 
-  constructor(rng: Rng) { this.noise = new PinkNoise(rng) }
+  constructor(rng: Rng) {
+    this.noise = new PinkNoise(rng)
+  }
 
   trigger(dur: number, amp: number) {
     this.active = true
@@ -1158,7 +1243,10 @@ export class PsyRiser {
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    if (this.t > this.dur) { this.active = false; return [0, true] }
+    if (this.t > this.dur) {
+      this.active = false
+      return [0, true]
+    }
     const progress = this.t / this.dur
 
     // Noise sweep: filter opens from 200Hz to 10kHz
@@ -1190,7 +1278,9 @@ export class PsyImpact {
   amp = 0.4
   noise: PinkNoise
 
-  constructor(rng: Rng) { this.noise = new PinkNoise(rng) }
+  constructor(rng: Rng) {
+    this.noise = new PinkNoise(rng)
+  }
 
   trigger(amp: number) {
     this.active = true
@@ -1203,7 +1293,10 @@ export class PsyImpact {
   render(): [number, boolean] {
     if (!this.active) return [0, true]
     this.t += 1 / SR
-    if (this.t > 0.5) { this.active = false; return [0, true] }
+    if (this.t > 0.5) {
+      this.active = false
+      return [0, true]
+    }
     const freq = (120 - 35) * Math.exp(-this.t / 0.1) + 35
     this.phase += (2 * Math.PI * freq) / SR
     const sub = Math.sin(this.phase) * Math.exp(-this.t / 0.3) * 0.7

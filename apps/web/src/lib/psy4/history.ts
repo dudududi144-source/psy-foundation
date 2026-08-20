@@ -14,23 +14,23 @@
  */
 
 export interface Command {
-  type: string                    // e.g. 'setCutoff', 'loadPreset'
-  description: string             // human-readable for UI: "Set Cutoff to 4200"
-  undo: () => void                // revert the change
-  redo: () => void                // re-apply the change
-  timestamp: number              // when executed
+  type: string // e.g. 'setCutoff', 'loadPreset'
+  description: string // human-readable for UI: "Set Cutoff to 4200"
+  undo: () => void // revert the change
+  redo: () => void // re-apply the change
+  timestamp: number // when executed
 }
 
 export class HistoryManager {
   private undoStack: Command[] = []
   private redoStack: Command[] = []
-  private maxHistory = 100        // bounded history to prevent memory growth
+  private maxHistory = 100 // bounded history to prevent memory growth
   private listeners: Set<() => void> = new Set()
 
   /** Execute a command and push to undo stack */
   execute(cmd: Omit<Command, 'timestamp'>): void {
     const fullCmd: Command = { ...cmd, timestamp: Date.now() }
-    fullCmd.redo()  // apply the change
+    fullCmd.redo() // apply the change
     this.undoStack.push(fullCmd)
     // Clear redo stack (new action invalidates redo history)
     this.redoStack = []
@@ -62,16 +62,24 @@ export class HistoryManager {
   }
 
   /** Can undo? */
-  canUndo(): boolean { return this.undoStack.length > 0 }
+  canUndo(): boolean {
+    return this.undoStack.length > 0
+  }
 
   /** Can redo? */
-  canRedo(): boolean { return this.redoStack.length > 0 }
+  canRedo(): boolean {
+    return this.redoStack.length > 0
+  }
 
   /** Get undo stack (for UI display) */
-  getUndoStack(): Command[] { return [...this.undoStack] }
+  getUndoStack(): Command[] {
+    return [...this.undoStack]
+  }
 
   /** Get redo stack (for UI display) */
-  getRedoStack(): Command[] { return [...this.redoStack] }
+  getRedoStack(): Command[] {
+    return [...this.redoStack]
+  }
 
   /** Clear all history */
   clear(): void {
@@ -99,7 +107,7 @@ export class HistoryManager {
   }
 
   private notifyListeners(): void {
-    this.listeners.forEach(l => l())
+    this.listeners.forEach((l) => l())
   }
 
   /** Get history stats */

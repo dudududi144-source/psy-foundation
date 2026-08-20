@@ -23,20 +23,20 @@
 export type InterpolationType = 'linear' | 'exponential' | 'step' | 'bezier'
 
 export interface AutomationPoint {
-  time: number          // seconds
-  value: number         // parameter value
-  interpolation?: InterpolationType  // how to interpolate to next point
-  tension?: number      // for bezier (0-1, 0.5 = smooth)
+  time: number // seconds
+  value: number // parameter value
+  interpolation?: InterpolationType // how to interpolate to next point
+  tension?: number // for bezier (0-1, 0.5 = smooth)
 }
 
 export interface AutomationLane {
-  name: string                    // parameter name (e.g. 'cutoff')
-  points: AutomationPoint[]       // sorted by time
+  name: string // parameter name (e.g. 'cutoff')
+  points: AutomationPoint[] // sorted by time
   minValue: number
   maxValue: number
   defaultValue: number
-  unit?: string                   // 'Hz', '%', etc.
-  color?: string                  // for UI display
+  unit?: string // 'Hz', '%', etc.
+  color?: string // for UI display
 }
 
 export class AutomationEngine {
@@ -81,7 +81,7 @@ export class AutomationEngine {
   removePoint(laneName: string, time: number): void {
     const lane = this.lanes.get(laneName)
     if (!lane) return
-    lane.points = lane.points.filter(p => Math.abs(p.time - time) > 0.001)
+    lane.points = lane.points.filter((p) => Math.abs(p.time - time) > 0.001)
     this.notifyListeners()
   }
 
@@ -123,7 +123,7 @@ export class AutomationEngine {
         const ratio = prev.value !== 0 ? next.value / prev.value : 1
         return prev.value * Math.pow(ratio, t)
       case 'step':
-        return prev.value  // Hold until next point
+        return prev.value // Hold until next point
       case 'bezier':
         // Simple bezier with tension
         const tension = prev.tension ?? 0.5
@@ -200,7 +200,7 @@ export class AutomationEngine {
   }
 
   private notifyListeners(): void {
-    this.listeners.forEach(l => l())
+    this.listeners.forEach((l) => l())
   }
 
   /** Get stats */

@@ -15,7 +15,7 @@
  *   const sample = wg.render()
  */
 
-import { Rng } from '../forensic/prng'
+import type { Rng } from '../forensic/prng'
 
 export class WaveguideString {
   private delayLine: Float32Array
@@ -30,7 +30,7 @@ export class WaveguideString {
     this.delayLine = new Float32Array(4410)
   }
 
-  trigger(freq: number, amp: number, damping: number = 0.5) {
+  trigger(freq: number, amp: number, damping = 0.5) {
     this.delayLength = Math.max(2, Math.floor(this.SR / freq))
     if (this.delayLength > this.delayLine.length) {
       this.delayLine = new Float32Array(this.delayLength + 10)
@@ -74,6 +74,11 @@ export class WaveguideString {
     return current * this.amp
   }
 
-  noteOff(): void { this.amp *= 0.5 }
-  reset(): void { this.active = false; this.amp = 0 }
+  noteOff(): void {
+    this.amp *= 0.5
+  }
+  reset(): void {
+    this.active = false
+    this.amp = 0
+  }
 }

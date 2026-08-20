@@ -38,16 +38,16 @@ export interface ArrangementSection {
   type: SectionType
   name: string
   bars: number
-  energy: number          // 0-1
+  energy: number // 0-1
   tensionShape: 'rise' | 'fall' | 'arc' | 'sustain'
   voices: string[]
-  variation: number       // 0-1, controls per-section variation
+  variation: number // 0-1, controls per-section variation
 }
 
 export interface ArrangementPlan {
   sections: ArrangementSection[]
   totalBars: number
-  structureHash: string   // unique identifier for this arrangement
+  structureHash: string // unique identifier for this arrangement
 }
 
 // ── Psytrance section conventions ──
@@ -103,8 +103,8 @@ const TRANSITIONS: Record<SectionType, Partial<Record<SectionType, number>>> = {
 
 function mulberry32(seed: number): () => number {
   let a = seed | 0
-  return function () {
-    a = (a + 0x6D2B79F5) | 0
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
     let t = a
     t = Math.imul(t ^ (t >>> 15), t | 1)
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
@@ -115,7 +115,7 @@ function mulberry32(seed: number): () => number {
 export class ArrangementGenerator {
   private rng: () => number
 
-  constructor(seed: number = 42) {
+  constructor(seed = 42) {
     this.rng = mulberry32(seed)
   }
 
@@ -149,7 +149,7 @@ export class ArrangementGenerator {
     return { type, name: type, bars, energy, tensionShape, voices, variation }
   }
 
-  generate(targetBars: number = 88): ArrangementPlan {
+  generate(targetBars = 88): ArrangementPlan {
     const sections: ArrangementSection[] = []
     let totalBars = 0
     let current: SectionType = 'intro'
@@ -175,7 +175,7 @@ export class ArrangementGenerator {
       totalBars += sections[sections.length - 1]!.bars
     }
 
-    const structureStr = sections.map(s => `${s.type[0]}${s.bars}`).join('-')
+    const structureStr = sections.map((s) => `${s.type[0]}${s.bars}`).join('-')
     const structureHash = this.hashString(structureStr)
 
     return { sections, totalBars, structureHash }
@@ -185,13 +185,13 @@ export class ArrangementGenerator {
     let hash = 0
     for (let i = 0; i < s.length; i++) {
       const char = s.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
+      hash = (hash << 5) - hash + char
       hash = hash & hash
     }
     return Math.abs(hash).toString(16).padStart(8, '0')
   }
 
-  generateShort(targetBars: number = 8): ArrangementPlan {
+  generateShort(targetBars = 8): ArrangementPlan {
     const shortDurations: Record<SectionType, number> = {
       intro: Math.max(2, Math.floor(targetBars * 0.15)),
       build: Math.max(2, Math.floor(targetBars * 0.2)),
@@ -220,11 +220,11 @@ export class ArrangementGenerator {
       totalBars += bars
     }
 
-    const structureStr = sections.map(s => `${s.type[0]}${s.bars}`).join('-')
+    const structureStr = sections.map((s) => `${s.type[0]}${s.bars}`).join('-')
     return { sections, totalBars, structureHash: this.hashString(structureStr) }
   }
 
-  static generateVariations(count: number, baseSeed: number, targetBars: number = 88): ArrangementPlan[] {
+  static generateVariations(count: number, baseSeed: number, targetBars = 88): ArrangementPlan[] {
     const plans: ArrangementPlan[] = []
     for (let i = 0; i < count; i++) {
       const gen = new ArrangementGenerator(baseSeed + i * 1000)
@@ -244,7 +244,7 @@ export function planToSpec(plan: ArrangementPlan): {
   }>
 } {
   return {
-    sections: plan.sections.map(s => ({
+    sections: plan.sections.map((s) => ({
       name: s.name,
       bars: s.bars,
       energy: s.energy,

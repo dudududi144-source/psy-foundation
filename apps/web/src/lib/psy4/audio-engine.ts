@@ -59,7 +59,7 @@ export class PSY4AudioEngine {
     }
   }
 
-  noteOn(midi: number, velocity: number = 0.8): void {
+  noteOn(midi: number, velocity = 0.8): void {
     if (!this.workletNode) return
     this.workletNode.port.postMessage({ type: 'noteOn', midi, velocity })
   }
@@ -84,7 +84,7 @@ export class PSY4AudioEngine {
       return false
     }
     try {
-      this.midiAccess = await (navigator as any).requestMIDIAccess() as MIDIAccess
+      this.midiAccess = (await (navigator as any).requestMIDIAccess()) as MIDIAccess
       this.midiAccess.onstatechange = () => {
         // Could emit event for UI update
       }

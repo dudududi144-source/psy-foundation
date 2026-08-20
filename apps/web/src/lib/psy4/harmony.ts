@@ -44,10 +44,10 @@ export const CHORD_INTERVALS: Record<ChordType, number[]> = {
 }
 
 export interface Chord {
-  root: number       // MIDI note
+  root: number // MIDI note
   type: ChordType
-  notes: number[]    // MIDI notes
-  name: string       // e.g. "Am7"
+  notes: number[] // MIDI notes
+  name: string // e.g. "Am7"
 }
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -59,10 +59,14 @@ export function midiToNoteName(midi: number): string {
 
 export function buildScale(rootMidi: number, scaleType: ScaleType): number[] {
   const intervals = SCALE_INTERVALS[scaleType]
-  return intervals.map(i => rootMidi + i)
+  return intervals.map((i) => rootMidi + i)
 }
 
-export function buildScaleSpanning(rootMidi: number, scaleType: ScaleType, octaves: number): number[] {
+export function buildScaleSpanning(
+  rootMidi: number,
+  scaleType: ScaleType,
+  octaves: number
+): number[] {
   const notes: number[] = []
   const span = Math.max(1, Math.floor(octaves))
   for (let o = 0; o < span; o++) {
@@ -74,16 +78,22 @@ export function buildScaleSpanning(rootMidi: number, scaleType: ScaleType, octav
 }
 
 export function buildChord(rootMidi: number, chordType: ChordType): number[] {
-  return CHORD_INTERVALS[chordType].map(i => rootMidi + i)
+  return CHORD_INTERVALS[chordType].map((i) => rootMidi + i)
 }
 
 export function buildChordNamed(rootMidi: number, chordType: ChordType): Chord {
   const notes = buildChord(rootMidi, chordType)
   const rootName = midiToNoteName(rootMidi)
   const typeSuffix: Record<ChordType, string> = {
-    maj: '', min: 'm', dim: 'dim', aug: 'aug',
-    maj7: 'maj7', min7: 'm7', dom7: '7',
-    sus4: 'sus4', power: '5',
+    maj: '',
+    min: 'm',
+    dim: 'dim',
+    aug: 'aug',
+    maj7: 'maj7',
+    min7: 'm7',
+    dom7: '7',
+    sus4: 'sus4',
+    power: '5',
   }
   return { root: rootMidi, type: chordType, notes, name: rootName + typeSuffix[chordType] }
 }
@@ -124,22 +134,22 @@ export function diatonicChord(rootMidi: number, scaleType: ScaleType, degree: nu
 export function buildProgression(
   rootMidi: number,
   scaleType: ScaleType,
-  degrees: number[],
+  degrees: number[]
 ): Chord[] {
-  return degrees.map(deg => diatonicChord(rootMidi, scaleType, deg))
+  return degrees.map((deg) => diatonicChord(rootMidi, scaleType, deg))
 }
 
 /**
  * Common psytrance progressions.
  */
 export const PSYTRANCE_PROGRESSIONS: Record<string, number[]> = {
-  'hypnotic': [0, 0, 0, 0],           // I-I-I-I (drone)
-  'dark': [0, 1, 0, 1],               // I-II-I-II (Phrygian)
-  'uplifting': [0, 5, 3, 4],          // I-vi-IV-V
-  'epic': [0, 3, 5, 4],              // I-IV-vi-V
-  'classic': [0, 4, 5, 3],           // I-V-vi-IV
-  'minor': [0, 5, 3, 4],             // i-VI-III-VII (minor)
-  'psy-dominant': [0, 1, 0, 6],      // I-II-I-VII (Phrygian dominant)
+  hypnotic: [0, 0, 0, 0], // I-I-I-I (drone)
+  dark: [0, 1, 0, 1], // I-II-I-II (Phrygian)
+  uplifting: [0, 5, 3, 4], // I-vi-IV-V
+  epic: [0, 3, 5, 4], // I-IV-vi-V
+  classic: [0, 4, 5, 3], // I-V-vi-IV
+  minor: [0, 5, 3, 4], // i-VI-III-VII (minor)
+  'psy-dominant': [0, 1, 0, 6], // I-II-I-VII (Phrygian dominant)
 }
 
 /**

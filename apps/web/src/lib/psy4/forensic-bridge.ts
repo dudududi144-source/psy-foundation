@@ -1,41 +1,46 @@
-/**
- * Forensic Bridge v3 — Foundation RawScore → Psy Voices → Per-Channel FX → Master Chain → Stereo PCM
- *
- * Architecture:
- *   RawScore → event scheduler → voice pools → per-type ChannelFX (EQ+delay+reverb+pan+width)
- *   → 3-bus sum (drum/bass/music) with glue compression
- *   → MultibandCompressor (3-band, LR4 crossovers)
- *   → StereoWidener (M/S, width 1.3)
- *   → LUFS measurement → gain targeting (-9 LUFS)
- *   → TruePeakLimiter (4x oversampled, -1 dBTP brickwall)
- *   → Stereo PCM 44100Hz
- *
- * All stages deterministic. Same seed → bit-identical output.
- */
-
-import { CompositionEngine } from '@psy-foundation/music'
-import { createIdentityA } from '@psy-foundation/music'
 import { serializeRawScore } from '@psy-foundation/music'
 import type { ComposedSection } from '@psy-foundation/music'
 
-import { Rng } from './forensic/prng'
-import { fastTanh } from './forensic/dsp'
-import { BusProcessor, MasterChain } from './forensic/mixing'
-import { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyRiser, PsyImpact, PsyAcid, PsyTexture } from './psy-voices'
-import { Wavetable } from './wavetable'
-import { WaveguideString } from './physical/waveguide-string'
-import { DDSPHarmonic } from './neural/ddsp-harmonic'
 import type { AutomationEngine } from './automation'
 import { ChannelFX } from './channel-fx'
 import { CHANNEL_PRESETS } from './channel-presets'
-import { MultibandCompressor, LR4Crossover } from './multiband'
-import { StereoWidener } from './ms-processor'
-import { measureLUFS, lufsToGainOffset } from './loudness'
+import { fastTanh } from './forensic/dsp'
+import { BusProcessor, MasterChain } from './forensic/mixing'
+import { Rng } from './forensic/prng'
+import { PSYTRANCE_PROGRESSIONS, buildProgression } from './harmony'
+import { driftTime, jitterVelocity, mulberry32 } from './humanizer'
 import { TruePeakLimiter } from './limiter'
-import { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, HAT_SPEC, SNARE_SPEC, BUS_GAINS, MASTER_SPEC } from './voice-specs'
-import { mulberry32, jitterVelocity, driftTime } from './humanizer'
-import { buildProgression, PSYTRANCE_PROGRESSIONS, type Chord } from './harmony'
+import { lufsToGainOffset, measureLUFS } from './loudness'
 import { ModulationMatrix } from './modulation-matrix'
+import { StereoWidener } from './ms-processor'
+import { LR4Crossover, MultibandCompressor } from './multiband'
+import { WaveguideString } from './physical/waveguide-string'
+import {
+  PsyAcid,
+  PsyBass,
+  PsyHat,
+  PsyImpact,
+  PsyKick,
+  PsyLead,
+  PsyPad,
+  PsyRiser,
+  PsySample,
+  PsyShaker,
+  PsySnare,
+  PsySubBass,
+  PsyTexture,
+} from './psy-voices'
+import {
+  BASS_SPEC,
+  BUS_GAINS,
+  HAT_SPEC,
+  KICK_SPEC,
+  LEAD_SPEC,
+  MASTER_SPEC,
+  PAD_SPEC,
+  SNARE_SPEC,
+} from './voice-specs'
+import { Wavetable } from './wavetable'
 
 const SR = 44100
 const TARGET_LUFS = MASTER_SPEC.targetLufs
@@ -45,11 +50,17 @@ const TARGET_LUFS = MASTER_SPEC.targetLufs
 function decodeWav(buffer: ArrayBuffer): { data: Float32Array; sampleRate: number } {
   const view = new DataView(buffer)
   if (view.getUint32(0, false) !== 0x52494646) throw new Error('Not WAV')
-  let dataOffset = 44, dataSize = 0, offset = 12
+  let dataOffset = 44,
+    dataSize = 0,
+    offset = 12
   while (offset < buffer.byteLength - 8) {
     const chunkId = view.getUint32(offset, false)
     const chunkSize = view.getUint32(offset + 4, true)
-    if (chunkId === 0x64617461) { dataOffset = offset + 8; dataSize = chunkSize; break }
+    if (chunkId === 0x64617461) {
+      dataOffset = offset + 8
+      dataSize = chunkSize
+      break
+    }
     offset += 8 + chunkSize + (chunkSize % 2)
   }
   if (dataSize === 0) throw new Error('No data chunk')
@@ -83,31 +94,31 @@ function decodeWav(buffer: ArrayBuffer): { data: Float32Array; sampleRate: numbe
 
 export interface RenderConfig {
   // Kick
-  kickFundamental: number      // Hz, default 46
-  kickDecay: number            // seconds, default 0.11
+  kickFundamental: number // Hz, default 46
+  kickDecay: number // seconds, default 0.11
   // Bass
-  bassDecay: number            // seconds, default 0.06 (passed to PsyBass via trigger dur)
-  bassGain: number             // linear, default 1.0
+  bassDecay: number // seconds, default 0.06 (passed to PsyBass via trigger dur)
+  bassGain: number // linear, default 1.0
   // Lead
-  leadCutoff: number           // Hz, default 4500
-  leadGain: number             // linear, default 1.0
-  leadResonance: number        // 0..1, default 0.5
+  leadCutoff: number // Hz, default 4500
+  leadGain: number // linear, default 1.0
+  leadResonance: number // 0..1, default 0.5
   // Hats
-  hatGain: number              // linear, default 0.8
-  openHatGain: number          // linear, default 0.4
+  hatGain: number // linear, default 0.8
+  openHatGain: number // linear, default 0.4
   // Snare
-  snareGain: number            // linear, default 0.6
+  snareGain: number // linear, default 0.6
   // Shaker
-  shakerGain: number           // linear, default 1.0
+  shakerGain: number // linear, default 1.0
   // Sub-bass
-  subBassGain: number          // linear, default 1.0
+  subBassGain: number // linear, default 1.0
   // Pad
-  padGain: number              // linear, default 1.0
+  padGain: number // linear, default 1.0
   // Sidechain
-  duckAmount: number           // 0..1, depth (1 = full duck to 0), default 0.75
+  duckAmount: number // 0..1, depth (1 = full duck to 0), default 0.75
   // Master
-  targetLufs: number           // default -9
-  stereoWidth: number          // 0..2, default 1.3
+  targetLufs: number // default -9
+  stereoWidth: number // 0..2, default 1.3
 }
 
 export const DEFAULT_RENDER_CONFIG: RenderConfig = {
@@ -156,7 +167,13 @@ export interface RenderResult {
 
 export async function renderFoundationSection(
   section: ComposedSection,
-  options: { useSamples?: boolean; bpm?: number; config?: Partial<RenderConfig>; stems?: boolean; automation?: AutomationEngine } = {}
+  options: {
+    useSamples?: boolean
+    bpm?: number
+    config?: Partial<RenderConfig>
+    stems?: boolean
+    automation?: AutomationEngine
+  } = {}
 ): Promise<RenderResult> {
   const cfg: RenderConfig = { ...DEFAULT_RENDER_CONFIG, ...options.config }
   const automation = options.automation ?? null
@@ -169,7 +186,13 @@ export async function renderFoundationSection(
 
   // Only render bars with kick+bass (skip INTRO/OUTRO silence)
   // Fix: keep BREAK bars — they have kick+bass and add dynamic contrast
-  const activeBars = rawScore.bars.filter(b => b.roles.kick && b.roles.bass && b.arrangementState !== 'INTRO' && b.arrangementState !== 'OUTRO')
+  const activeBars = rawScore.bars.filter(
+    (b) =>
+      b.roles.kick &&
+      b.roles.bass &&
+      b.arrangementState !== 'INTRO' &&
+      b.arrangementState !== 'OUTRO'
+  )
   const renderBars = activeBars.length > 0 ? activeBars : rawScore.bars
   const barRemap = new Map<number, number>()
   renderBars.forEach((b, i) => barRemap.set(b.barIndex, i))
@@ -208,8 +231,8 @@ export async function renderFoundationSection(
 
   // ── Connect synthesis engines to voices (Phase 2 integration) ──
   // Wavetable → Lead: replaces the dual-saw fundamental with a morphable wavetable
-  const leadWavetable = Wavetable.createMulti()  // 6 morphable tables
-  leadWavetable.setPosition(0.4)  // start between saw and psyLead
+  const leadWavetable = Wavetable.createMulti() // 6 morphable tables
+  leadWavetable.setPosition(0.4) // start between saw and psyLead
   for (const lead of leads) lead.setWavetable(leadWavetable)
 
   // Waveguide → Bass: adds Karplus-Strong string decay to the bass voice
@@ -281,12 +304,66 @@ export async function renderFoundationSection(
   }
 
   // ── Mix bus (stereo) — glue compression per bus (from BUS_GAINS) ──
-  const drumBusL = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: BUS_GAINS.drum })
-  const drumBusR = new BusProcessor({ hpFreq: 0, compThr: 0.5, compRatio: 3, compAtt: 0.002, compRel: 0.08, compMakeup: 1.3, drive: 1.2, gain: BUS_GAINS.drum })
-  const bassBusL = new BusProcessor({ hpFreq: BASS_SPEC.hpFreq + 80, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: BUS_GAINS.bass })
-  const bassBusR = new BusProcessor({ hpFreq: BASS_SPEC.hpFreq + 80, compThr: 0.4, compRatio: 2, compAtt: 0.005, compRel: 0.1, compMakeup: 1.0, drive: 1.0, gain: BUS_GAINS.bass })
-  const musicBusL = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: BUS_GAINS.music })
-  const musicBusR = new BusProcessor({ hpFreq: 180, compThr: 0.4, compRatio: 2, compAtt: 0.01, compRel: 0.15, compMakeup: 1.3, drive: 1.2, gain: BUS_GAINS.music })
+  const drumBusL = new BusProcessor({
+    hpFreq: 0,
+    compThr: 0.5,
+    compRatio: 3,
+    compAtt: 0.002,
+    compRel: 0.08,
+    compMakeup: 1.3,
+    drive: 1.2,
+    gain: BUS_GAINS.drum,
+  })
+  const drumBusR = new BusProcessor({
+    hpFreq: 0,
+    compThr: 0.5,
+    compRatio: 3,
+    compAtt: 0.002,
+    compRel: 0.08,
+    compMakeup: 1.3,
+    drive: 1.2,
+    gain: BUS_GAINS.drum,
+  })
+  const bassBusL = new BusProcessor({
+    hpFreq: BASS_SPEC.hpFreq + 80,
+    compThr: 0.4,
+    compRatio: 2,
+    compAtt: 0.005,
+    compRel: 0.1,
+    compMakeup: 1.0,
+    drive: 1.0,
+    gain: BUS_GAINS.bass,
+  })
+  const bassBusR = new BusProcessor({
+    hpFreq: BASS_SPEC.hpFreq + 80,
+    compThr: 0.4,
+    compRatio: 2,
+    compAtt: 0.005,
+    compRel: 0.1,
+    compMakeup: 1.0,
+    drive: 1.0,
+    gain: BUS_GAINS.bass,
+  })
+  const musicBusL = new BusProcessor({
+    hpFreq: 180,
+    compThr: 0.4,
+    compRatio: 2,
+    compAtt: 0.01,
+    compRel: 0.15,
+    compMakeup: 1.3,
+    drive: 1.2,
+    gain: BUS_GAINS.music,
+  })
+  const musicBusR = new BusProcessor({
+    hpFreq: 180,
+    compThr: 0.4,
+    compRatio: 2,
+    compAtt: 0.01,
+    compRel: 0.15,
+    compMakeup: 1.3,
+    drive: 1.2,
+    gain: BUS_GAINS.music,
+  })
 
   const masterGlueL = new MasterChain()
   const masterGlueR = new MasterChain()
@@ -300,7 +377,14 @@ export async function renderFoundationSection(
   const bassXover = new LR4Crossover(120, SR)
 
   // ── Events ──
-  interface Ev { pos: number; type: string; midi?: number; freqs?: number[]; vel: number; dur: number }
+  interface Ev {
+    pos: number
+    type: string
+    midi?: number
+    freqs?: number[]
+    vel: number
+    dur: number
+  }
   const events: Ev[] = []
 
   for (const bar of renderBars) {
@@ -313,44 +397,70 @@ export async function renderFoundationSection(
     const phase = barIdx % 8
     const playKick = true
     const playBass = true
-    const playHats = true              // hats from bar 0 (keep energy)
-    const playLead = phase >= 2        // lead enters at bar 2
-    const playCounter = phase >= 3     // counter at bar 3
-    const playPad = phase >= 1 && phase !== 6  // pad from bar 1, except break
-    const playSnare = phase >= 2       // snare from bar 2
-    const playShaker = true            // shaker from bar 0 (driving pulse)
-    const playFX = phase === 6 || phase === 7  // riser/impact at break/drop
-    const isBreak = phase === 6        // break bar: drop lead, keep percussion
+    const playHats = true // hats from bar 0 (keep energy)
+    const playLead = phase >= 2 // lead enters at bar 2
+    const playCounter = phase >= 3 // counter at bar 3
+    const playPad = phase >= 1 && phase !== 6 // pad from bar 1, except break
+    const playSnare = phase >= 2 // snare from bar 2
+    const playShaker = true // shaker from bar 0 (driving pulse)
+    const playFX = phase === 6 || phase === 7 // riser/impact at break/drop
+    const isBreak = phase === 6 // break bar: drop lead, keep percussion
 
     // Four-on-the-floor kick with per-bar velocity variation
     // SELF_ROAST fix #3: vary kick pattern per 4-bar phrase to reduce uniformity.
     // Bar 3 of each phrase: drop the last kick (step 12) to create a "breath"
     // before the next phrase. Adds anticipation/fill feel.
     const kickPhraseBar = barIdx % 8
-    const kickVelBase = kickPhraseBar < 2 ? 0.85 : kickPhraseBar < 4 ? 0.8 : kickPhraseBar < 6 ? 0.9 : 0.7
-    const kickDropBar = (barIdx % 4) === 3  // drop on bar 3 of each 4-bar phrase
-    const kickSteps = kickDropBar ? [0, 4, 8] : [0, 4, 8, 12]  // skip step 12 on drop bars
+    const kickVelBase =
+      kickPhraseBar < 2 ? 0.85 : kickPhraseBar < 4 ? 0.8 : kickPhraseBar < 6 ? 0.9 : 0.7
+    const kickDropBar = barIdx % 4 === 3 // drop on bar 3 of each 4-bar phrase
+    const kickSteps = kickDropBar ? [0, 4, 8] : [0, 4, 8, 12] // skip step 12 on drop bars
     // Step 8 alternates 1.0/0.75 per bar — creates syncopated kick variation
     const step8VelMod = barIdx % 2 === 0 ? 1.0 : 0.75
     for (const step of kickSteps) {
       const a = accent[step % accent.length] ?? 1
       const velMod = step === 0 ? 1.0 : step === 8 ? step8VelMod : step === 12 ? 0.9 : 0.95
-      events.push({ pos: barStart + step * samplesPerStep, type: 'kick', vel: kickVelBase * velMod + a * 0.1, dur: samplesPerStep })
+      events.push({
+        pos: barStart + step * samplesPerStep,
+        type: 'kick',
+        vel: kickVelBase * velMod + a * 0.1,
+        dur: samplesPerStep,
+      })
     }
     // On drop bars, add a fill snare on step 14-15 to replace the missing kick
     if (kickDropBar) {
-      events.push({ pos: barStart + 14 * samplesPerStep, type: 'snare', vel: 0.35, dur: samplesPerStep })
-      events.push({ pos: barStart + 15 * samplesPerStep, type: 'snare', vel: 0.45, dur: samplesPerStep })
+      events.push({
+        pos: barStart + 14 * samplesPerStep,
+        type: 'snare',
+        vel: 0.35,
+        dur: samplesPerStep,
+      })
+      events.push({
+        pos: barStart + 15 * samplesPerStep,
+        type: 'snare',
+        vel: 0.45,
+        dur: samplesPerStep,
+      })
     }
     // Ghost kick on offbeat in build/drop sections
     if (kickPhraseBar >= 2 && kickPhraseBar < 6 && barIdx % 2 === 1) {
-      events.push({ pos: barStart + 7 * samplesPerStep, type: 'kick', vel: 0.3, dur: samplesPerStep })
+      events.push({
+        pos: barStart + 7 * samplesPerStep,
+        type: 'kick',
+        vel: 0.3,
+        dur: samplesPerStep,
+      })
     }
 
     // Ghost snare on step 6 of odd non-drop bars — adds rhythmic interest
     // (reduces RHYTHMIC_PATTERN_TOO_UNIFORM). Skipped on the climax (phase 7).
     if (playSnare && barIdx % 2 === 1 && phase !== 7) {
-      events.push({ pos: barStart + 6 * samplesPerStep, type: 'snare', vel: 0.25, dur: samplesPerStep })
+      events.push({
+        pos: barStart + 6 * samplesPerStep,
+        type: 'snare',
+        vel: 0.25,
+        dur: samplesPerStep,
+      })
     }
 
     // Rolling 16th bass — 8-bar phrase development
@@ -368,23 +478,37 @@ export async function renderFoundationSection(
 
       if (phraseBar < 2) {
         // Bars 0-1: simple root-fifth pattern
-        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : rootMidi
+        midi = step % 4 === 0 ? rootMidi : step % 4 === 2 ? fifthMidi : rootMidi
         vel = step % 4 === 0 ? 0.7 + a * 0.2 : 0.35 + a * 0.15
         dur = step % 2 === 1 ? 0.6 : 0.85
       } else if (phraseBar < 4) {
         // Bars 2-3: add third movement
-        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 1) ? thirdMidi : (step % 4 === 2) ? fifthMidi : rootMidi
+        midi =
+          step % 4 === 0
+            ? rootMidi
+            : step % 4 === 1
+              ? thirdMidi
+              : step % 4 === 2
+                ? fifthMidi
+                : rootMidi
         vel = step % 4 === 0 ? 0.7 + a * 0.2 : step % 2 === 1 ? 0.25 + a * 0.15 : 0.45 + a * 0.2
         dur = step % 2 === 1 ? 0.6 : 0.85
       } else if (phraseBar < 6) {
         // Bars 4-5: full pattern with octave jumps
-        midi = (step % 4 === 0) ? rootMidi : (step % 4 === 2) ? fifthMidi : (step % 4 === 3) ? rootMidi + 12 : rootMidi
+        midi =
+          step % 4 === 0
+            ? rootMidi
+            : step % 4 === 2
+              ? fifthMidi
+              : step % 4 === 3
+                ? rootMidi + 12
+                : rootMidi
         vel = step % 4 === 0 ? 0.75 + a * 0.2 : step % 2 === 1 ? 0.3 + a * 0.15 : 0.5 + a * 0.2
         dur = step % 2 === 1 ? 0.65 : 0.85
       } else {
         // Bars 6-7: simplify (drop anticipation) — less notes, more space
         if (step % 4 === 0 || step % 4 === 2) {
-          midi = (step % 4 === 0) ? rootMidi : fifthMidi
+          midi = step % 4 === 0 ? rootMidi : fifthMidi
           vel = 0.6 + a * 0.2
           dur = 0.9
         } else {
@@ -395,23 +519,37 @@ export async function renderFoundationSection(
       const swingOffset = step % 2 === 1 ? swingAmount : 0
       events.push({
         pos: barStart + step * samplesPerStep + swingOffset,
-        type: 'bass', midi, vel,
-        dur: Math.floor(samplesPerStep * dur)
+        type: 'bass',
+        midi,
+        vel,
+        dur: Math.floor(samplesPerStep * dur),
       })
     }
 
     // Lead — enters at bar 3 (build phase)
     if (playLead && !isBreak && bar.leadNotes.length > 0) {
       for (const n of bar.leadNotes) {
-        events.push({ pos: barStart + n.step * samplesPerStep, type: 'lead', midi: n.midi, vel: n.velocity, dur: n.durationSteps * samplesPerStep })
+        events.push({
+          pos: barStart + n.step * samplesPerStep,
+          type: 'lead',
+          midi: n.midi,
+          vel: n.velocity,
+          dur: n.durationSteps * samplesPerStep,
+        })
       }
-      const leadSteps = new Set(bar.leadNotes.map(n => n.step))
+      const leadSteps = new Set(bar.leadNotes.map((n) => n.step))
       const fillSteps = [3, 7, 11, 15]
       for (const fs of fillSteps) {
         if (!leadSteps.has(fs)) {
           const lastLead = bar.leadNotes[bar.leadNotes.length - 1]
           if (lastLead) {
-            events.push({ pos: barStart + fs * samplesPerStep, type: 'lead', midi: lastLead.midi + 4, vel: 0.4, dur: samplesPerStep })
+            events.push({
+              pos: barStart + fs * samplesPerStep,
+              type: 'lead',
+              midi: lastLead.midi + 4,
+              vel: 0.4,
+              dur: samplesPerStep,
+            })
           }
         }
       }
@@ -419,13 +557,19 @@ export async function renderFoundationSection(
       // No lead from Foundation — AABA motif development
       // A: original motif, A: repeat, B: contrast (higher), A': return with variation
       const phrasePos = barIdx % 4
-      const motifA = [64, 67, 71, 67]        // E4 G4 B4 G4
-      const motifB = [76, 74, 71, 69]        // E5 D5 B4 A4 (contrast)
-      const motifAp = [64, 67, 71, 72]       // E4 G4 B4 C5 (variation)
+      const motifA = [64, 67, 71, 67] // E4 G4 B4 G4
+      const motifB = [76, 74, 71, 69] // E5 D5 B4 A4 (contrast)
+      const motifAp = [64, 67, 71, 72] // E4 G4 B4 C5 (variation)
       const motif = phrasePos === 2 ? motifB : phrasePos === 3 ? motifAp : motifA
       for (let i = 0; i < motif.length; i++) {
         const step = i * 2
-        events.push({ pos: barStart + step * samplesPerStep, type: 'lead', midi: motif[i]!, vel: 0.5, dur: samplesPerStep })
+        events.push({
+          pos: barStart + step * samplesPerStep,
+          type: 'lead',
+          midi: motif[i]!,
+          vel: 0.5,
+          dur: samplesPerStep,
+        })
       }
     }
 
@@ -435,7 +579,13 @@ export async function renderFoundationSection(
         const counterStep = n.step + 3
         if (counterStep < 16) {
           const harmonyMidi = n.midi + (counterStep % 2 === 0 ? 4 : 7)
-          events.push({ pos: barStart + counterStep * samplesPerStep, type: 'counter', midi: harmonyMidi, vel: n.velocity * 0.6, dur: samplesPerStep })
+          events.push({
+            pos: barStart + counterStep * samplesPerStep,
+            type: 'counter',
+            midi: harmonyMidi,
+            vel: n.velocity * 0.6,
+            dur: samplesPerStep,
+          })
         }
       }
     }
@@ -450,12 +600,17 @@ export async function renderFoundationSection(
       const phraseBoost = phraseBar === 0 ? 1.15 : phraseBar === 3 ? 0.85 : 1.0
       const oddBar = barIdx % 2 === 1
       const stepVel = oddBar
-        ? [0.30, 0.50, 0.40, 0.45, 0.35, 0.55, 0.40, 0.50].map(v => v * phraseBoost)
-        : [0.35, 0.55, 0.40, 0.50, 0.35, 0.60, 0.40, 0.55].map(v => v * phraseBoost)
+        ? [0.3, 0.5, 0.4, 0.45, 0.35, 0.55, 0.4, 0.5].map((v) => v * phraseBoost)
+        : [0.35, 0.55, 0.4, 0.5, 0.35, 0.6, 0.4, 0.55].map((v) => v * phraseBoost)
       for (let eighth = 0; eighth < 8; eighth++) {
         const step = eighth * 2
         const vel = stepVel[eighth]!
-        events.push({ pos: barStart + step * samplesPerStep, type: 'hat', vel, dur: samplesPerStep })
+        events.push({
+          pos: barStart + step * samplesPerStep,
+          type: 'hat',
+          vel,
+          dur: samplesPerStep,
+        })
       }
       // Ghost notes on odd 16ths — vary pattern per bar in 4-bar phrase.
       const ghostMap: Record<number, number[]> = {
@@ -467,32 +622,87 @@ export async function renderFoundationSection(
       const ghostSteps = ghostMap[phraseBar] ?? [3, 7, 11, 15]
       const ghostVel = phraseBar === 3 ? 0.22 : 0.18
       for (const gs of ghostSteps) {
-        events.push({ pos: barStart + gs * samplesPerStep, type: 'hat', vel: ghostVel, dur: samplesPerStep })
+        events.push({
+          pos: barStart + gs * samplesPerStep,
+          type: 'hat',
+          vel: ghostVel,
+          dur: samplesPerStep,
+        })
       }
     }
 
     // Open hats — syncopated
     if (playHats && barIdx % 2 === 0) {
-      events.push({ pos: barStart + 6 * samplesPerStep, type: 'openhat', vel: 0.4, dur: samplesPerStep })
-      events.push({ pos: barStart + 14 * samplesPerStep, type: 'openhat', vel: 0.4, dur: samplesPerStep })
+      events.push({
+        pos: barStart + 6 * samplesPerStep,
+        type: 'openhat',
+        vel: 0.4,
+        dur: samplesPerStep,
+      })
+      events.push({
+        pos: barStart + 14 * samplesPerStep,
+        type: 'openhat',
+        vel: 0.4,
+        dur: samplesPerStep,
+      })
     }
 
     // Claps on 2 & 4
-    events.push({ pos: barStart + 4 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
-    events.push({ pos: barStart + 12 * samplesPerStep, type: 'clap', vel: 0.45, dur: samplesPerStep })
+    events.push({
+      pos: barStart + 4 * samplesPerStep,
+      type: 'clap',
+      vel: 0.45,
+      dur: samplesPerStep,
+    })
+    events.push({
+      pos: barStart + 12 * samplesPerStep,
+      type: 'clap',
+      vel: 0.45,
+      dur: samplesPerStep,
+    })
 
     // Snare — enters at bar 4 (full)
     if (playSnare) {
-      events.push({ pos: barStart + 4 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
-      events.push({ pos: barStart + 12 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
+      events.push({
+        pos: barStart + 4 * samplesPerStep,
+        type: 'snare',
+        vel: 0.5,
+        dur: samplesPerStep,
+      })
+      events.push({
+        pos: barStart + 12 * samplesPerStep,
+        type: 'snare',
+        vel: 0.5,
+        dur: samplesPerStep,
+      })
     }
 
     // Snare roll before section changes (last bar of 4-bar phrase)
     if (barIdx % 4 === 3) {
-      events.push({ pos: barStart + 13 * samplesPerStep, type: 'snare', vel: 0.3, dur: samplesPerStep })
-      events.push({ pos: barStart + 14 * samplesPerStep, type: 'snare', vel: 0.4, dur: samplesPerStep })
-      events.push({ pos: barStart + 15 * samplesPerStep, type: 'snare', vel: 0.5, dur: samplesPerStep })
-      events.push({ pos: barStart + 15 * samplesPerStep + Math.floor(samplesPerStep / 2), type: 'snare', vel: 0.7, dur: samplesPerStep })
+      events.push({
+        pos: barStart + 13 * samplesPerStep,
+        type: 'snare',
+        vel: 0.3,
+        dur: samplesPerStep,
+      })
+      events.push({
+        pos: barStart + 14 * samplesPerStep,
+        type: 'snare',
+        vel: 0.4,
+        dur: samplesPerStep,
+      })
+      events.push({
+        pos: barStart + 15 * samplesPerStep,
+        type: 'snare',
+        vel: 0.5,
+        dur: samplesPerStep,
+      })
+      events.push({
+        pos: barStart + 15 * samplesPerStep + Math.floor(samplesPerStep / 2),
+        type: 'snare',
+        vel: 0.7,
+        dur: samplesPerStep,
+      })
     }
 
     // Sub-bass: sustained root for the whole bar
@@ -514,7 +724,8 @@ export async function renderFoundationSection(
     // Shaker — enters at bar 2, with per-bar velocity variation + 4-bar rest map
     if (playShaker) {
       const shakerPhraseBar = barIdx % 8
-      const shakerVelBase = shakerPhraseBar < 2 ? 0.25 : shakerPhraseBar < 4 ? 0.3 : shakerPhraseBar < 6 ? 0.35 : 0.2
+      const shakerVelBase =
+        shakerPhraseBar < 2 ? 0.25 : shakerPhraseBar < 4 ? 0.3 : shakerPhraseBar < 6 ? 0.35 : 0.2
       // 4-bar phrase rest map — adds variation across the phrase so the
       // shaker isn't on every 16th step. Reduces RHYTHMIC_PATTERN_TOO_UNIFORM.
       //   Bar 0: no rests
@@ -523,10 +734,7 @@ export async function renderFoundationSection(
       //   Bar 3: rest on steps 6, 14
       const restPhrase = barIdx % 4
       const restSteps = new Set<number>(
-        restPhrase === 1 ? [6] :
-        restPhrase === 2 ? [11] :
-        restPhrase === 3 ? [6, 14] :
-        []
+        restPhrase === 1 ? [6] : restPhrase === 2 ? [11] : restPhrase === 3 ? [6, 14] : []
       )
       for (let step = 0; step < 16; step++) {
         if (restSteps.has(step)) continue // skip rest steps
@@ -534,7 +742,12 @@ export async function renderFoundationSection(
         // Add variation: skip some steps in certain bars for groove
         if (shakerPhraseBar >= 4 && step === 7 && barIdx % 2 === 1) continue // ghost rest
         const vel = isStrong ? shakerVelBase : shakerVelBase * 0.5
-        events.push({ pos: barStart + step * samplesPerStep, type: 'shaker', vel, dur: samplesPerStep })
+        events.push({
+          pos: barStart + step * samplesPerStep,
+          type: 'shaker',
+          vel,
+          dur: samplesPerStep,
+        })
       }
     }
 
@@ -550,7 +763,13 @@ export async function renderFoundationSection(
       for (let step = 0; step < 16; step++) {
         if (step % 4 === 0 || step % 4 === 2) {
           const acidMidi = acidRootMidi + (step % 8 === 0 ? 7 : step % 4 === 2 ? 5 : 0)
-          events.push({ pos: barStart + step * samplesPerStep, type: 'acid', midi: acidMidi, vel: 0.4, dur: samplesPerStep })
+          events.push({
+            pos: barStart + step * samplesPerStep,
+            type: 'acid',
+            midi: acidMidi,
+            vel: 0.4,
+            dur: samplesPerStep,
+          })
         }
       }
     }
@@ -560,13 +779,31 @@ export async function renderFoundationSection(
       const rootFreq = 440 * Math.pow(2, (rootMidi - 69) / 12)
       const thirdFreq = 440 * Math.pow(2, (rootMidi + 4 - 69) / 12)
       const fifthFreq = 440 * Math.pow(2, (rootMidi + 7 - 69) / 12)
-      events.push({ pos: barStart, type: 'texture', vel: 0.2, dur: samplesPerBar, freqs: [rootFreq, thirdFreq, fifthFreq] })
+      events.push({
+        pos: barStart,
+        type: 'texture',
+        vel: 0.2,
+        dur: samplesPerBar,
+        freqs: [rootFreq, thirdFreq, fifthFreq],
+      })
     }
 
     // Ghost perc
-    const percSteps = phraseBar === 0 ? [7, 15] : phraseBar === 1 ? [5, 13] : phraseBar === 2 ? [3, 11] : [7, 11, 15]
+    const percSteps =
+      phraseBar === 0
+        ? [7, 15]
+        : phraseBar === 1
+          ? [5, 13]
+          : phraseBar === 2
+            ? [3, 11]
+            : [7, 11, 15]
     for (const ps of percSteps) {
-      events.push({ pos: barStart + ps * samplesPerStep, type: 'perc', vel: 0.2, dur: samplesPerStep })
+      events.push({
+        pos: barStart + ps * samplesPerStep,
+        type: 'perc',
+        vel: 0.2,
+        dur: samplesPerStep,
+      })
     }
   }
 
@@ -596,42 +833,49 @@ export async function renderFoundationSection(
   let subBassNoteOffPos = 0
   let activePad: PsyPad | null = null
   let padNoteOffPos = 0
-  let kickIdx = 0, bassIdx = 0, leadIdx = 0, hatIdx = 0
+  let kickIdx = 0,
+    bassIdx = 0,
+    leadIdx = 0,
+    hatIdx = 0
   let evIdx = 0
 
   // Alternating pan state for hats (per-type, driven by step grid)
-  let hatPanFlip = false
-  let openHatPanFlip = false
+  const hatPanFlip = false
+  const openHatPanFlip = false
 
   // Energy contour: create tension/release by modulating overall energy across bars.
   // Pattern: bars 0-3 full, bar 4 dip (70%), bars 5-6 build (85%→100%), bar 7 peak (105%).
   // This creates a 8-bar tension/release cycle that improves the dynamic contour.
   function barEnergy(barIdx: number): number {
     const phase = barIdx % 8
-    if (phase === 0) return 0.60  // intro — quieter (was 0.80)
-    if (phase === 1) return 0.85  // groove building (was 0.88)
-    if (phase === 2) return 1.00  // build (was 0.95)
-    if (phase === 3) return 1.10  // full (was 1.0)
-    if (phase === 4) return 0.20  // breakdown — deep drop (was 0.35)
-    if (phase === 5) return 0.50  // rebuild (was 0.65)
-    if (phase === 6) return 0.95  // build (was 0.92)
-    if (phase === 7) return 1.30  // climax — peak (was 1.20)
+    if (phase === 0) return 0.6 // intro — quieter (was 0.80)
+    if (phase === 1) return 0.85 // groove building (was 0.88)
+    if (phase === 2) return 1.0 // build (was 0.95)
+    if (phase === 3) return 1.1 // full (was 1.0)
+    if (phase === 4) return 0.2 // breakdown — deep drop (was 0.35)
+    if (phase === 5) return 0.5 // rebuild (was 0.65)
+    if (phase === 6) return 0.95 // build (was 0.92)
+    if (phase === 7) return 1.3 // climax — peak (was 1.20)
     return 1.0
   }
 
   for (let i = 0; i < totalSamples; i++) {
     const currentBar = Math.floor(i / samplesPerBar)
     const energyMul = barEnergy(currentBar)
-    const currentTime = i / SR  // seconds — for automation
+    const currentTime = i / SR // seconds — for automation
 
     // ── Automation: override config params from AutomationEngine ──
     // If automation is connected, read automated values at this time.
     // This allows DAW-style parameter curves to control the render.
     if (automation) {
-      if (automation.isAutomated('leadCutoff')) cfg.leadCutoff = automation.getValue('leadCutoff', currentTime)
-      if (automation.isAutomated('leadGain')) cfg.leadGain = automation.getValue('leadGain', currentTime)
-      if (automation.isAutomated('stereoWidth')) cfg.stereoWidth = automation.getValue('stereoWidth', currentTime)
-      if (automation.isAutomated('targetLufs')) cfg.targetLufs = automation.getValue('targetLufs', currentTime)
+      if (automation.isAutomated('leadCutoff'))
+        cfg.leadCutoff = automation.getValue('leadCutoff', currentTime)
+      if (automation.isAutomated('leadGain'))
+        cfg.leadGain = automation.getValue('leadGain', currentTime)
+      if (automation.isAutomated('stereoWidth'))
+        cfg.stereoWidth = automation.getValue('stereoWidth', currentTime)
+      if (automation.isAutomated('targetLufs'))
+        cfg.targetLufs = automation.getValue('targetLufs', currentTime)
     }
 
     // ── Modulation matrix: tick ONCE per sample (advances all LFO phases) ──
@@ -657,7 +901,10 @@ export async function renderFoundationSection(
       if (ev.type === 'kick') {
         duckEnv = 1.0 - cfg.duckAmount
         if (kickSample) kickSample.trigger(ev.vel)
-        else { kicks[kickIdx % 4]!.trigger(ev.vel, cfg.kickFundamental, cfg.kickDecay); kickIdx++ }
+        else {
+          kicks[kickIdx % 4]!.trigger(ev.vel, cfg.kickFundamental, cfg.kickDecay)
+          kickIdx++
+        }
       } else if (ev.type === 'bass' && ev.midi !== undefined) {
         if (activeBass) activeBass.noteOff()
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
@@ -667,11 +914,20 @@ export async function renderFoundationSection(
         bassIdx++
       } else if (ev.type === 'lead' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
-        leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: cfg.leadCutoff, detune: 10, res: cfg.leadResonance, lfoRate: 1.2, lfoDepth: 0.5 })
+        leads[leadIdx % 4]!.trigger(freq, ev.dur / SR, ev.vel, {
+          cutoff: cfg.leadCutoff,
+          detune: 10,
+          res: cfg.leadResonance,
+          lfoRate: 1.2,
+          lfoDepth: 0.5,
+        })
         leadIdx++
       } else if (ev.type === 'hat') {
         if (hatSample) hatSample.trigger(ev.vel)
-        else { hats[hatIdx % 4]!.trigger(ev.vel, false); hatIdx++ }
+        else {
+          hats[hatIdx % 4]!.trigger(ev.vel, false)
+          hatIdx++
+        }
       } else if (ev.type === 'openhat') {
         // Choke group: open hat chokes all closed hats (PSYDRUM pattern)
         for (const h of hats) {
@@ -708,25 +964,49 @@ export async function renderFoundationSection(
         textures[0]!.trigger(ev.freqs, ev.dur / SR, ev.vel)
       } else if (ev.type === 'counter' && ev.midi !== undefined) {
         const freq = 440 * Math.pow(2, (ev.midi - 69) / 12)
-        leads[(leadIdx + 2) % 4]!.trigger(freq, ev.dur / SR, ev.vel, { cutoff: Math.floor(cfg.leadCutoff * 0.5), detune: 6, res: 0.3, lfoRate: 0.6, lfoDepth: 0.2 })
+        leads[(leadIdx + 2) % 4]!.trigger(freq, ev.dur / SR, ev.vel, {
+          cutoff: Math.floor(cfg.leadCutoff * 0.5),
+          detune: 6,
+          res: 0.3,
+          lfoRate: 0.6,
+          lfoDepth: 0.2,
+        })
         leadIdx++
       }
       evIdx++
     }
 
     // Note-offs
-    if (activeBass && i >= bassNoteOffPos) { activeBass.noteOff(); activeBass = null }
-    if (activeSubBass && i >= subBassNoteOffPos) { activeSubBass.noteOff(); activeSubBass = null }
-    if (activePad && i >= padNoteOffPos) { activePad.noteOff(); activePad = null }
+    if (activeBass && i >= bassNoteOffPos) {
+      activeBass.noteOff()
+      activeBass = null
+    }
+    if (activeSubBass && i >= subBassNoteOffPos) {
+      activeSubBass.noteOff()
+      activeSubBass = null
+    }
+    if (activePad && i >= padNoteOffPos) {
+      activePad.noteOff()
+      activePad = null
+    }
 
     // ── Render voices → per-type ChannelFX → buses ──
-    let drumL = 0, drumR = 0, bassL = 0, bassR = 0, musicL = 0, musicR = 0
+    let drumL = 0,
+      drumR = 0,
+      bassL = 0,
+      bassR = 0,
+      musicL = 0,
+      musicR = 0
 
     // Kick → fxKick → drum bus
     let kickMono = 0
     if (kickSample?.active) kickMono += kickSample.render()[0]
     for (const v of kicks) if (v.active) kickMono += v.render()[0]
-    if (kickMono !== 0) { const [kl, kr] = fxKick.process(kickMono); drumL += kl; drumR += kr }
+    if (kickMono !== 0) {
+      const [kl, kr] = fxKick.process(kickMono)
+      drumL += kl
+      drumR += kr
+    }
 
     // Bass (with sidechain) → fxBass → bass bus
     // Dynamic EQ sidechain: split bass into low (<120Hz) and high (>120Hz) bands.
@@ -740,18 +1020,27 @@ export async function renderFoundationSection(
       const [bassLow, bassHigh] = bassXover.process(bassMono)
       const bassDucked = bassLow * duckEnv + bassHigh
       const [bl, br] = fxBass.process(bassDucked * cfg.bassGain)
-      bassL += bl; bassR += br
+      bassL += bl
+      bassR += br
     }
 
     // Sub-bass → fxSubBass → bass bus
     let subMono = 0
     if (activeSubBass?.active) subMono += activeSubBass.render()[0]
-    if (subMono !== 0) { const [sl, sr] = fxSubBass.process(subMono * cfg.subBassGain); bassL += sl; bassR += sr }
+    if (subMono !== 0) {
+      const [sl, sr] = fxSubBass.process(subMono * cfg.subBassGain)
+      bassL += sl
+      bassR += sr
+    }
 
     // Lead → fxLead → music bus
     let leadMono = 0
     for (const v of leads) if (v.active) leadMono += v.render()[0]
-    if (leadMono !== 0) { const [ll, lr] = fxLead.process(leadMono * cfg.leadGain); musicL += ll; musicR += lr }
+    if (leadMono !== 0) {
+      const [ll, lr] = fxLead.process(leadMono * cfg.leadGain)
+      musicL += ll
+      musicR += lr
+    }
 
     // Counter-lead — rendered by the same lead pool but the FX type is 'counter'
     // Since the lead pool is shared, we detect counter activity by checking if a counter
@@ -765,7 +1054,8 @@ export async function renderFoundationSection(
     // counter send from the lead signal.
     if (leadMono !== 0) {
       const [cl, cr] = fxCounter.process(leadMono * 0.3 * cfg.leadGain)
-      musicL += cl; musicR += cr
+      musicL += cl
+      musicR += cr
     }
 
     // Closed hats → fxHat → drum bus
@@ -774,7 +1064,8 @@ export async function renderFoundationSection(
     for (const v of hats) if (v.active && !v.open) hatMono += v.render()[0]
     if (hatMono !== 0) {
       const [hl, hr] = fxHat.process(hatMono * cfg.hatGain)
-      drumL += hl; drumR += hr
+      drumL += hl
+      drumR += hr
     }
 
     // Open hats → fxOpenHat → drum bus (separate FX chain for longer decay/reverb)
@@ -782,63 +1073,111 @@ export async function renderFoundationSection(
     for (const v of hats) if (v.active && v.open) openHatMono += v.render()[0]
     if (openHatMono !== 0) {
       const [ohl, ohr] = fxOpenHat.process(openHatMono * cfg.openHatGain)
-      drumL += ohl; drumR += ohr
+      drumL += ohl
+      drumR += ohr
     }
 
     // Clap → fxClap → drum bus
     let clapMono = 0
     if (clapSample?.active) clapMono += clapSample.render()[0]
-    if (clapMono !== 0) { const [cl, cr] = fxClap.process(clapMono); drumL += cl; drumR += cr }
+    if (clapMono !== 0) {
+      const [cl, cr] = fxClap.process(clapMono)
+      drumL += cl
+      drumR += cr
+    }
 
     // Perc → fxPerc → drum bus
     let percMono = 0
     if (percSample?.active) percMono += percSample.render()[0]
-    if (percMono !== 0) { const [pl, pr] = fxPerc.process(percMono); drumL += pl; drumR += pr }
+    if (percMono !== 0) {
+      const [pl, pr] = fxPerc.process(percMono)
+      drumL += pl
+      drumR += pr
+    }
 
     // Snare → fxSnare → drum bus
     let snareMono = 0
     for (const v of snares) if (v.active) snareMono += v.render()[0]
-    if (snareMono !== 0) { const [sl, sr] = fxSnare.process(snareMono * cfg.snareGain); drumL += sl; drumR += sr }
+    if (snareMono !== 0) {
+      const [sl, sr] = fxSnare.process(snareMono * cfg.snareGain)
+      drumL += sl
+      drumR += sr
+    }
 
     // Shaker → fxShaker → drum bus
     let shakerMono = 0
     for (const v of shakers) if (v.active) shakerMono += v.render()[0]
-    if (shakerMono !== 0) { const [sl, sr] = fxShaker.process(shakerMono * cfg.shakerGain); drumL += sl; drumR += sr }
+    if (shakerMono !== 0) {
+      const [sl, sr] = fxShaker.process(shakerMono * cfg.shakerGain)
+      drumL += sl
+      drumR += sr
+    }
 
     // Pad → fxPad → music bus
     let padMono = 0
     if (activePad?.active) padMono += activePad.render()[0]
-    if (padMono !== 0) { const [pl, pr] = fxPad.process(padMono * cfg.padGain); musicL += pl; musicR += pr }
+    if (padMono !== 0) {
+      const [pl, pr] = fxPad.process(padMono * cfg.padGain)
+      musicL += pl
+      musicR += pr
+    }
 
     // Riser → fxRiser → music bus
     let riserMono = 0
     for (const v of risers) if (v.active) riserMono += v.render()[0]
-    if (riserMono !== 0) { const [rl, rr] = fxRiser.process(riserMono); musicL += rl; musicR += rr }
+    if (riserMono !== 0) {
+      const [rl, rr] = fxRiser.process(riserMono)
+      musicL += rl
+      musicR += rr
+    }
 
     // Impact → fxImpact → bass bus
     let impactMono = 0
     for (const v of impacts) if (v.active) impactMono += v.render()[0]
-    if (impactMono !== 0) { const [il, ir] = fxImpact.process(impactMono); bassL += il; bassR += ir }
+    if (impactMono !== 0) {
+      const [il, ir] = fxImpact.process(impactMono)
+      bassL += il
+      bassR += ir
+    }
 
     // Acid → fxLead → music bus (shares lead FX chain)
     let acidMono = 0
     for (const v of acids) if (v.active) acidMono += v.render()[0]
-    if (acidMono !== 0) { const [al, ar] = fxLead.process(acidMono); musicL += al; musicR += ar }
+    if (acidMono !== 0) {
+      const [al, ar] = fxLead.process(acidMono)
+      musicL += al
+      musicR += ar
+    }
 
     // Texture → fxPad → music bus (shares pad FX chain for atmospheric reverb)
     let textureMono = 0
     for (const v of textures) if (v.active) textureMono += v.render()[0]
-    if (textureMono !== 0) { const [tl, tr] = fxPad.process(textureMono); musicL += tl; musicR += tr }
+    if (textureMono !== 0) {
+      const [tl, tr] = fxPad.process(textureMono)
+      musicL += tl
+      musicR += tr
+    }
 
     // ── Bus glue compression ──
-    drumL = drumBusL.process(drumL, SR); drumR = drumBusR.process(drumR, SR)
-    bassL = bassBusL.process(bassL, SR); bassR = bassBusR.process(bassR, SR)
-    musicL = musicBusL.process(musicL, SR); musicR = musicBusR.process(musicR, SR)
+    drumL = drumBusL.process(drumL, SR)
+    drumR = drumBusR.process(drumR, SR)
+    bassL = bassBusL.process(bassL, SR)
+    bassR = bassBusR.process(bassR, SR)
+    musicL = musicBusL.process(musicL, SR)
+    musicR = musicBusR.process(musicR, SR)
 
     // ── Stems capture ── (post-bus-glue, pre-master-chain, with energy contour
     // applied so summing all three stems == the signal entering the master chain).
     // Mastering engineers can process each bus independently and recombine.
-    if (stemsEnabled && stemsDrumL && stemsDrumR && stemsBassL && stemsBassR && stemsMusicL && stemsMusicR) {
+    if (
+      stemsEnabled &&
+      stemsDrumL &&
+      stemsDrumR &&
+      stemsBassL &&
+      stemsBassR &&
+      stemsMusicL &&
+      stemsMusicR
+    ) {
       stemsDrumL[i] = drumL * energyMul
       stemsDrumR[i] = drumR * energyMul
       stemsBassL[i] = bassL * energyMul
@@ -885,13 +1224,13 @@ export async function renderFoundationSection(
   //   Converts back via L' = M + S, R' = M - S (preserves the M/S gain stage).
   const msMonoFreq = 120
   const msHighFreq = 3000
-  const msWiden = 1.5  // raised: 1.3 → 1.5 for more stereo width
+  const msWiden = 1.5 // raised: 1.3 → 1.5 for more stereo width
   const msA = (1 / SR) * 2 * Math.PI * msMonoFreq
   const msMonoLpCoef = msA / (1 + msA)
   const msB = (1 / SR) * 2 * Math.PI * msHighFreq
   const msHighLpCoef = msB / (1 + msB)
-  let msLowState = 0   // LP state: low-frequency content of S
-  let msHighState = 0  // LP state: low-passed S used to derive one-pole HP
+  let msLowState = 0 // LP state: low-frequency content of S
+  let msHighState = 0 // LP state: low-passed S used to derive one-pole HP
   for (let i = 0; i < totalSamples; i++) {
     const l = samplesL[i]!
     const r = samplesR[i]!
@@ -958,7 +1297,7 @@ export async function renderFoundationSection(
   // Now applies only 50% correction to keep dynamic range.
   const gainOffset = lufsToGainOffset(lufsResult.integratedLUFS, targetLufs)
   const fullGain = Math.max(0.1, Math.min(8.0, gainOffset))
-  const safeGain = 1.0 + (fullGain - 1.0) * 0.5  // 50% correction
+  const safeGain = 1.0 + (fullGain - 1.0) * 0.5 // 50% correction
   for (let i = 0; i < totalSamples; i++) {
     samplesL[i] = (samplesL[i] ?? 0) * safeGain
     samplesR[i] = (samplesR[i] ?? 0) * safeGain
@@ -973,8 +1312,10 @@ export async function renderFoundationSection(
   for (let i = 0; i < totalSamples; i++) {
     let l = samplesL[i] ?? 0
     let r = samplesR[i] ?? 0
-    if (l > 1) l = 1; else if (l < -1) l = -1
-    if (r > 1) r = 1; else if (r < -1) r = -1
+    if (l > 1) l = 1
+    else if (l < -1) l = -1
+    if (r > 1) r = 1
+    else if (r < -1) r = -1
     samplesL[i] = l
     samplesR[i] = r
   }
@@ -984,7 +1325,9 @@ export async function renderFoundationSection(
   const stereoWidth = StereoWidener.measureWidth(samplesL, samplesR)
 
   return {
-    samplesL, samplesR, sampleRate: SR,
+    samplesL,
+    samplesR,
+    sampleRate: SR,
     durationSec: totalSamples / SR,
     bars: renderBars.length,
     events: events.length,
@@ -993,13 +1336,23 @@ export async function renderFoundationSection(
     stereoWidth,
     monoCompatibility: monoCompat,
     gainReductionDb: limiter.getMaxGainReductionDb(),
-    stems: stemsEnabled && stemsDrumL && stemsDrumR && stemsBassL && stemsBassR && stemsMusicL && stemsMusicR
-      ? {
-          drumL: stemsDrumL, drumR: stemsDrumR,
-          bassL: stemsBassL, bassR: stemsBassR,
-          musicL: stemsMusicL, musicR: stemsMusicR,
-        }
-      : undefined,
+    stems:
+      stemsEnabled &&
+      stemsDrumL &&
+      stemsDrumR &&
+      stemsBassL &&
+      stemsBassR &&
+      stemsMusicL &&
+      stemsMusicR
+        ? {
+            drumL: stemsDrumL,
+            drumR: stemsDrumR,
+            bassL: stemsBassL,
+            bassR: stemsBassR,
+            musicL: stemsMusicL,
+            musicR: stemsMusicR,
+          }
+        : undefined,
   }
 }
 

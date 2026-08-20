@@ -18,14 +18,14 @@
  *   const [left, right] = cloud.process()
  */
 
-import { Rng } from './forensic/prng'
+import type { Rng } from './forensic/prng'
 
 interface Grain {
-  pos: number        // position in source buffer
-  pitch: number      // playback rate (1 = normal)
-  pan: number        // -1..1
-  dur: number        // duration in samples
-  age: number        // current age in samples
+  pos: number // position in source buffer
+  pitch: number // playback rate (1 = normal)
+  pan: number // -1..1
+  dur: number // duration in samples
+  age: number // current age in samples
 }
 
 export class GrainCloud {
@@ -50,16 +50,27 @@ export class GrainCloud {
     this.samplesPerGrain = Math.floor(44100 / d)
   }
 
-  setGrainDuration(ms: number): void { this.grainDurMs = ms }
-  setPitchVar(v: number): void { this.pitchVar = v }
-  setPosVar(v: number): void { this.posVar = v }
-  setAmp(a: number): void { this.amp = a }
-  setBuffer(buf: Float32Array): void { this.buffer = buf; this.reset() }
+  setGrainDuration(ms: number): void {
+    this.grainDurMs = ms
+  }
+  setPitchVar(v: number): void {
+    this.pitchVar = v
+  }
+  setPosVar(v: number): void {
+    this.posVar = v
+  }
+  setAmp(a: number): void {
+    this.amp = a
+  }
+  setBuffer(buf: Float32Array): void {
+    this.buffer = buf
+    this.reset()
+  }
 
   private amp = 1.0
 
   private spawnGrain(): void {
-    const grainDur = Math.floor(44100 * this.grainDurMs / 1000)
+    const grainDur = Math.floor((44100 * this.grainDurMs) / 1000)
     const posRange = this.buffer.length - grainDur - 1
     const basePos = this.rng.range(0, Math.max(1, posRange))
     this.grains.push({
@@ -78,7 +89,8 @@ export class GrainCloud {
       this.sampleCount = 0
     }
 
-    let outL = 0, outR = 0
+    let outL = 0,
+      outR = 0
     for (let i = this.grains.length - 1; i >= 0; i--) {
       const g = this.grains[i]!
       if (g.age >= g.dur) {
@@ -88,7 +100,7 @@ export class GrainCloud {
       const samplePos = Math.floor(g.pos + g.age * g.pitch)
       const sample = this.buffer[samplePos % this.buffer.length] ?? 0
       // Hann envelope (smooth grain edges)
-      const env = 0.5 * (1 - Math.cos(2 * Math.PI * g.age / g.dur))
+      const env = 0.5 * (1 - Math.cos((2 * Math.PI * g.age) / g.dur))
       // Equal-power pan
       const panAngle = (g.pan + 1) * 0.25 * Math.PI
       const panL = Math.cos(panAngle)
@@ -100,9 +112,14 @@ export class GrainCloud {
     return [outL, outR]
   }
 
-  reset(): void { this.grains = []; this.sampleCount = 0 }
+  reset(): void {
+    this.grains = []
+    this.sampleCount = 0
+  }
 
-  get activeGrains(): number { return this.grains.length }
+  get activeGrains(): number {
+    return this.grains.length
+  }
 
   // ── Factory: generate source buffer procedurally ──
 
@@ -130,7 +147,12 @@ export class GrainCloud {
     return buf
   }
 
-  static generateMixedBuffer(rng: Rng, freq: number, durationSec: number, noiseLevel: number = 0.5): Float32Array {
+  static generateMixedBuffer(
+    rng: Rng,
+    freq: number,
+    durationSec: number,
+    noiseLevel = 0.5
+  ): Float32Array {
     const len = Math.floor(44100 * durationSec)
     const buf = new Float32Array(len)
     const period = 44100 / freq

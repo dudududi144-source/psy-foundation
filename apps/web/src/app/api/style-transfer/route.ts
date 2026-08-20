@@ -1,8 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server'
+import {
+  DEFAULT_RENDER_CONFIG,
+  encodeWav,
+  renderFoundationSection,
+} from '@/lib/psy4/forensic-bridge'
+import { NeuralStyleTransfer } from '@/lib/psy4/neural/latent-decoder'
 import { CompositionEngine } from '@psy-foundation/music'
 import { createIdentityA } from '@psy-foundation/music'
-import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG } from '@/lib/psy4/forensic-bridge'
-import { NeuralStyleTransfer } from '@/lib/psy4/neural/latent-decoder'
+import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -30,9 +34,9 @@ const BEST_CONFIG = {
  * with multipart form data.
  */
 export async function GET(req: NextRequest) {
-  const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
-  const seed = parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
-  const blend = parseFloat(req.nextUrl.searchParams.get('blend') ?? '0.3')
+  const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
+  const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
+  const blend = Number.parseFloat(req.nextUrl.searchParams.get('blend') ?? '0.3')
   const useSamples = req.nextUrl.searchParams.get('samples') !== 'false'
 
   const ctx = {
@@ -60,7 +64,11 @@ export async function GET(req: NextRequest) {
   try {
     result = await renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
   } catch {
-    result = await renderFoundationSection(section, { useSamples: false, bpm: 145, config: BEST_CONFIG })
+    result = await renderFoundationSection(section, {
+      useSamples: false,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
   }
 
   // Apply style transfer (mono for now — use left channel as reference)

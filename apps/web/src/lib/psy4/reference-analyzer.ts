@@ -9,30 +9,30 @@
  * Pure functions: no audio playback, no I/O, no side effects.
  */
 
-import { measureLUFS, type LUFSResult } from './loudness'
+import { type LUFSResult, measureLUFS } from './loudness'
 
 export interface ReferenceProfile {
   bpm: number
   lufs: number
   truePeakDb: number
-  spectralCentroid: number       // Hz — brightness
-  bassEnergy: number             // 20-250Hz ratio
-  midEnergy: number              // 250-2000Hz ratio
-  highEnergy: number             // 2000-12000Hz ratio
-  airEnergy: number              // 12000-20000Hz ratio
-  crestFactor: number            // peak/RMS
-  stereoWidth: number            // L-R / L+R
-  dynamicRange: number           // LU range
-  lowMidMud: number              // 200-500Hz ratio
+  spectralCentroid: number // Hz — brightness
+  bassEnergy: number // 20-250Hz ratio
+  midEnergy: number // 250-2000Hz ratio
+  highEnergy: number // 2000-12000Hz ratio
+  airEnergy: number // 12000-20000Hz ratio
+  crestFactor: number // peak/RMS
+  stereoWidth: number // L-R / L+R
+  dynamicRange: number // LU range
+  lowMidMud: number // 200-500Hz ratio
 }
 
 export interface RenderComparison {
-  distance: number               // 0 = identical, 1 = completely different
-  lufsDelta: number             // dB difference
-  brightnessDelta: number       // Hz difference
-  bassRatioDelta: number         // ratio difference
-  widthDelta: number            // width difference
-  suggestions: string[]          // actionable corrections
+  distance: number // 0 = identical, 1 = completely different
+  lufsDelta: number // dB difference
+  brightnessDelta: number // Hz difference
+  bassRatioDelta: number // ratio difference
+  widthDelta: number // width difference
+  suggestions: string[] // actionable corrections
 }
 
 export interface AnalysisResult {
@@ -46,7 +46,7 @@ export interface AnalysisResult {
 export function analyzeReference(
   L: Float32Array,
   R: Float32Array,
-  sampleRate: number,
+  sampleRate: number
 ): AnalysisResult {
   const N = Math.min(L.length, R.length)
   const fftSize = 2048
@@ -88,20 +88,21 @@ export function analyzeReference(
     for (let i = 0; i < fftSize; i++) {
       // Use mono sum + Hann window
       const mono = (L[f * fftSize + i]! + R[f * fftSize + i]!) * 0.5
-      const hann = 0.5 * (1 - Math.cos(2 * Math.PI * i / fftSize))
+      const hann = 0.5 * (1 - Math.cos((2 * Math.PI * i) / fftSize))
       frame[i] = mono * hann
     }
     // DFT
     for (let k = 0; k < fftSize / 2; k++) {
-      let re = 0, im = 0
+      let re = 0,
+        im = 0
       for (let n = 0; n < fftSize; n++) {
-        const angle = -2 * Math.PI * k * n / fftSize
+        const angle = (-2 * Math.PI * k * n) / fftSize
         re += frame[n]! * Math.cos(angle)
         im += frame[n]! * Math.sin(angle)
       }
       const mag = Math.sqrt(re * re + im * im)
       avgSpectrum[k] += mag
-      totalWeighted += (k * sampleRate / fftSize) * mag
+      totalWeighted += ((k * sampleRate) / fftSize) * mag
       totalMag += mag
     }
   }
@@ -113,8 +114,8 @@ export function analyzeReference(
 
   // Band energies
   const bandEnergy = (loHz: number, hiHz: number): number => {
-    const loBin = Math.floor(loHz * fftSize / sampleRate)
-    const hiBin = Math.ceil(hiHz * fftSize / sampleRate)
+    const loBin = Math.floor((loHz * fftSize) / sampleRate)
+    const hiBin = Math.ceil((hiHz * fftSize) / sampleRate)
     let e = 0
     for (let i = loBin; i <= hiBin && i < avgSpectrum.length; i++) e += avgSpectrum[i]!
     return e
@@ -129,7 +130,7 @@ export function analyzeReference(
 
   // Dynamic range (simplified: difference between max and min frame energy)
   let maxFrameRMS = 0
-  let minFrameRMS = Infinity
+  let minFrameRMS = Number.POSITIVE_INFINITY
   for (let f = 0; f < numFrames; f++) {
     let frameSum = 0
     for (let i = 0; i < fftSize; i++) {
@@ -140,9 +141,8 @@ export function analyzeReference(
     if (frameRMS > maxFrameRMS) maxFrameRMS = frameRMS
     if (frameRMS < minFrameRMS) minFrameRMS = frameRMS
   }
-  const dynamicRange = maxFrameRMS > 0 && minFrameRMS > 0
-    ? 20 * Math.log10(maxFrameRMS / minFrameRMS)
-    : 0
+  const dynamicRange =
+    maxFrameRMS > 0 && minFrameRMS > 0 ? 20 * Math.log10(maxFrameRMS / minFrameRMS) : 0
 
   // BPM estimation via onset autocorrelation
   const bpm = estimateBPM(L, sampleRate)
@@ -183,8 +183,8 @@ function estimateBPM(pcm: Float32Array, sampleRate: number): number {
   // Autocorrelation — find the lag with highest correlation
   let bestLag = 0
   let bestCorr = 0
-  const minLag = Math.floor(60 / 200 * sampleRate / windowSize) // 200 BPM
-  const maxLag = Math.floor(60 / 60 * sampleRate / windowSize)   // 60 BPM
+  const minLag = Math.floor(((60 / 200) * sampleRate) / windowSize) // 200 BPM
+  const maxLag = Math.floor(((60 / 60) * sampleRate) / windowSize) // 60 BPM
 
   for (let lag = minLag; lag < maxLag; lag++) {
     let corr = 0
@@ -193,7 +193,7 @@ function estimateBPM(pcm: Float32Array, sampleRate: number): number {
       corr += envelope[i]! * envelope[i + lag]!
       energy += envelope[i]! * envelope[i]! + envelope[i + lag]! * envelope[i + lag]!
     }
-    const norm = energy > 0 ? corr / energy * 2 : 0
+    const norm = energy > 0 ? (corr / energy) * 2 : 0
     if (norm > bestCorr) {
       bestCorr = norm
       bestLag = lag
@@ -211,7 +211,7 @@ function estimateBPM(pcm: Float32Array, sampleRate: number): number {
  */
 export function compareProfiles(
   render: ReferenceProfile,
-  reference: ReferenceProfile,
+  reference: ReferenceProfile
 ): RenderComparison {
   const lufsDelta = render.lufs - reference.lufs
   const brightnessDelta = render.spectralCentroid - reference.spectralCentroid
@@ -219,22 +219,41 @@ export function compareProfiles(
   const widthDelta = render.stereoWidth - reference.stereoWidth
 
   // Distance: weighted sum of normalized deltas
-  const distance = Math.min(1, (
-    Math.abs(lufsDelta) / 6 +
-    Math.abs(brightnessDelta) / 2000 +
-    Math.abs(bassRatioDelta) +
-    Math.abs(widthDelta)
-  ) / 4)
+  const distance = Math.min(
+    1,
+    (Math.abs(lufsDelta) / 6 +
+      Math.abs(brightnessDelta) / 2000 +
+      Math.abs(bassRatioDelta) +
+      Math.abs(widthDelta)) /
+      4
+  )
 
   const suggestions: string[] = []
-  if (lufsDelta < -1) suggestions.push(`Increase LUFS by ${(-lufsDelta).toFixed(1)}dB — render is quieter than reference`)
-  if (lufsDelta > 1) suggestions.push(`Decrease LUFS by ${lufsDelta.toFixed(1)}dB — render is louder than reference`)
-  if (brightnessDelta < -500) suggestions.push(`Increase brightness — render is ${(-brightnessDelta).toFixed(0)}Hz darker than reference`)
-  if (brightnessDelta > 500) suggestions.push(`Decrease brightness — render is ${brightnessDelta.toFixed(0)}Hz brighter than reference`)
-  if (bassRatioDelta > 0.1) suggestions.push(`Reduce bass — render has ${(bassRatioDelta * 100).toFixed(0)}% more bass than reference`)
-  if (bassRatioDelta < -0.1) suggestions.push(`Increase bass — render has ${(-bassRatioDelta * 100).toFixed(0)}% less bass than reference`)
+  if (lufsDelta < -1)
+    suggestions.push(
+      `Increase LUFS by ${(-lufsDelta).toFixed(1)}dB — render is quieter than reference`
+    )
+  if (lufsDelta > 1)
+    suggestions.push(`Decrease LUFS by ${lufsDelta.toFixed(1)}dB — render is louder than reference`)
+  if (brightnessDelta < -500)
+    suggestions.push(
+      `Increase brightness — render is ${(-brightnessDelta).toFixed(0)}Hz darker than reference`
+    )
+  if (brightnessDelta > 500)
+    suggestions.push(
+      `Decrease brightness — render is ${brightnessDelta.toFixed(0)}Hz brighter than reference`
+    )
+  if (bassRatioDelta > 0.1)
+    suggestions.push(
+      `Reduce bass — render has ${(bassRatioDelta * 100).toFixed(0)}% more bass than reference`
+    )
+  if (bassRatioDelta < -0.1)
+    suggestions.push(
+      `Increase bass — render has ${(-bassRatioDelta * 100).toFixed(0)}% less bass than reference`
+    )
   if (widthDelta > 0.3) suggestions.push(`Reduce stereo width — render is wider than reference`)
-  if (widthDelta < -0.3) suggestions.push(`Increase stereo width — render is narrower than reference`)
+  if (widthDelta < -0.3)
+    suggestions.push(`Increase stereo width — render is narrower than reference`)
   if (render.lowMidMud > 0.15) suggestions.push(`Reduce low-mid mud (200-500Hz) — render is muddy`)
 
   return {

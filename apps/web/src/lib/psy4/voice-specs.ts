@@ -19,18 +19,18 @@
 // ═══════════════════════════════════════════════════════════════
 
 export interface KickSpec {
-  fundamental: number        // Hz, 40 (below bass territory)
-  subDecay: number            // 0.18s — 90x longer than click (PSY3 rule 1)
-  subLevel: number            // 0.9 — sub dominates
-  midDecay: number            // 0.05s — mid punch
-  midLevel: number            // 0.5
-  midFreq: number             // 150Hz — mid body frequency
-  clickDecay: number          // 0.002s — ultra short
-  clickLevel: number          // 0.35
-  pitchStart: number          // 200Hz — pitch sweep start
-  pitchDecay: number          // 0.012s — 12ms sweep
-  saturation: number          // 1.8 — drive
-  hpFreq: number              // 30Hz — clean sub rumble
+  fundamental: number // Hz, 40 (below bass territory)
+  subDecay: number // 0.18s — 90x longer than click (PSY3 rule 1)
+  subLevel: number // 0.9 — sub dominates
+  midDecay: number // 0.05s — mid punch
+  midLevel: number // 0.5
+  midFreq: number // 150Hz — mid body frequency
+  clickDecay: number // 0.002s — ultra short
+  clickLevel: number // 0.35
+  pitchStart: number // 200Hz — pitch sweep start
+  pitchDecay: number // 0.012s — 12ms sweep
+  saturation: number // 1.8 — drive
+  hpFreq: number // 30Hz — clean sub rumble
 }
 
 export const KICK_SPEC: KickSpec = {
@@ -53,19 +53,19 @@ export const KICK_SPEC: KickSpec = {
 // ═══════════════════════════════════════════════════════════════
 
 export interface BassSpec {
-  mode: 'pluck' | 'sustain'   // pluck = short, sustain = held
-  subLevel: number            // 0.5 — sub at f/2
-  bodyLevel: number           // 0.7 — main saw
-  characterLevel: number      // 0.2 — stereo character
-  cutoffStart: number         // 1500Hz — filter opens here (PSY3 rule 2)
-  cutoffEnd: number           // 150Hz — filter settles here
-  res: number                 // 0.3 — moderate resonance
-  pluckDecay: number          // 0.06s — short pluck
-  sustainLevel: number        // 0.7 — sustain portion
-  sustainRelease: number      // 0.005s — quick release
-  hpFreq: number              // 40Hz — let kick own sub
-  saturation: number          // 2.5
-  sidechainDepth: number      // 0.7 — 7dB duck
+  mode: 'pluck' | 'sustain' // pluck = short, sustain = held
+  subLevel: number // 0.5 — sub at f/2
+  bodyLevel: number // 0.7 — main saw
+  characterLevel: number // 0.2 — stereo character
+  cutoffStart: number // 1500Hz — filter opens here (PSY3 rule 2)
+  cutoffEnd: number // 150Hz — filter settles here
+  res: number // 0.3 — moderate resonance
+  pluckDecay: number // 0.06s — short pluck
+  sustainLevel: number // 0.7 — sustain portion
+  sustainRelease: number // 0.005s — quick release
+  hpFreq: number // 40Hz — let kick own sub
+  saturation: number // 2.5
+  sidechainDepth: number // 0.7 — 7dB duck
 }
 
 export const BASS_SPEC: BassSpec = {
@@ -89,26 +89,26 @@ export const BASS_SPEC: BassSpec = {
 // ═══════════════════════════════════════════════════════════════
 
 export interface LeadSpec {
-  oscCount: number            // 2 — detuned fundamentals
-  detune: number              // 12 cents
-  octaveLevel: number         // 0.4 — octave-up layer
-  octaveDetune: number        // 7 cents
-  airLevel: number            // 0.05 — noise air
-  airDecay: number            // 0.1s
-  fmLevel: number             // 0.3 — FM component
-  fmRatio: number             // 2.0 — modulator ratio
-  fmIndex: number             // 150 — FM depth
-  cutoff: number              // 1500Hz
-  res: number                 // 0.7 — acid resonance
-  filterEnvAmount: number     // 3.0 — dramatic sweep
-  filterEnvDecay: number      // 0.15s
-  lfoRate: number             // 1.2Hz
-  lfoDepth: number            // 0.5
-  saturation: number          // 2.0
-  delaySend: number           // 0.25 — per-note throws
-  reverbSend: number          // 0.25
-  hpFreq: number              // 80Hz
-  gain: number                // -7dB → 0.45 linear
+  oscCount: number // 2 — detuned fundamentals
+  detune: number // 12 cents
+  octaveLevel: number // 0.4 — octave-up layer
+  octaveDetune: number // 7 cents
+  airLevel: number // 0.05 — noise air
+  airDecay: number // 0.1s
+  fmLevel: number // 0.3 — FM component
+  fmRatio: number // 2.0 — modulator ratio
+  fmIndex: number // 150 — FM depth
+  cutoff: number // 1500Hz
+  res: number // 0.7 — acid resonance
+  filterEnvAmount: number // 3.0 — dramatic sweep
+  filterEnvDecay: number // 0.15s
+  lfoRate: number // 1.2Hz
+  lfoDepth: number // 0.5
+  saturation: number // 2.0
+  delaySend: number // 0.25 — per-note throws
+  reverbSend: number // 0.25
+  hpFreq: number // 80Hz
+  gain: number // -7dB → 0.45 linear
 }
 
 export const LEAD_SPEC: LeadSpec = {
@@ -139,22 +139,22 @@ export const LEAD_SPEC: LeadSpec = {
 // ═══════════════════════════════════════════════════════════════
 
 export interface PadSpec {
-  oscCount: number            // 3 detuned oscillators
-  detune: number              // 7 cents
-  octaveOsc: boolean          // true — one osc octave up
-  chorusDepth: number         // 0.5
-  chorusRate: number          // 0.3Hz
-  shimmerLevel: number        // 0.3 — pitch-shifted reverb tail
-  cutoff: number              // 600Hz
-  res: number                 // 0.3
-  filterLfoRate: number       // 0.15Hz — slow sweep
-  filterLfoDepth: number      // 0.5
-  saturation: number          // 1.0
-  reverbSend: number          // 0.4
-  hpFreq: number              // 80Hz
-  attack: number              // 0.3s — slow swell
-  release: number             // 0.4s
-  gain: number                // -8dB → 0.4 linear
+  oscCount: number // 3 detuned oscillators
+  detune: number // 7 cents
+  octaveOsc: boolean // true — one osc octave up
+  chorusDepth: number // 0.5
+  chorusRate: number // 0.3Hz
+  shimmerLevel: number // 0.3 — pitch-shifted reverb tail
+  cutoff: number // 600Hz
+  res: number // 0.3
+  filterLfoRate: number // 0.15Hz — slow sweep
+  filterLfoDepth: number // 0.5
+  saturation: number // 1.0
+  reverbSend: number // 0.4
+  hpFreq: number // 80Hz
+  attack: number // 0.3s — slow swell
+  release: number // 0.4s
+  gain: number // -8dB → 0.4 linear
 }
 
 export const PAD_SPEC: PadSpec = {
@@ -182,15 +182,15 @@ export const PAD_SPEC: PadSpec = {
 
 export interface AcidSpec {
   waveType: 'square' | 'saw'
-  cutoff: number              // 800Hz base
-  res: number                 // 0.85 — high resonance
-  lfoRate: number             // 2.0Hz — bidirectional
-  lfoDepth: number            // 0.7 — deep modulation
-  envAmount: number           // 2.0 — envelope sweep
-  envDecay: number            // 0.12s
-  distortion: number          // 3.0 — heavy
-  hpFreq: number              // 100Hz
-  gain: number                // -10dB → 0.3 linear
+  cutoff: number // 800Hz base
+  res: number // 0.85 — high resonance
+  lfoRate: number // 2.0Hz — bidirectional
+  lfoDepth: number // 0.7 — deep modulation
+  envAmount: number // 2.0 — envelope sweep
+  envDecay: number // 0.12s
+  distortion: number // 3.0 — heavy
+  hpFreq: number // 100Hz
+  gain: number // -10dB → 0.3 linear
 }
 
 export const ACID_SPEC: AcidSpec = {
@@ -211,15 +211,15 @@ export const ACID_SPEC: AcidSpec = {
 // ═══════════════════════════════════════════════════════════════
 
 export interface HatSpec {
-  metallicFreqs: number[]     // 6 inharmonic frequencies
-  bpFreq: number              // 10000Hz bandpass
-  bpRes: number               // 0.5
-  hpFreq: number              // 6000Hz
-  closedDecay: number         // 0.04s
-  openDecay: number           // 0.18s
-  pitchVar: number            // 0.02 — ±2% per hit
-  panVar: number              // 0.1 — ±0.1 per hit
-  gain: number                // -10dB → 0.3 linear
+  metallicFreqs: number[] // 6 inharmonic frequencies
+  bpFreq: number // 10000Hz bandpass
+  bpRes: number // 0.5
+  hpFreq: number // 6000Hz
+  closedDecay: number // 0.04s
+  openDecay: number // 0.18s
+  pitchVar: number // 0.02 — ±2% per hit
+  panVar: number // 0.1 — ±0.1 per hit
+  gain: number // -10dB → 0.3 linear
 }
 
 export const HAT_SPEC: HatSpec = {
@@ -239,14 +239,14 @@ export const HAT_SPEC: HatSpec = {
 // ═══════════════════════════════════════════════════════════════
 
 export interface SnareSpec {
-  tone1Freq: number           // 180Hz
-  tone2Freq: number           // 330Hz
-  toneDecay: number           // 0.05s
-  noiseBpFreq: number         // 1800Hz
-  noiseBpRes: number          // 0.7
-  noiseHpFreq: number         // 1000Hz
-  noiseDecay: number          // 0.08s
-  gain: number                // -8dB → 0.4 linear
+  tone1Freq: number // 180Hz
+  tone2Freq: number // 330Hz
+  toneDecay: number // 0.05s
+  noiseBpFreq: number // 1800Hz
+  noiseBpRes: number // 0.7
+  noiseHpFreq: number // 1000Hz
+  noiseDecay: number // 0.08s
+  gain: number // -8dB → 0.4 linear
 }
 
 export const SNARE_SPEC: SnareSpec = {
@@ -265,10 +265,10 @@ export const SNARE_SPEC: SnareSpec = {
 // ═══════════════════════════════════════════════════════════════
 
 export interface BusGains {
-  drum: number                // 1.2 — drums prominent
-  bass: number                // 0.35 — bass controlled
-  music: number               // 1.1 — lead/pad audible
-  fx: number                  // 0.5 — FX subtle
+  drum: number // 1.2 — drums prominent
+  bass: number // 0.35 — bass controlled
+  music: number // 1.1 — lead/pad audible
+  fx: number // 0.5 — FX subtle
 }
 
 export const BUS_GAINS: BusGains = {
@@ -283,49 +283,49 @@ export const BUS_GAINS: BusGains = {
 // ═══════════════════════════════════════════════════════════════
 
 export interface MasterSpec {
-  hpFreq: number              // 25Hz — clean DC
+  hpFreq: number // 25Hz — clean DC
   // Multiband (3-band)
-  mbLowXover: number          // 180Hz
-  mbHighXover: number         // 4000Hz
-  mbLowThr: number            // -18dB → 0.126 linear
-  mbMidThr: number            // -22dB → 0.079 linear
-  mbHighThr: number           // -20dB → 0.1 linear
+  mbLowXover: number // 180Hz
+  mbHighXover: number // 4000Hz
+  mbLowThr: number // -18dB → 0.126 linear
+  mbMidThr: number // -22dB → 0.079 linear
+  mbHighThr: number // -20dB → 0.1 linear
   // Glue
-  glueThr: number             // 0.6
-  glueRatio: number           // 2.0
-  glueAttack: number          // 0.004s
-  glueRelease: number         // 0.12s
-  glueMakeup: number          // 1.3
+  glueThr: number // 0.6
+  glueRatio: number // 2.0
+  glueAttack: number // 0.004s
+  glueRelease: number // 0.12s
+  glueMakeup: number // 1.3
   // Saturation
-  satDrive: number            // 1.15
-  satMix: number              // 0.15 — 15% wet
+  satDrive: number // 1.15
+  satMix: number // 0.15 — 15% wet
   // Stereo
-  stereoWidth: number         // 1.3
-  monoBelowHz: number         // 120Hz — mono bass
+  stereoWidth: number // 1.3
+  monoBelowHz: number // 120Hz — mono bass
   // Limiter
-  ceiling: number             // 0.98 — high ceiling
+  ceiling: number // 0.98 — high ceiling
   // LUFS
-  targetLufs: number          // -9
+  targetLufs: number // -9
 }
 
 export const MASTER_SPEC: MasterSpec = {
   hpFreq: 25,
   mbLowXover: 180,
   mbHighXover: 3500,
-  mbLowThr: 0.30,     // raised: less low-band compression
-  mbMidThr: 0.20,     // raised: less mid compression
-  mbHighThr: 0.25,    // raised: less high compression = more air
-  glueThr: 0.8,       // raised: 0.6 → 0.8 (much less glue compression)
-  glueRatio: 1.5,     // lowered: 2.0 → 1.5 (gentler ratio)
-  glueAttack: 0.01,   // slower: 0.005 → 0.01 (let transients through)
-  glueRelease: 0.2,   // slower: 0.15 → 0.2 (more natural)
-  glueMakeup: 1.0,    // lowered: 1.1 → 1.0 (no makeup = no pumping)
-  satDrive: 1.0,      // lowered = less saturation = cleaner
-  satMix: 0.1,        // lowered = less sat mix = more transparency
-  stereoWidth: 1.3,   // slightly less width = more mono compatibility
+  mbLowThr: 0.3, // raised: less low-band compression
+  mbMidThr: 0.2, // raised: less mid compression
+  mbHighThr: 0.25, // raised: less high compression = more air
+  glueThr: 0.8, // raised: 0.6 → 0.8 (much less glue compression)
+  glueRatio: 1.5, // lowered: 2.0 → 1.5 (gentler ratio)
+  glueAttack: 0.01, // slower: 0.005 → 0.01 (let transients through)
+  glueRelease: 0.2, // slower: 0.15 → 0.2 (more natural)
+  glueMakeup: 1.0, // lowered: 1.1 → 1.0 (no makeup = no pumping)
+  satDrive: 1.0, // lowered = less saturation = cleaner
+  satMix: 0.1, // lowered = less sat mix = more transparency
+  stereoWidth: 1.3, // slightly less width = more mono compatibility
   monoBelowHz: 120,
-  ceiling: 0.95,      // raised = less limiting = more dynamics
-  targetLufs: -12,    // lowered = less loudness = more headroom
+  ceiling: 0.95, // raised = less limiting = more dynamics
+  targetLufs: -12, // lowered = less loudness = more headroom
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -336,20 +336,67 @@ export interface ArrangementSpec {
   sections: Array<{
     name: string
     bars: number
-    energy: number          // 0-1
+    energy: number // 0-1
     tensionShape: 'rise' | 'fall' | 'arc' | 'sustain'
-    voices: string[]        // which voices play
+    voices: string[] // which voices play
   }>
 }
 
 export const ARRANGEMENT_SPEC: ArrangementSpec = {
   sections: [
-    { name: 'intro', bars: 8, energy: 0.5, tensionShape: 'rise', voices: ['kick', 'bass', 'hats', 'shaker'] },
-    { name: 'build1', bars: 16, energy: 0.7, tensionShape: 'rise', voices: ['kick', 'bass', 'hats', 'shaker', 'pad', 'lead'] },
-    { name: 'drop1', bars: 16, energy: 1.0, tensionShape: 'arc', voices: ['kick', 'bass', 'hats', 'shaker', 'pad', 'lead', 'counter', 'snare'] },
-    { name: 'break', bars: 8, energy: 0.4, tensionShape: 'fall', voices: ['kick', 'pad', 'texture', 'riser'] },
-    { name: 'drop2', bars: 16, energy: 1.0, tensionShape: 'arc', voices: ['kick', 'bass', 'hats', 'shaker', 'pad', 'lead', 'counter', 'snare', 'acid'] },
-    { name: 'climax', bars: 16, energy: 1.0, tensionShape: 'sustain', voices: ['kick', 'bass', 'hats', 'shaker', 'pad', 'lead', 'counter', 'snare', 'acid', 'impact'] },
+    {
+      name: 'intro',
+      bars: 8,
+      energy: 0.5,
+      tensionShape: 'rise',
+      voices: ['kick', 'bass', 'hats', 'shaker'],
+    },
+    {
+      name: 'build1',
+      bars: 16,
+      energy: 0.7,
+      tensionShape: 'rise',
+      voices: ['kick', 'bass', 'hats', 'shaker', 'pad', 'lead'],
+    },
+    {
+      name: 'drop1',
+      bars: 16,
+      energy: 1.0,
+      tensionShape: 'arc',
+      voices: ['kick', 'bass', 'hats', 'shaker', 'pad', 'lead', 'counter', 'snare'],
+    },
+    {
+      name: 'break',
+      bars: 8,
+      energy: 0.4,
+      tensionShape: 'fall',
+      voices: ['kick', 'pad', 'texture', 'riser'],
+    },
+    {
+      name: 'drop2',
+      bars: 16,
+      energy: 1.0,
+      tensionShape: 'arc',
+      voices: ['kick', 'bass', 'hats', 'shaker', 'pad', 'lead', 'counter', 'snare', 'acid'],
+    },
+    {
+      name: 'climax',
+      bars: 16,
+      energy: 1.0,
+      tensionShape: 'sustain',
+      voices: [
+        'kick',
+        'bass',
+        'hats',
+        'shaker',
+        'pad',
+        'lead',
+        'counter',
+        'snare',
+        'acid',
+        'impact',
+      ],
+    },
     { name: 'outro', bars: 8, energy: 0.3, tensionShape: 'fall', voices: ['kick', 'bass', 'pad'] },
   ],
 }

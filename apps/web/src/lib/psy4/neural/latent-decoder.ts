@@ -30,19 +30,19 @@
  *   const styled = decoder.decode()
  */
 
-const BARK_BANDS = 32  // bark-spaced frequency bands (psychoacoustic)
+const BARK_BANDS = 32 // bark-spaced frequency bands (psychoacoustic)
 const FFT_SIZE = 2048
 
 export interface LatentVector {
-  bands: Float32Array  // BARK_BANDS log magnitudes (the "latent" representation)
-  centroid: number    // spectral centroid (brightness)
-  flatness: number     // spectral flatness (0=tonal, 1=noise)
+  bands: Float32Array // BARK_BANDS log magnitudes (the "latent" representation)
+  centroid: number // spectral centroid (brightness)
+  flatness: number // spectral flatness (0=tonal, 1=noise)
 }
 
 export class LatentDecoder {
   private currentLatent: LatentVector
   private targetLatent: LatentVector | null = null
-  private blendAmount = 0  // 0=own style, 1=reference style
+  private blendAmount = 0 // 0=own style, 1=reference style
   private filterStates: Float32Array
 
   constructor() {
@@ -58,7 +58,7 @@ export class LatentDecoder {
    * Encode an audio block into a latent vector.
    * Extracts: bark-band magnitudes, spectral centroid, spectral flatness.
    */
-  encode(samples: Float32Array, sampleRate: number = 44100): LatentVector {
+  encode(samples: Float32Array, sampleRate = 44100): LatentVector {
     const N = Math.min(samples.length, FFT_SIZE)
     // Simplified DFT (magnitude spectrum at bark-spaced frequencies)
     const bands = new Float32Array(BARK_BANDS)
@@ -76,7 +76,8 @@ export class LatentDecoder {
       const freq = Math.exp(logMin + bandPos * (logMax - logMin))
       const bin = Math.floor((freq * N) / sampleRate)
       // Goertzel-like: compute magnitude at this frequency
-      let real = 0, imag = 0
+      let real = 0,
+        imag = 0
       const omega = (2 * Math.PI * freq) / sampleRate
       for (let i = 0; i < N; i++) {
         const s = samples[i] ?? 0
@@ -84,14 +85,15 @@ export class LatentDecoder {
         imag += s * Math.sin(omega * i)
       }
       const mag = Math.sqrt(real * real + imag * imag) / N
-      bands[b] = Math.log(1 + mag * 100)  // log scale
+      bands[b] = Math.log(1 + mag * 100) // log scale
       totalEnergy += mag
       weightedFreq += mag * freq
     }
 
     const centroid = totalEnergy > 0 ? weightedFreq / totalEnergy : 1000
     // Spectral flatness: geometric mean / arithmetic mean (0=tonal, 1=noise)
-    let logSum = 0, linSum = 0
+    let logSum = 0,
+      linSum = 0
     for (let b = 0; b < BARK_BANDS; b++) {
       const m = Math.exp(bands[b]!) - 1
       logSum += Math.log(Math.max(0.0001, m))
@@ -118,7 +120,7 @@ export class LatentDecoder {
    * Decode the (possibly style-blended) latent back into a filter response.
    * Returns the filtered audio block.
    */
-  decode(samples: Float32Array, sampleRate: number = 44100): Float32Array {
+  decode(samples: Float32Array, sampleRate = 44100): Float32Array {
     if (!this.targetLatent) return samples
 
     // Blend current latent with target latent
@@ -149,11 +151,11 @@ export class LatentDecoder {
         // Compute gain ratio (how much to boost/cut this band)
         const ownMag = this.currentLatent.bands[b]! + 0.01
         const blendMag = blended[b]! + 0.01
-        const gainRatio = blendMag / ownMag  // 1.0 = no change
+        const gainRatio = blendMag / ownMag // 1.0 = no change
 
         // One-pole resonator at this frequency
         const omega = (2 * Math.PI * freq) / sampleRate
-        const alpha = Math.sin(omega) / (2 * 4)  // Q=4
+        const alpha = Math.sin(omega) / (2 * 4) // Q=4
         const a0 = 1 + alpha
         const b0 = alpha / a0
 
@@ -163,7 +165,7 @@ export class LatentDecoder {
         out += filtered * gainRatio
       }
       // Normalize by number of bands
-      output[i] = out / BARK_BANDS * 10
+      output[i] = (out / BARK_BANDS) * 10
     }
     return output
   }
@@ -185,13 +187,13 @@ export class LatentDecoder {
 export class NeuralStyleTransfer {
   private decoder = new LatentDecoder()
   private referenceLatent: LatentVector | null = null
-  private blendAmount = 0.3  // 30% style by default
+  private blendAmount = 0.3 // 30% style by default
 
   /**
    * Learn the style of a reference track.
    * Analyzes multiple windows and averages the latent vectors.
    */
-  loadReference(samples: Float32Array, sampleRate: number = 44100): void {
+  loadReference(samples: Float32Array, sampleRate = 44100): void {
     const windowSize = FFT_SIZE
     const numWindows = Math.min(50, Math.floor(samples.length / windowSize))
     const latents: LatentVector[] = []
@@ -208,9 +210,10 @@ export class NeuralStyleTransfer {
 
     // Average the latents
     const avgBands = new Float32Array(BARK_BANDS)
-    let avgCentroid = 0, avgFlatness = 0
+    let avgCentroid = 0,
+      avgFlatness = 0
     for (const l of latents) {
-      for (let b = 0; b < BARK_BANDS; b++) avgBands[b]! += l.bands[b]!
+      for (let b = 0; b < BARK_BANDS; b++) avgBands[b]! += l.bands[b]
       avgCentroid += l.centroid
       avgFlatness += l.flatness
     }
@@ -225,15 +228,19 @@ export class NeuralStyleTransfer {
     this.blendAmount = Math.max(0, Math.min(1, amount))
   }
 
-  getBlendAmount(): number { return this.blendAmount }
+  getBlendAmount(): number {
+    return this.blendAmount
+  }
 
-  hasReference(): boolean { return this.referenceLatent !== null }
+  hasReference(): boolean {
+    return this.referenceLatent !== null
+  }
 
   /**
    * Apply the learned style to a render block.
    * Returns the styled audio.
    */
-  transfer(samples: Float32Array, sampleRate: number = 44100): Float32Array {
+  transfer(samples: Float32Array, sampleRate = 44100): Float32Array {
     if (!this.referenceLatent) return samples
     this.decoder.encode(samples, sampleRate)
     this.decoder.applyStyle(this.referenceLatent, this.blendAmount)
@@ -244,7 +251,7 @@ export class NeuralStyleTransfer {
    * Process in real-time blocks (for streaming).
    * blockSize: typically 1024 or 2048 samples.
    */
-  *processStream(blocks: Iterable<Float32Array>, sampleRate: number = 44100): Generator<Float32Array> {
+  *processStream(blocks: Iterable<Float32Array>, sampleRate = 44100): Generator<Float32Array> {
     for (const block of blocks) {
       yield this.transfer(block, sampleRate)
     }

@@ -52,7 +52,7 @@ export class ONNXDDSPDecoder {
   private modelPath: string
   private initialized = false
 
-  constructor(modelPath: string = '/models/ddsp_lead.onnx') {
+  constructor(modelPath = '/models/ddsp_lead.onnx') {
     this.modelPath = modelPath
   }
 
@@ -90,7 +90,9 @@ export class ONNXDDSPDecoder {
     }
   }
 
-  get isReady(): boolean { return this.initialized }
+  get isReady(): boolean {
+    return this.initialized
+  }
 }
 
 /**
@@ -101,7 +103,7 @@ export class ONNXRAVEEncoder {
   private modelPath: string
   private initialized = false
 
-  constructor(modelPath: string = '/models/rave_encoder.onnx') {
+  constructor(modelPath = '/models/rave_encoder.onnx') {
     this.modelPath = modelPath
   }
 
@@ -141,7 +143,9 @@ export class ONNXRAVEEncoder {
     }
   }
 
-  get isReady(): boolean { return this.initialized }
+  get isReady(): boolean {
+    return this.initialized
+  }
 }
 
 /**
@@ -152,7 +156,7 @@ export class ONNXRAVEDecoder {
   private modelPath: string
   private initialized = false
 
-  constructor(modelPath: string = '/models/rave_decoder.onnx') {
+  constructor(modelPath = '/models/rave_decoder.onnx') {
     this.modelPath = modelPath
   }
 
@@ -189,7 +193,9 @@ export class ONNXRAVEDecoder {
     }
   }
 
-  get isReady(): boolean { return this.initialized }
+  get isReady(): boolean {
+    return this.initialized
+  }
 }
 
 /**
@@ -208,10 +214,7 @@ export class ONNXStyleTransfer {
   }
 
   async init(): Promise<boolean> {
-    const [encOk, decOk] = await Promise.all([
-      this.encoder.init(),
-      this.decoder.init(),
-    ])
+    const [encOk, decOk] = await Promise.all([this.encoder.init(), this.decoder.init()])
     return encOk && decOk
   }
 

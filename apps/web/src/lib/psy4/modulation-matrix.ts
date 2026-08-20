@@ -10,13 +10,33 @@
  * Deterministic: all LFOs use phase accumulation, no Math.random.
  */
 
-export type ModSource = 'lfo1' | 'lfo2' | 'lfo3' | 'lfo4' | 'lfo5' | 'lfo6' | 'env' | 'velocity' | 'macro1' | 'macro2' | 'macro3'
-export type ModDestination = 'pitch' | 'cutoff' | 'resonance' | 'fmIndex' | 'amp' | 'pan' | 'drive' | 'delaySend' | 'wavetablePos'
+export type ModSource =
+  | 'lfo1'
+  | 'lfo2'
+  | 'lfo3'
+  | 'lfo4'
+  | 'lfo5'
+  | 'lfo6'
+  | 'env'
+  | 'velocity'
+  | 'macro1'
+  | 'macro2'
+  | 'macro3'
+export type ModDestination =
+  | 'pitch'
+  | 'cutoff'
+  | 'resonance'
+  | 'fmIndex'
+  | 'amp'
+  | 'pan'
+  | 'drive'
+  | 'delaySend'
+  | 'wavetablePos'
 
 export interface ModRoute {
   source: ModSource
   destination: ModDestination
-  amount: number  // -1..1
+  amount: number // -1..1
 }
 
 export class ModulationMatrix {
@@ -27,22 +47,27 @@ export class ModulationMatrix {
   private readonly lfoRatesArr = Float64Array.from([0.3, 2.0, 5.5, 0.15, 0.1, 0.05])
   // Kept for back-compat with getSourceValue lookups
   private lfoPhases: Record<string, number> = {
-    lfo1: 0, lfo2: 0, lfo3: 0, lfo4: 0, lfo5: 0, lfo6: 0,
+    lfo1: 0,
+    lfo2: 0,
+    lfo3: 0,
+    lfo4: 0,
+    lfo5: 0,
+    lfo6: 0,
   }
   private lfoRates: Record<string, number> = {
-    lfo1: 0.3,   // slow filter sweep
-    lfo2: 2.0,   // acid bidirectional
-    lfo3: 5.5,   // shimmer
-    lfo4: 0.15,  // pad morph
-    lfo5: 0.1,   // texture morph
-    lfo6: 0.05,  // ultra-slow evolution
+    lfo1: 0.3, // slow filter sweep
+    lfo2: 2.0, // acid bidirectional
+    lfo3: 5.5, // shimmer
+    lfo4: 0.15, // pad morph
+    lfo5: 0.1, // texture morph
+    lfo6: 0.05, // ultra-slow evolution
   }
   private envValue = 0
   private velocity = 0.5
   private macros: Record<string, number> = {
-    macro1: 0.5,  // SPACE: reverb + delay + filter
-    macro2: 0.5,  // ENERGY: drive + volume + filter
-    macro3: 0.5,  // TENSION: filter + reso + swing
+    macro1: 0.5, // SPACE: reverb + delay + filter
+    macro2: 0.5, // ENERGY: drive + volume + filter
+    macro3: 0.5, // TENSION: filter + reso + swing
   }
 
   addRoute(route: ModRoute): void {
@@ -75,9 +100,15 @@ export class ModulationMatrix {
 
   /** Get the current value of a modulation source. */
   getSourceValue(source: ModSource): number {
-    if (source === 'lfo1' || source === 'lfo2' || source === 'lfo3' ||
-        source === 'lfo4' || source === 'lfo5' || source === 'lfo6') {
-      const idx = source.charCodeAt(3) - 49  // '1'..'6' → 0..5
+    if (
+      source === 'lfo1' ||
+      source === 'lfo2' ||
+      source === 'lfo3' ||
+      source === 'lfo4' ||
+      source === 'lfo5' ||
+      source === 'lfo6'
+    ) {
+      const idx = source.charCodeAt(3) - 49 // '1'..'6' → 0..5
       const phase = this.lfoPhasesArr[idx] ?? 0
       return Math.sin(2 * Math.PI * phase)
     }
@@ -106,32 +137,45 @@ export class ModulationMatrix {
       const amount = route.amount
       switch (route.destination) {
         case 'pitch':
-          if (params.pitch !== undefined) params.pitch *= Math.pow(2, sourceValue * amount * 0.1 / 12)
+          if (params.pitch !== undefined)
+            params.pitch *= Math.pow(2, (sourceValue * amount * 0.1) / 12)
           break
         case 'cutoff':
-          if (params.cutoff !== undefined) params.cutoff *= (1 + sourceValue * amount * 0.5)
+          if (params.cutoff !== undefined) params.cutoff *= 1 + sourceValue * amount * 0.5
           break
         case 'resonance':
-          if (params.resonance !== undefined) params.resonance = Math.max(0, Math.min(1, params.resonance + sourceValue * amount * 0.3))
+          if (params.resonance !== undefined)
+            params.resonance = Math.max(
+              0,
+              Math.min(1, params.resonance + sourceValue * amount * 0.3)
+            )
           break
         case 'fmIndex':
-          if (params.fmIndex !== undefined) params.fmIndex *= (1 + sourceValue * amount * 0.5)
+          if (params.fmIndex !== undefined) params.fmIndex *= 1 + sourceValue * amount * 0.5
           break
         case 'amp':
-          if (params.amp !== undefined) params.amp *= (1 + sourceValue * amount * 0.3)
+          if (params.amp !== undefined) params.amp *= 1 + sourceValue * amount * 0.3
           break
         case 'pan':
           if (params.pan !== undefined) params.pan += sourceValue * amount * 0.5
           break
         case 'drive':
-          if (params.drive !== undefined) params.drive *= (1 + sourceValue * amount * 0.5)
+          if (params.drive !== undefined) params.drive *= 1 + sourceValue * amount * 0.5
           break
         case 'delaySend':
-          if (params.delaySend !== undefined) params.delaySend = Math.max(0, Math.min(1, params.delaySend + sourceValue * amount * 0.3))
+          if (params.delaySend !== undefined)
+            params.delaySend = Math.max(
+              0,
+              Math.min(1, params.delaySend + sourceValue * amount * 0.3)
+            )
           break
         case 'wavetablePos':
           // Bidirectional morph modulation, clamped to [0, 1]
-          if (params.wavetablePos !== undefined) params.wavetablePos = Math.max(0, Math.min(1, params.wavetablePos + sourceValue * amount * 0.5))
+          if (params.wavetablePos !== undefined)
+            params.wavetablePos = Math.max(
+              0,
+              Math.min(1, params.wavetablePos + sourceValue * amount * 0.5)
+            )
           break
       }
     }

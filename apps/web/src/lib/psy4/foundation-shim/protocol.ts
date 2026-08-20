@@ -39,10 +39,29 @@ export interface EventTime {
   at: number
 }
 
-export interface BeatEvent { type: 'beat'; time: EventTime; bpm: number; bar: number; beat: number }
-export interface SectionEvent { type: 'section'; time: EventTime; section: string; energy: number }
-export interface EnergyEvent { type: 'energy'; time: EventTime; energy: number }
-export interface DropEvent { type: 'drop'; time: EventTime; dropType: string }
+export interface BeatEvent {
+  type: 'beat'
+  time: EventTime
+  bpm: number
+  bar: number
+  beat: number
+}
+export interface SectionEvent {
+  type: 'section'
+  time: EventTime
+  section: string
+  energy: number
+}
+export interface EnergyEvent {
+  type: 'energy'
+  time: EventTime
+  energy: number
+}
+export interface DropEvent {
+  type: 'drop'
+  time: EventTime
+  dropType: string
+}
 export interface NoteEvent {
   type: 'note'
   time: EventTime
@@ -52,14 +71,25 @@ export interface NoteEvent {
   channel: string
   at: number
 }
-export interface PatternEvent { type: 'pattern'; time: EventTime; pattern: unknown; channel: string }
+export interface PatternEvent {
+  type: 'pattern'
+  time: EventTime
+  pattern: unknown
+  channel: string
+}
 
-export type MusicalEvent = BeatEvent | SectionEvent | EnergyEvent | DropEvent | NoteEvent | PatternEvent
+export type MusicalEvent =
+  | BeatEvent
+  | SectionEvent
+  | EnergyEvent
+  | DropEvent
+  | NoteEvent
+  | PatternEvent
 
 export type EventOfType<T extends MusicalEvent['type']> = Extract<MusicalEvent, { type: T }>
 
-export interface ChannelListener { (event: MusicalEvent): void }
-export interface Unsubscribe { (): void }
+export type ChannelListener = (event: MusicalEvent) => void
+export type Unsubscribe = () => void
 
 export interface Channel {
   subscribe(listener: ChannelListener): Unsubscribe
@@ -73,11 +103,16 @@ export class InMemoryChannel implements Channel {
   subscribe(listener: ChannelListener): Unsubscribe {
     if (this.closed) throw new Error('Cannot subscribe to closed channel')
     this.listeners.push(listener)
-    return () => { this.listeners = this.listeners.filter(l => l !== listener) }
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener)
+    }
   }
   publish(event: MusicalEvent): void {
     if (this.closed) return
     for (const l of this.listeners) l(event)
   }
-  close(): void { this.closed = true; this.listeners = [] }
+  close(): void {
+    this.closed = true
+    this.listeners = []
+  }
 }

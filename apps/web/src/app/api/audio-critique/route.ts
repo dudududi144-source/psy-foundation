@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { critiqueAudio } from '@/lib/psy4/audio-critic'
+import { DEFAULT_RENDER_CONFIG, renderFoundationSection } from '@/lib/psy4/forensic-bridge'
+import { PSYTRANCE_PROGRESSIONS, buildProgression, midiToNoteName } from '@/lib/psy4/harmony'
+import { analyzeReference } from '@/lib/psy4/reference-analyzer'
 import { CompositionEngine } from '@psy-foundation/music'
 import { createIdentityA } from '@psy-foundation/music'
-import { renderFoundationSection, DEFAULT_RENDER_CONFIG } from '@/lib/psy4/forensic-bridge'
-import { critiqueAudio } from '@/lib/psy4/audio-critic'
-import { analyzeReference } from '@/lib/psy4/reference-analyzer'
-import { PSYTRANCE_PROGRESSIONS, buildProgression, midiToNoteName } from '@/lib/psy4/harmony'
+import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,8 +18,8 @@ const BEST_CONFIG = {
 }
 
 export async function GET(req: NextRequest) {
-  const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
-  const seed = parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
+  const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
+  const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
   const useSamples = req.nextUrl.searchParams.get('samples') !== 'false'
 
   const ctx = {
@@ -48,7 +48,11 @@ export async function GET(req: NextRequest) {
     result = await renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
   } catch (e) {
     console.error('Render failed, retrying without samples:', (e as Error).message)
-    result = await renderFoundationSection(section, { useSamples: false, bpm: 145, config: BEST_CONFIG })
+    result = await renderFoundationSection(section, {
+      useSamples: false,
+      bpm: 145,
+      config: BEST_CONFIG,
+    })
   }
 
   // Downmix to mono for AudioCritic
@@ -63,12 +67,16 @@ export async function GET(req: NextRequest) {
   const analysis = analyzeReference(result.samplesL, result.samplesR, result.sampleRate)
 
   // Harmony info (new in v6.6)
-  const progression = buildProgression(40, 'phrygianDominant', PSYTRANCE_PROGRESSIONS['psy-dominant']!)
-  const chordNames = progression.map(c => c.name)
+  const progression = buildProgression(
+    40,
+    'phrygianDominant',
+    PSYTRANCE_PROGRESSIONS['psy-dominant']!
+  )
+  const chordNames = progression.map((c) => c.name)
 
   return NextResponse.json({
     overallScore: critique.overallScore,
-    failures: critique.failures.map(f => ({
+    failures: critique.failures.map((f) => ({
       code: f.code,
       severity: f.severity,
       diagnosis: f.diagnosis,

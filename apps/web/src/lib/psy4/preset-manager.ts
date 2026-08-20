@@ -23,16 +23,16 @@
  */
 
 export interface Preset {
-  id: string               // unique identifier
-  name: string            // display name
-  category: string         // 'Kick' | 'Bass' | 'Lead' | 'Pad' | 'Acid' | 'Master' | 'Custom'
-  voice: string           // which voice type
-  description: string     // user notes
-  params: Record<string, number>   // voice-specific params
+  id: string // unique identifier
+  name: string // display name
+  category: string // 'Kick' | 'Bass' | 'Lead' | 'Pad' | 'Acid' | 'Master' | 'Custom'
+  voice: string // which voice type
+  description: string // user notes
+  params: Record<string, number> // voice-specific params
   modulationRoutes?: Array<{ source: string; destination: string; amount: number }>
   masterSettings?: Record<string, number>
-  createdAt: number      // timestamp
-  updatedAt: number      // timestamp
+  createdAt: number // timestamp
+  updatedAt: number // timestamp
 }
 
 export interface PresetCategory {
@@ -53,7 +53,16 @@ export const FACTORY_PRESETS: Preset[] = [
     category: 'Kick',
     voice: 'kick',
     description: 'Punchy full-on psytrance kick with strong sub',
-    params: { fundamental: 38, subDecay: 0.25, subLevel: 1.0, midDecay: 0.05, midLevel: 0.5, clickDecay: 0.002, clickLevel: 0.35, saturation: 1.8 },
+    params: {
+      fundamental: 38,
+      subDecay: 0.25,
+      subLevel: 1.0,
+      midDecay: 0.05,
+      midLevel: 0.5,
+      clickDecay: 0.002,
+      clickLevel: 0.35,
+      saturation: 1.8,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
@@ -63,7 +72,16 @@ export const FACTORY_PRESETS: Preset[] = [
     category: 'Kick',
     voice: 'kick',
     description: 'Dark, fast-decay kick for darkpsy',
-    params: { fundamental: 42, subDecay: 0.18, subLevel: 0.9, midDecay: 0.04, midLevel: 0.4, clickDecay: 0.001, clickLevel: 0.45, saturation: 2.2 },
+    params: {
+      fundamental: 42,
+      subDecay: 0.18,
+      subLevel: 0.9,
+      midDecay: 0.04,
+      midLevel: 0.4,
+      clickDecay: 0.001,
+      clickLevel: 0.45,
+      saturation: 2.2,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
@@ -74,7 +92,15 @@ export const FACTORY_PRESETS: Preset[] = [
     category: 'Bass',
     voice: 'bass',
     description: 'Classic psytrance rolling 16th bass',
-    params: { subLevel: 0.5, bodyLevel: 0.45, characterLevel: 0.15, cutoffStart: 1200, cutoffEnd: 150, res: 0.3, pluckDecay: 0.05 },
+    params: {
+      subLevel: 0.5,
+      bodyLevel: 0.45,
+      characterLevel: 0.15,
+      cutoffStart: 1200,
+      cutoffEnd: 150,
+      res: 0.3,
+      pluckDecay: 0.05,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
@@ -84,7 +110,15 @@ export const FACTORY_PRESETS: Preset[] = [
     category: 'Bass',
     voice: 'bass',
     description: 'Smoother, longer decay for progressive psytrance',
-    params: { subLevel: 0.4, bodyLevel: 0.55, characterLevel: 0.2, cutoffStart: 1000, cutoffEnd: 200, res: 0.25, pluckDecay: 0.08 },
+    params: {
+      subLevel: 0.4,
+      bodyLevel: 0.55,
+      characterLevel: 0.2,
+      cutoffStart: 1000,
+      cutoffEnd: 200,
+      res: 0.25,
+      pluckDecay: 0.08,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
@@ -95,7 +129,15 @@ export const FACTORY_PRESETS: Preset[] = [
     category: 'Lead',
     voice: 'lead',
     description: 'Bright, energetic lead for full-on psytrance',
-    params: { cutoff: 4200, gain: 0.6, octaveLevel: 0.6, airLevel: 0.12, fmLevel: 0.35, detune: 12, res: 0.7 },
+    params: {
+      cutoff: 4200,
+      gain: 0.6,
+      octaveLevel: 0.6,
+      airLevel: 0.12,
+      fmLevel: 0.35,
+      detune: 12,
+      res: 0.7,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
@@ -105,7 +147,15 @@ export const FACTORY_PRESETS: Preset[] = [
     category: 'Lead',
     voice: 'lead',
     description: 'FM-heavy lead with modulation',
-    params: { cutoff: 3800, gain: 0.55, octaveLevel: 0.5, airLevel: 0.1, fmLevel: 0.5, detune: 18, res: 0.8 },
+    params: {
+      cutoff: 3800,
+      gain: 0.55,
+      octaveLevel: 0.5,
+      airLevel: 0.1,
+      fmLevel: 0.5,
+      detune: 18,
+      res: 0.8,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
@@ -116,7 +166,14 @@ export const FACTORY_PRESETS: Preset[] = [
     category: 'Acid',
     voice: 'acid',
     description: 'Classic TB-303 squelch',
-    params: { cutoff: 800, res: 0.85, lfoRate: 2.0, lfoDepth: 0.7, envAmount: 2.0, distortion: 3.0 },
+    params: {
+      cutoff: 800,
+      res: 0.85,
+      lfoRate: 2.0,
+      lfoDepth: 0.7,
+      envAmount: 2.0,
+      distortion: 3.0,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
@@ -137,7 +194,15 @@ export const FACTORY_PRESETS: Preset[] = [
     category: 'Pad',
     voice: 'pad',
     description: 'Evolving atmospheric pad',
-    params: { cutoff: 600, res: 0.3, filterLfoRate: 0.15, filterLfoDepth: 0.5, shimmerLevel: 0.3, attack: 0.3, release: 0.4 },
+    params: {
+      cutoff: 600,
+      res: 0.3,
+      filterLfoRate: 0.15,
+      filterLfoDepth: 0.5,
+      shimmerLevel: 0.3,
+      attack: 0.3,
+      release: 0.4,
+    },
     createdAt: Date.now(),
     updatedAt: Date.now(),
   },
@@ -189,7 +254,7 @@ export class PresetManager {
 
   /** Get presets by category */
   getByCategory(category: string): Preset[] {
-    return this.getAll().filter(p => p.category === category)
+    return this.getAll().filter((p) => p.category === category)
   }
 
   /** Get preset by ID */
@@ -212,7 +277,13 @@ export class PresetManager {
   }
 
   /** Create a new preset from current params */
-  create(name: string, category: string, voice: string, params: Record<string, number>, description: string = ''): Preset {
+  create(
+    name: string,
+    category: string,
+    voice: string,
+    params: Record<string, number>,
+    description = ''
+  ): Preset {
     const preset: Preset = {
       id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name,
@@ -278,10 +349,11 @@ export class PresetManager {
   /** Search presets by name/description */
   search(query: string): Preset[] {
     const q = query.toLowerCase()
-    return this.getAll().filter(p =>
-      p.name.toLowerCase().includes(q) ||
-      p.description.toLowerCase().includes(q) ||
-      p.category.toLowerCase().includes(q)
+    return this.getAll().filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.description.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q)
     )
   }
 
@@ -316,8 +388,12 @@ export class PresetManager {
   }
 
   /** Get preset count */
-  get count(): number { return this.presets.size }
+  get count(): number {
+    return this.presets.size
+  }
 
   /** Check if preset is factory (read-only) */
-  isFactory(id: string): boolean { return id.startsWith('factory-') }
+  isFactory(id: string): boolean {
+    return id.startsWith('factory-')
+  }
 }

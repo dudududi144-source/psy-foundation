@@ -1,7 +1,7 @@
 // VERBATIM SHIM — pinned to psy-foundation commit 4ae95d3
 // Source: psy-foundation/packages/protocol/src/transport.ts
 
-import type { TransportState, MusicalEvent } from './protocol'
+import type { MusicalEvent, TransportState } from './protocol'
 
 export interface MusicalTransport {
   state: TransportState

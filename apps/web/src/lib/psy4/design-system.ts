@@ -29,15 +29,15 @@ export const DESIGN = {
     bgElevated: '#23262d',
 
     // Accents
-    cyan: '#00e5ff',         // reference/analysis
+    cyan: '#00e5ff', // reference/analysis
     cyanDim: '#00b8cc',
-    violet: '#a78bfa',       // harmony/musical
+    violet: '#a78bfa', // harmony/musical
     violetDim: '#7c3aed',
-    emerald: '#10b981',      // scores/success
+    emerald: '#10b981', // scores/success
     emeraldDim: '#059669',
-    amber: '#f59e0b',        // warnings
-    rose: '#f43f5e',         // failures
-    zinc: '#71717a',         // neutral
+    amber: '#f59e0b', // warnings
+    rose: '#f43f5e', // failures
+    zinc: '#71717a', // neutral
     zincDim: '#3f3f46',
 
     // Text
@@ -122,7 +122,7 @@ export const DESIGN = {
     },
 
     // Progress bar
-    progressBar: (value: number, invert: boolean = false) => {
+    progressBar: (value: number, invert = false) => {
       const good = invert ? value < 0.5 : value > 0.5
       const color = good ? 'bg-emerald-500' : value > 0.3 ? 'bg-amber-500' : 'bg-rose-500'
       return { color, pct: Math.round(value * 100) }
@@ -131,18 +131,18 @@ export const DESIGN = {
 
   // ─── Voice Type Colors ───
   voiceColors: {
-    kick:    { bg: 'bg-amber-500/10',   border: 'border-amber-500/30',   text: 'text-amber-400' },
-    bass:    { bg: 'bg-orange-500/10',   border: 'border-orange-500/30',  text: 'text-orange-400' },
-    lead:    { bg: 'bg-violet-500/10',  border: 'border-violet-500/30',  text: 'text-violet-400' },
-    pad:     { bg: 'bg-indigo-500/10',  border: 'border-indigo-500/30',   text: 'text-indigo-400' },
-    acid:    { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', text: 'text-fuchsia-400' },
-    texture: { bg: 'bg-teal-500/10',    border: 'border-teal-500/30',    text: 'text-teal-400' },
-    hat:     { bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30',    text: 'text-cyan-400' },
-    snare:   { bg: 'bg-red-500/10',     border: 'border-red-500/30',     text: 'text-red-400' },
-    shaker:  { bg: 'bg-lime-500/10',    border: 'border-lime-500/30',    text: 'text-lime-400' },
-    sub:     { bg: 'bg-yellow-500/10',  border: 'border-yellow-500/30',   text: 'text-yellow-400' },
-    riser:   { bg: 'bg-sky-500/10',     border: 'border-sky-500/30',     text: 'text-sky-400' },
-    impact:  { bg: 'bg-purple-500/10',  border: 'border-purple-500/30',   text: 'text-purple-400' },
+    kick: { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-400' },
+    bass: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400' },
+    lead: { bg: 'bg-violet-500/10', border: 'border-violet-500/30', text: 'text-violet-400' },
+    pad: { bg: 'bg-indigo-500/10', border: 'border-indigo-500/30', text: 'text-indigo-400' },
+    acid: { bg: 'bg-fuchsia-500/10', border: 'border-fuchsia-500/30', text: 'text-fuchsia-400' },
+    texture: { bg: 'bg-teal-500/10', border: 'border-teal-500/30', text: 'text-teal-400' },
+    hat: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/30', text: 'text-cyan-400' },
+    snare: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400' },
+    shaker: { bg: 'bg-lime-500/10', border: 'border-lime-500/30', text: 'text-lime-400' },
+    sub: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400' },
+    riser: { bg: 'bg-sky-500/10', border: 'border-sky-500/30', text: 'text-sky-400' },
+    impact: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-400' },
   },
 } as const
 

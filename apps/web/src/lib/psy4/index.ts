@@ -26,14 +26,65 @@
  */
 
 // Voice specifications (single source of truth)
-export { KICK_SPEC, BASS_SPEC, LEAD_SPEC, PAD_SPEC, ACID_SPEC, HAT_SPEC, SNARE_SPEC, BUS_GAINS, MASTER_SPEC, ARRANGEMENT_SPEC } from './voice-specs'
-export type { KickSpec, BassSpec, LeadSpec, PadSpec, AcidSpec, HatSpec, SnareSpec, BusGains, MasterSpec, ArrangementSpec } from './voice-specs'
+export {
+  KICK_SPEC,
+  BASS_SPEC,
+  LEAD_SPEC,
+  PAD_SPEC,
+  ACID_SPEC,
+  HAT_SPEC,
+  SNARE_SPEC,
+  BUS_GAINS,
+  MASTER_SPEC,
+  ARRANGEMENT_SPEC,
+} from './voice-specs'
+export type {
+  KickSpec,
+  BassSpec,
+  LeadSpec,
+  PadSpec,
+  AcidSpec,
+  HatSpec,
+  SnareSpec,
+  BusGains,
+  MasterSpec,
+  ArrangementSpec,
+} from './voice-specs'
 
 // Voice implementations
-export { PsyKick, PsyBass, PsyLead, PsyHat, PsySample, PsySnare, PsySubBass, PsyPad, PsyShaker, PsyAcid, PsyTexture, PsyRiser, PsyImpact } from './psy-voices'
+export {
+  PsyKick,
+  PsyBass,
+  PsyLead,
+  PsyHat,
+  PsySample,
+  PsySnare,
+  PsySubBass,
+  PsyPad,
+  PsyShaker,
+  PsyAcid,
+  PsyTexture,
+  PsyRiser,
+  PsyImpact,
+} from './psy-voices'
 
 // DSP primitives
-export { fastTanh, polyBlep, MoogLadder, ZDFSVF, OnePoleLP, OnePoleHP, PinkNoise, ADSR, DecayEnv, BLSaw, BLSquare, BLTriangle, SineOsc, OversampledSaturation } from './forensic/dsp'
+export {
+  fastTanh,
+  polyBlep,
+  MoogLadder,
+  ZDFSVF,
+  OnePoleLP,
+  OnePoleHP,
+  PinkNoise,
+  ADSR,
+  DecayEnv,
+  BLSaw,
+  BLSquare,
+  BLTriangle,
+  SineOsc,
+  OversampledSaturation,
+} from './forensic/dsp'
 export { Rng } from './forensic/prng'
 export { BusProcessor, MasterChain, SchroederReverb, StereoDelay } from './forensic/mixing'
 
@@ -61,11 +112,21 @@ export { LatentDecoder, NeuralStyleTransfer } from './neural/latent-decoder'
 export type { LatentVector } from './neural/latent-decoder'
 
 // ONNX inference (Phase 3 — trained model support)
-export { ONNXDDSPDecoder, ONNXRAVEEncoder, ONNXRAVEDecoder, ONNXStyleTransfer, checkModelAvailability } from './neural/onnx-inference'
+export {
+  ONNXDDSPDecoder,
+  ONNXRAVEEncoder,
+  ONNXRAVEDecoder,
+  ONNXStyleTransfer,
+  checkModelAvailability,
+} from './neural/onnx-inference'
 
 // AI Arrangement (Phase 4)
 export { ArrangementGenerator, planToSpec } from './arrangement/ArrangementGenerator'
-export type { SectionType, ArrangementSection, ArrangementPlan } from './arrangement/ArrangementGenerator'
+export type {
+  SectionType,
+  ArrangementSection,
+  ArrangementPlan,
+} from './arrangement/ArrangementGenerator'
 
 // Preset Manager (Tier 2 — commercial)
 export { PresetManager, FACTORY_PRESETS } from './preset-manager'
@@ -101,11 +162,32 @@ export { RenderDevice, createRenderDevice } from './render-device'
 export type { RenderDeviceOptions, RenderDeviceResult } from './render-device'
 
 // Foundation shim (PsyDevice contract)
-export type { PsyDevice, MusicalEvent, NoteEvent, DeviceCapabilities, MusicalContext, MusicalTransport } from './foundation-shim'
+export type {
+  PsyDevice,
+  MusicalEvent,
+  NoteEvent,
+  DeviceCapabilities,
+  MusicalContext,
+  MusicalTransport,
+} from './foundation-shim'
 export { InMemoryChannel } from './foundation-shim'
 
 // Harmony engine (ported from PSYSTAR)
-export { SCALE_INTERVALS, CHORD_INTERVALS, PSYTRANCE_PROGRESSIONS, buildScale, buildScaleSpanning, buildChord, buildChordNamed, diatonicChord, buildProgression, midiToNoteName, midiToFreq, freqToMidi, snapToScale } from './harmony'
+export {
+  SCALE_INTERVALS,
+  CHORD_INTERVALS,
+  PSYTRANCE_PROGRESSIONS,
+  buildScale,
+  buildScaleSpanning,
+  buildChord,
+  buildChordNamed,
+  diatonicChord,
+  buildProgression,
+  midiToNoteName,
+  midiToFreq,
+  freqToMidi,
+  snapToScale,
+} from './harmony'
 export type { ScaleType, ChordType, Chord } from './harmony'
 
 // Humanizer (ported from PSYSTAR)

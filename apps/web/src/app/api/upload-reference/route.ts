@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { NeuralStyleTransfer } from '@/lib/psy4/neural/latent-decoder'
+import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -42,11 +42,13 @@ function parseWav(buffer: ArrayBuffer): { samples: Float32Array; sampleRate: num
   while (offset < buffer.byteLength - 8) {
     const chunkId = view.getUint32(offset, false)
     const chunkSize = view.getUint32(offset + 4, true)
-    if (chunkId === 0x666d7420) { // "fmt "
+    if (chunkId === 0x666d7420) {
+      // "fmt "
       sampleRate = view.getUint32(offset + 12, true)
       numChannels = view.getUint16(offset + 10, true)
       bitsPerSample = view.getUint16(offset + 14, true)
-    } else if (chunkId === 0x64617461) { // "data"
+    } else if (chunkId === 0x64617461) {
+      // "data"
       dataOffset = offset + 8
       dataLength = chunkSize
       break
@@ -90,9 +92,12 @@ export async function POST(req: NextRequest) {
     // Check file type
     const validTypes = ['audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3', 'audio/ogg']
     if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.wav')) {
-      return NextResponse.json({
-        error: `Invalid file type: ${file.type}. Supported: WAV, MP3, OGG`
-      }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: `Invalid file type: ${file.type}. Supported: WAV, MP3, OGG`,
+        },
+        { status: 400 }
+      )
     }
 
     // Check file size (max 50MB)
@@ -105,16 +110,18 @@ export async function POST(req: NextRequest) {
     // Parse audio (WAV only for now — MP3 would need a decoder)
     const parsed = parseWav(buffer)
     if (!parsed) {
-      return NextResponse.json({
-        error: 'Failed to parse audio file. Only WAV format is supported.'
-      }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: 'Failed to parse audio file. Only WAV format is supported.',
+        },
+        { status: 400 }
+      )
     }
 
     // Limit to first 30 seconds for analysis (memory constraint)
     const maxSamples = 30 * parsed.sampleRate
-    const analysisSamples = parsed.samples.length > maxSamples
-      ? parsed.samples.subarray(0, maxSamples)
-      : parsed.samples
+    const analysisSamples =
+      parsed.samples.length > maxSamples ? parsed.samples.subarray(0, maxSamples) : parsed.samples
 
     // Learn the reference style
     const styleTransfer = new NeuralStyleTransfer()
@@ -155,7 +162,8 @@ export async function POST(req: NextRequest) {
         bands: Array.from(latent.bands).map((v: number) => Math.round(v * 1000) / 1000),
         bandStats,
       },
-      message: 'Reference loaded. Use /api/style-transfer?reference=' + hash + '&blend=0.5 to apply.',
+      message:
+        'Reference loaded. Use /api/style-transfer?reference=' + hash + '&blend=0.5 to apply.',
     })
   } catch (e) {
     console.error('Upload reference error:', e)

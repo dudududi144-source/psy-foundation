@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { ArrangementGenerator } from '@/lib/psy4/arrangement/ArrangementGenerator'
+import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,9 +20,9 @@ export const dynamic = 'force-dynamic'
  * Structure hash uniquely identifies each arrangement for reproducibility.
  */
 export async function GET(req: NextRequest) {
-  const seed = parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
-  const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '88', 10)
-  const variations = parseInt(req.nextUrl.searchParams.get('variations') ?? '1', 10)
+  const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
+  const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '88', 10)
+  const variations = Number.parseInt(req.nextUrl.searchParams.get('variations') ?? '1', 10)
   const mode = req.nextUrl.searchParams.get('mode') ?? 'full'
 
   try {
@@ -32,8 +32,8 @@ export async function GET(req: NextRequest) {
         mode: 'variations',
         count: plans.length,
         targetBars: bars,
-        plans: plans.map(p => ({
-          sections: p.sections.map(s => ({
+        plans: plans.map((p) => ({
+          sections: p.sections.map((s) => ({
             type: s.type,
             name: s.name,
             bars: s.bars,
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       targetBars: bars,
       totalBars: plan.totalBars,
       structureHash: plan.structureHash,
-      sections: plan.sections.map(s => ({
+      sections: plan.sections.map((s) => ({
         type: s.type,
         name: s.name,
         bars: s.bars,
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
         variation: Math.round(s.variation * 100) / 100,
       })),
       // Summary for quick inspection
-      summary: plan.sections.map(s => `${s.type[0]!.toUpperCase()}${s.bars}`).join(' → '),
+      summary: plan.sections.map((s) => `${s.type[0]!.toUpperCase()}${s.bars}`).join(' → '),
     })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

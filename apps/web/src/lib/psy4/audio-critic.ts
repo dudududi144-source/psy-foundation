@@ -107,7 +107,7 @@ export function critiqueAudio(
   stepsPerBar = 16
 ): AudioCritique {
   const failures: AudioFailure[] = []
-  pcmLength = pcm.length  // set for computeOnsetTimingConsistency
+  pcmLength = pcm.length // set for computeOnsetTimingConsistency
 
   // ── Basic levels ──
   const peak = findPeak(pcm)
@@ -193,7 +193,7 @@ export function critiqueAudio(
   // Modulation depth: measures how much the spectral centroid changes over time.
   // Unlike spectralMovement (which measures frame-to-frame spectral diff), this
   // captures the DEPTH of timbral modulation (bright→dark sweeps, filter movement).
-  const centroidOverTime = spectra.map(s => computeCentroid(s, sampleRate, fftSize))
+  const centroidOverTime = spectra.map((s) => computeCentroid(s, sampleRate, fftSize))
   let centroidMean = 0
   for (const c of centroidOverTime) centroidMean += c
   centroidMean /= Math.max(1, centroidOverTime.length)
@@ -243,13 +243,13 @@ export function critiqueAudio(
       severity: (subMud - 0.45) * 2,
     })
   }
-  if (kickClarity < 0.40) {
+  if (kickClarity < 0.4) {
     failures.push({
       code: 'KICK_TRANSIENT_MASKED',
       diagnosis: `Kick transient is not sharp enough (sharpness=${onsetSharpness.toFixed(3)}), likely masked by bass decay overlap.`,
       correctionTarget: 'kick.clickAmount / bass.decay',
       correctionHint: 'Increase click amount and brightness; shorten bass decay to leave space',
-      severity: (0.40 - kickClarity) * 2,
+      severity: (0.4 - kickClarity) * 2,
     })
   }
   if (decayOverlap > 0.35) {
@@ -298,23 +298,23 @@ export function critiqueAudio(
       severity: 0.3 - brightness,
     })
   }
-  if (excessiveUniformity > 0.70) {
+  if (excessiveUniformity > 0.7) {
     failures.push({
       code: 'RHYTHMIC_PATTERN_TOO_UNIFORM',
       diagnosis: `Rhythmic pattern is too uniform (${excessiveUniformity.toFixed(3)}) — lacks dynamic variation.`,
       correctionTarget: 'groove.velocityContour / ghost.notes',
       correctionHint: 'Add velocity variation; introduce ghost notes; vary accent patterns',
-      severity: (excessiveUniformity - 0.70) * 2,
+      severity: (excessiveUniformity - 0.7) * 2,
     })
   }
-  if (kickBassSeparation < 0.20) {
+  if (kickBassSeparation < 0.2) {
     failures.push({
       code: 'KICK_BASS_PHASE_RISK',
       diagnosis: `Kick and bass are not spectrally separated (${kickBassSeparation.toFixed(3)}) — they occupy the same frequency range.`,
       correctionTarget: 'kick.pitchEnd / bass.sub.cutoffHz',
       correctionHint:
         'Lower kick sub frequency; raise bass sub cutoff; ensure kick is done before bass starts',
-      severity: (0.20 - kickBassSeparation) * 3,
+      severity: (0.2 - kickBassSeparation) * 3,
     })
   }
   if (melodicClarity < 0.4) {
@@ -451,7 +451,7 @@ function computeRMS(pcm: Float32Array): number {
  * For performance, uses a simplified DFT (not a full FFT) at reduced resolution.
  */
 function computeSpectrogram(pcm: Float32Array, fftSize: number, _sampleRate: number): number[][] {
-  const hopSize = Math.floor(fftSize / 4)  // 512 at fftSize=2048 — 4× better time resolution
+  const hopSize = Math.floor(fftSize / 4) // 512 at fftSize=2048 — 4× better time resolution
   const numFrames = Math.floor(pcm.length / hopSize)
   // Full spectrum: 512 bins at fftSize=2048 → 0 to 11025Hz (covers all bands incl. 5-12kHz high band).
   // Previous 128-bin limit only covered 0-2756Hz, making highEndPresence/brightness always 0.
@@ -664,7 +664,11 @@ function computeSpectralMovement(spectra: number[][]): number {
   return Math.min(1, (totalChange / (spectra.length - 1)) * 15000)
 }
 
-function computeKickSpectralClarity(spectrum: number[], sampleRate: number, fftSize: number): number {
+function computeKickSpectralClarity(
+  spectrum: number[],
+  sampleRate: number,
+  fftSize: number
+): number {
   // Kick spectral clarity = crest factor in 40-120Hz (kick fundamental range).
   // High crest = sharp kick peak (good), low crest = muddy kick (bad).
   const lowBin = Math.floor((40 * fftSize) / sampleRate)
@@ -743,11 +747,7 @@ function computePhaseRisk(pcm: Float32Array, _sampleRate: number): number {
   return Math.max(0, Math.min(1, dcOffset * 20))
 }
 
-function computeNoteSeparation(
-  spectra: number[][],
-  sampleRate: number,
-  fftSize: number
-): number {
+function computeNoteSeparation(spectra: number[][], sampleRate: number, fftSize: number): number {
   // Note separation = how much the bass-band energy drops between note onsets.
   // Uses the spectral approach (same as computeDecayOverlap v3) to avoid the
   // full-range contamination problem. Measures the CV of bass-band energy across
@@ -775,11 +775,7 @@ function computeNoteSeparation(
   return Math.max(0, Math.min(1, cv * 2.0))
 }
 
-function computeDecayOverlap(
-  spectra: number[][],
-  sampleRate: number,
-  fftSize: number
-): number {
+function computeDecayOverlap(spectra: number[][], sampleRate: number, fftSize: number): number {
   // Measures BASS-BAND ENERGY MODULATION across spectral frames.
   //
   // PROBLEM: Time-domain filtering approaches failed because (a) one-pole filters
@@ -833,17 +829,18 @@ function computePitchStability(pcm: Float32Array, sampleRate: number): number {
   // stable the strongest bass frequency is across spectral frames.
   const windowSize = 4096
   const window = pcm.slice(0, Math.min(pcm.length, windowSize))
-  
+
   // Find the strongest frequency in 60-120Hz (bass fundamental range)
   const fftSize = windowSize
   const bassLowBin = Math.floor((60 * fftSize) / sampleRate)
   const bassHighBin = Math.ceil((120 * fftSize) / sampleRate)
-  
+
   let maxMag = 0
   let maxBin = bassLowBin
   for (let i = bassLowBin; i <= bassHighBin && i < window.length / 2; i++) {
     // Simple DFT at this bin
-    let real = 0, imag = 0
+    let real = 0,
+      imag = 0
     const omega = (2 * Math.PI * i) / fftSize
     for (let j = 0; j < window.length; j++) {
       real += (window[j] ?? 0) * Math.cos(omega * j)
@@ -855,12 +852,13 @@ function computePitchStability(pcm: Float32Array, sampleRate: number): number {
       maxBin = i
     }
   }
-  
+
   // If we found a strong bass peak, pitch is stable
   // Normalize: a strong peak (high crest factor) = stable pitch
   let totalEnergy = 0
   for (let i = bassLowBin; i <= bassHighBin && i < window.length / 2; i++) {
-    let real = 0, imag = 0
+    let real = 0,
+      imag = 0
     const omega = (2 * Math.PI * i) / fftSize
     for (let j = 0; j < Math.min(window.length, 1024); j++) {
       real += (window[j] ?? 0) * Math.cos(omega * j)
@@ -868,7 +866,7 @@ function computePitchStability(pcm: Float32Array, sampleRate: number): number {
     }
     totalEnergy += Math.sqrt(real * real + imag * imag)
   }
-  
+
   // Crest factor: peak / average. High = stable pitch.
   const avgEnergy = totalEnergy / Math.max(1, bassHighBin - bassLowBin + 1)
   return avgEnergy > 0 ? Math.max(0, Math.min(1, maxMag / (avgEnergy * 3))) : 0.5
@@ -910,7 +908,7 @@ function computeOnsetTimingConsistency(
   return Math.max(0, 1 - avgJitter * 3)
 }
 
-let pcmLength = 0  // set by critiqueAudio
+let pcmLength = 0 // set by critiqueAudio
 
 function computeSyncopation(
   onsets: number[],
@@ -969,7 +967,7 @@ function computeKickBassLock(
   // peaks align with kick onsets. High = tight kick-bass lock.
   if (onsets.length < 4) return 0.5
   const samplesPerStep = Math.floor(pcm.length / onsets.length)
-  const bassLowBin = 60  // approximate — we measure energy in time domain
+  const bassLowBin = 60 // approximate — we measure energy in time domain
 
   // For each onset, measure bass-band energy in the 50ms after the onset
   const postWindow = Math.floor(sampleRate * 0.05) // 50ms
@@ -1089,7 +1087,9 @@ function computeMelodicClarity(pcm: Float32Array, sampleRate: number): number {
   // Spectral crest factor = max(bin) / mean(bin) in the lead range (500-5000Hz)
   const lowBin = Math.floor((500 * fftSize) / sampleRate)
   const highBin = Math.ceil((5000 * fftSize) / sampleRate)
-  let maxBin = 0, sumBins = 0, binCount = 0
+  let maxBin = 0,
+    sumBins = 0,
+    binCount = 0
   for (let i = lowBin; i <= highBin && i < spectrum.length; i++) {
     const v = spectrum[i] ?? 0
     if (v > maxBin) maxBin = v
@@ -1145,7 +1145,9 @@ function computeRepetitionBalance(pcm: Float32Array, sampleRate: number, bpm: nu
   let totalPairs = 0
   for (let i = 0; i < profiles.length; i++) {
     for (let j = i + 1; j < profiles.length; j++) {
-      let dot = 0, normI = 0, normJ = 0
+      let dot = 0,
+        normI = 0,
+        normJ = 0
       for (let k = 0; k < subWindows; k++) {
         dot += profiles[i]![k]! * profiles[j]![k]!
         normI += profiles[i]![k]! ** 2
@@ -1191,7 +1193,7 @@ function computeNoisiness(spectrum: number[], sampleRate: number, fftSize: numbe
   let variance = 0
   for (const v of spectrum) variance += (v - mean) ** 2
   variance /= spectrum.length
-  const cv = Math.sqrt(variance) / mean  // coefficient of variation
+  const cv = Math.sqrt(variance) / mean // coefficient of variation
   // High CV = peaky spectrum (harmonic, low noise) → low noisiness
   // Low CV = flat spectrum (noisy) → high noisiness
   return Math.max(0, Math.min(1, 1 - cv))
@@ -1256,7 +1258,7 @@ function computeSpectralContrast(spectrum: number[]): number {
     const start = b * bandSize
     const end = Math.min(start + bandSize, spectrum.length)
     let maxVal = 0
-    let minVal = Infinity
+    let minVal = Number.POSITIVE_INFINITY
     for (let i = start; i < end; i++) {
       const v = spectrum[i] ?? 0
       if (v > maxVal) maxVal = v
@@ -1339,7 +1341,9 @@ function computeMotifIdentity(pcm: Float32Array, sampleRate: number, bpm: number
   for (const lagBars of [1, 2, 4]) {
     const lag = lagBars * samplesPerBar
     if (pcm.length < lag * 2) continue
-    let dot = 0, normA = 0, normB = 0
+    let dot = 0,
+      normA = 0,
+      normB = 0
     const windowSize = Math.min(pcm.length - lag, samplesPerBar * 4)
     for (let i = 0; i < windowSize; i++) {
       const a = pcm[i] ?? 0
@@ -1385,7 +1389,7 @@ function computeDevelopment(pcm: Float32Array, sampleRate: number, bpm: number):
   if (meanEnergy < 1e-8) return 0.5
   // Normalize: totalChange / (meanEnergy * numTransitions)
   const cv = totalChange / (meanEnergy * Math.max(1, numBars - 1))
-  return Math.max(0, Math.min(1, cv * 2))  // scale ×2 for sensitivity
+  return Math.max(0, Math.min(1, cv * 2)) // scale ×2 for sensitivity
 }
 
 function computeCallResponse(pcm: Float32Array, sampleRate: number, _bpm: number): number {

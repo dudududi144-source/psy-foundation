@@ -1,9 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server'
+import {
+  DEFAULT_RENDER_CONFIG,
+  type RenderResult,
+  encodeWav,
+  renderFoundationSection,
+} from '@/lib/psy4/forensic-bridge'
+import {
+  type ExportFormat,
+  encodeAiff,
+  encodeFlacPlaceholder,
+  getMimeType,
+} from '@/lib/psy4/multi-export'
+import { FACTORY_PRESETS } from '@/lib/psy4/preset-manager'
 import { CompositionEngine } from '@psy-foundation/music'
 import { createIdentityA } from '@psy-foundation/music'
-import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG, type RenderResult } from '@/lib/psy4/forensic-bridge'
-import { encodeAiff, encodeFlacPlaceholder, getMimeType, type ExportFormat } from '@/lib/psy4/multi-export'
-import { FACTORY_PRESETS } from '@/lib/psy4/preset-manager'
+import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,28 +31,31 @@ const VALID_STEMS: Set<string> = new Set(['drum', 'bass', 'music'])
 const VALID_FORMATS: Set<string> = new Set(['wav', 'aiff', 'flac'])
 
 export async function GET(req: NextRequest) {
-  const bars = parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
-  const seed = parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
+  const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
+  const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
   const useSamples = req.nextUrl.searchParams.get('samples') !== 'false'
   const stemParam = req.nextUrl.searchParams.get('stem')
   const stem: StemName | null =
     stemParam && VALID_STEMS.has(stemParam) ? (stemParam as StemName) : null
   // Multi-format export: ?format=wav|aiff|flac (default: wav)
   const formatParam = req.nextUrl.searchParams.get('format') ?? 'wav'
-  const format: ExportFormat = VALID_FORMATS.has(formatParam) ? (formatParam as ExportFormat) : 'wav'
+  const format: ExportFormat = VALID_FORMATS.has(formatParam)
+    ? (formatParam as ExportFormat)
+    : 'wav'
 
   // Preset support: ?preset=Full-On+Lead applies preset params to render config
   const presetName = req.nextUrl.searchParams.get('preset')
   let renderConfig = { ...BEST_CONFIG }
   if (presetName) {
-    const preset = FACTORY_PRESETS.find(p => p.name === presetName)
+    const preset = FACTORY_PRESETS.find((p) => p.name === presetName)
     if (preset) {
       // Map preset params to RenderConfig overrides
       const overrides: Record<string, number> = {}
       if (preset.params.cutoff !== undefined) overrides.leadCutoff = preset.params.cutoff
       if (preset.params.gain !== undefined) overrides.leadGain = preset.params.gain
       if (preset.params.res !== undefined) overrides.leadResonance = preset.params.res
-      if (preset.params.fundamental !== undefined) overrides.kickFundamental = preset.params.fundamental
+      if (preset.params.fundamental !== undefined)
+        overrides.kickFundamental = preset.params.fundamental
       if (preset.params.subDecay !== undefined) overrides.kickDecay = preset.params.subDecay
       if (preset.params.bodyLevel !== undefined) overrides.bassGain = preset.params.bodyLevel
       if (preset.params.targetLufs !== undefined) overrides.targetLufs = preset.params.targetLufs
@@ -97,11 +110,14 @@ export async function GET(req: NextRequest) {
     let stemL: Float32Array
     let stemR: Float32Array
     if (stem === 'drum') {
-      stemL = result.stems.drumL; stemR = result.stems.drumR
+      stemL = result.stems.drumL
+      stemR = result.stems.drumR
     } else if (stem === 'bass') {
-      stemL = result.stems.bassL; stemR = result.stems.bassR
+      stemL = result.stems.bassL
+      stemR = result.stems.bassR
     } else {
-      stemL = result.stems.musicL; stemR = result.stems.musicR
+      stemL = result.stems.musicL
+      stemR = result.stems.musicR
     }
 
     // Normalize the stem to peak 0.95 so it doesn't go silent when solo'd

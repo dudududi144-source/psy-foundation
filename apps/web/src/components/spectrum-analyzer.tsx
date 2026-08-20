@@ -18,7 +18,7 @@
  *   <SpectrumAnalyzer audioEngine={engine} width={600} height={150} />
  */
 
-import { useRef, useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface SpectrumAnalyzerProps {
   audioEngine: any | null
@@ -94,7 +94,7 @@ export function SpectrumAnalyzer({
       ctx.strokeStyle = 'rgba(255,255,255,0.05)'
       ctx.lineWidth = 1
       const freqMarks = [50, 100, 200, 500, 1000, 2000, 5000, 10000]
-      freqMarks.forEach(freq => {
+      freqMarks.forEach((freq) => {
         const x = freqToX(freq, width)
         ctx.beginPath()
         ctx.moveTo(x, 0)
@@ -109,7 +109,7 @@ export function SpectrumAnalyzer({
       })
 
       // Draw spectrum bars
-      const barWidth = width / bufferLength * 2
+      const barWidth = (width / bufferLength) * 2
       for (let i = 0; i < bufferLength; i++) {
         const freq = (i * audioEngine.audioContext.sampleRate) / analyser.fftSize
         if (freq < 20 || freq > 20000) continue
@@ -122,7 +122,7 @@ export function SpectrumAnalyzer({
         if (value > peaks[i]!) {
           peaks[i] = value
         } else {
-          peaks[i]! *= 0.95  // decay
+          peaks[i]! *= 0.95 // decay
         }
         const peakHeight = peaks[i]! * height * 0.9
 
@@ -177,9 +177,7 @@ export function SpectrumAnalyzer({
         style={{ background: colorMap[color].bg }}
       />
       {isActive && (
-        <div className="absolute top-1 right-2 text-[10px] text-emerald-400 font-mono">
-          ● LIVE
-        </div>
+        <div className="absolute top-1 right-2 text-[10px] text-emerald-400 font-mono">● LIVE</div>
       )}
     </div>
   )

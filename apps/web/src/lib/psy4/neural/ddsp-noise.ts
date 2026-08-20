@@ -17,11 +17,11 @@
  *   const sample = synth.process()
  */
 
-import { Rng } from '../forensic/prng'
+import type { Rng } from '../forensic/prng'
 
 export class DDSPNoise {
-  private bands: Float32Array        // 0..1 gains per band
-  private amp = 0.4                  // master amplitude
+  private bands: Float32Array // 0..1 gains per band
+  private amp = 0.4 // master amplitude
   private readonly SR = 44100
   private active = false
   private ampEnv = 0
@@ -29,10 +29,10 @@ export class DDSPNoise {
   // One-pole filter states per band (simple IIR bandpass)
   private bandStates: Float32Array
   private readonly numBands: number
-  private readonly lowFreq = 0       // Hz, start of noise spectrum
-  private readonly highFreq = 22050  // Hz, end of noise spectrum
+  private readonly lowFreq = 0 // Hz, start of noise spectrum
+  private readonly highFreq = 22050 // Hz, end of noise spectrum
 
-  constructor(rng: Rng, numBands: number = 65) {
+  constructor(rng: Rng, numBands = 65) {
     this.rng = rng
     this.numBands = numBands
     this.bands = new Float32Array(numBands)
@@ -52,7 +52,7 @@ export class DDSPNoise {
     this.amp = Math.max(0, Math.min(1, amp))
   }
 
-  trigger(amp: number = 0.4): void {
+  trigger(amp = 0.4): void {
     this.active = true
     this.ampEnv = 0
     this.amp = amp
@@ -94,7 +94,7 @@ export class DDSPNoise {
       const omega = (2 * Math.PI * freq) / this.SR
       const cosO = Math.cos(omega)
       const sinO = Math.sin(omega)
-      const Q = 2  // bandwidth
+      const Q = 2 // bandwidth
       const alpha = sinO / (2 * Q)
 
       // Direct Form I bandpass (simplified for performance)
@@ -104,7 +104,7 @@ export class DDSPNoise {
       const b0 = alpha / a0
       const b1 = 0
       const b2 = -alpha / a0
-      const a1 = -2 * cosO / a0
+      const a1 = (-2 * cosO) / a0
       const a2 = (1 - alpha) / a0
 
       const x = noise
@@ -124,7 +124,9 @@ export class DDSPNoise {
     return sample * this.ampEnv * (1 / Math.sqrt(this.numBands))
   }
 
-  get bandCount(): number { return this.numBands }
+  get bandCount(): number {
+    return this.numBands
+  }
 
   /**
    * Set noise band distribution by preset name.

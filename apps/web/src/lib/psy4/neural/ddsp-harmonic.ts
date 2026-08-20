@@ -27,15 +27,15 @@
  */
 
 export class DDSPHarmonic {
-  private phase = 0          // 0..1
-  private freq = 220          // Hz
-  private harmonics: Float32Array  // 0..1 amplitudes per harmonic
-  private amp = 0.8           // master amplitude
+  private phase = 0 // 0..1
+  private freq = 220 // Hz
+  private harmonics: Float32Array // 0..1 amplitudes per harmonic
+  private amp = 0.8 // master amplitude
   private readonly SR = 44100
   private active = false
-  private ampEnv = 0          // envelope follower for smooth note on/off
+  private ampEnv = 0 // envelope follower for smooth note on/off
 
-  constructor(numHarmonics: number = 60) {
+  constructor(numHarmonics = 60) {
     this.harmonics = new Float32Array(numHarmonics)
     // Default: sawtooth-like distribution (1/n)
     for (let n = 0; n < numHarmonics; n++) {
@@ -58,7 +58,7 @@ export class DDSPHarmonic {
     this.amp = Math.max(0, Math.min(1, amp))
   }
 
-  trigger(amp: number = 0.8): void {
+  trigger(amp = 0.8): void {
     this.active = true
     this.ampEnv = 0
     this.amp = amp
@@ -96,14 +96,16 @@ export class DDSPHarmonic {
 
     // Envelope follower (smooth attack/release)
     const target = this.active ? this.amp : 0
-    const envCoef = this.active ? 0.997 : 0.999  // attack faster than release
+    const envCoef = this.active ? 0.997 : 0.999 // attack faster than release
     this.ampEnv += (target - this.ampEnv) * (1 - envCoef)
 
     return sample * this.ampEnv
   }
 
   /** Get current number of harmonics */
-  get numHarmonics(): number { return this.harmonics.length }
+  get numHarmonics(): number {
+    return this.harmonics.length
+  }
 
   /**
    * Set harmonic distribution by preset name.
@@ -116,12 +118,12 @@ export class DDSPHarmonic {
         for (let n = 0; n < N; n++) this.harmonics[n] = 1 / (n + 1)
         break
       case 'square':
-        for (let n = 0; n < N; n++) this.harmonics[n] = (n % 2 === 0) ? 1 / (n + 1) : 0
+        for (let n = 0; n < N; n++) this.harmonics[n] = n % 2 === 0 ? 1 / (n + 1) : 0
         break
       case 'organ':
         // Odd harmonics with decreasing amplitude
         for (let n = 0; n < N; n++) {
-          this.harmonics[n] = (n % 2 === 0) ? 1 / Math.pow(n + 1, 0.7) : 0
+          this.harmonics[n] = n % 2 === 0 ? 1 / Math.pow(n + 1, 0.7) : 0
         }
         break
       case 'bell':
@@ -146,7 +148,7 @@ export class DDSPHarmonic {
         for (let n = 0; n < N; n++) {
           const harmonic = n + 1
           let amp = 1 / harmonic
-          if (harmonic <= 7) amp *= 1.5  // boost early harmonics
+          if (harmonic <= 7) amp *= 1.5 // boost early harmonics
           this.harmonics[n] = amp
         }
         break

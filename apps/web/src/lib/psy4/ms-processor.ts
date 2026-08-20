@@ -30,7 +30,7 @@ export class StereoWidener {
   private monoSumEnergy = 0
   private stereoSumEnergy = 0
 
-  constructor(width: number = 1.3) {
+  constructor(width = 1.3) {
     this.width = width
   }
 

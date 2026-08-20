@@ -14,10 +14,22 @@
  *   const result = device.render()  // produce WAV
  */
 
-import type { PsyDevice, MusicalEvent, NoteEvent, DeviceCapabilities, MusicalContext } from './foundation-shim'
+import { type AudioCritique, critiqueAudio } from './audio-critic'
+import {
+  DEFAULT_RENDER_CONFIG,
+  type RenderConfig,
+  type RenderResult,
+  encodeWav,
+  renderFoundationSection,
+} from './forensic-bridge'
+import type {
+  DeviceCapabilities,
+  MusicalContext,
+  MusicalEvent,
+  NoteEvent,
+  PsyDevice,
+} from './foundation-shim'
 import type { MusicalTransport } from './foundation-shim'
-import { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG, type RenderResult, type RenderConfig } from './forensic-bridge'
-import { critiqueAudio, type AudioCritique } from './audio-critic'
 
 export interface RenderDeviceOptions {
   sampleRate?: number
@@ -87,7 +99,7 @@ export class RenderDevice implements PsyDevice {
    * Convert accumulated NoteEvents to a render and produce WAV + critique.
    * This is the main entry point for offline rendering.
    */
-  async render(bars: number = 8, seed: number = 42): Promise<RenderDeviceResult> {
+  async render(bars = 8, seed = 42): Promise<RenderDeviceResult> {
     // For now, we use the CompositionEngine to generate the section
     // (since NoteEvents from the family don't have a direct composition path yet)
     // Future: convert NoteEvents directly to RawScore

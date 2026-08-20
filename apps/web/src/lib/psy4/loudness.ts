@@ -159,7 +159,7 @@ function computeBlocks(
   wR: Float32Array,
   N: number,
   blockSize: number,
-  hopSize: number,
+  hopSize: number
 ): Array<{ z: number; lufs: number }> {
   const out: Array<{ z: number; lufs: number }> = []
   if (blockSize <= 0 || hopSize <= 0) return out
@@ -212,11 +212,7 @@ function percentile(sortedAsc: number[], p: number): number {
  *
  * Deterministic. No Math.random, no I/O.
  */
-export function measureLUFS(
-  L: Float32Array,
-  R: Float32Array,
-  sampleRate: number,
-): LUFSResult {
+export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number): LUFSResult {
   const N = Math.min(L.length, R.length)
 
   // Edge case: empty buffer.

@@ -72,10 +72,10 @@ export interface HumanizableEvent {
 export function humanizeEvents(
   events: HumanizableEvent[],
   amount: number,
-  seed: number,
+  seed: number
 ): HumanizableEvent[] {
   const random = mulberry32(seed)
-  return events.map(ev => {
+  return events.map((ev) => {
     if (shouldSkip(ev.row, amount, random)) {
       return { ...ev, velocity: 0 } // ghost note — velocity 0 means skip
     }

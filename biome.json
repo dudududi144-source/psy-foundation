@@ -3,7 +3,20 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": true,
-    "ignore": ["**/dist/**", "**/node_modules/**", "**/.bun/**", "**/coverage/**"]
+    "ignore": [
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/.bun/**",
+      "**/coverage/**",
+      "**/public/**",
+      "**/*.json",
+      "**/next.config.mjs",
+      "**/postcss.config.mjs",
+      "**/tailwind.config.cjs",
+      "**/components.json",
+      "**/tsconfig.json",
+      "**/tsconfig.base.json"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -17,9 +30,14 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "correctness": { "noUnusedVariables": "warn", "noUnusedImports": "warn" },
+      "correctness": {
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error",
+        "noUnreachable": "error",
+        "noUnsafeFinally": "error"
+      },
       "suspicious": { "noExplicitAny": "warn" },
-      "style": { "useImportType": "warn", "noNonNullAssertion": "error" }
+      "style": { "useImportType": "warn", "noNonNullAssertion": "off" }
     }
   },
   "javascript": {

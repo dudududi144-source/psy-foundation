@@ -23,27 +23,27 @@
 
 export interface ChannelFXConfig {
   eq: {
-    lowGainDb: number     // low shelf gain in dB
-    lowFreqHz: number     // low shelf corner frequency
-    highGainDb: number    // high shelf gain in dB
-    highFreqHz: number    // high shelf corner frequency
-    midGainDb?: number    // mid peaking gain (0 = off)
-    midFreqHz?: number    // mid peak frequency
+    lowGainDb: number // low shelf gain in dB
+    lowFreqHz: number // low shelf corner frequency
+    highGainDb: number // high shelf gain in dB
+    highFreqHz: number // high shelf corner frequency
+    midGainDb?: number // mid peaking gain (0 = off)
+    midFreqHz?: number // mid peak frequency
   }
   delay: {
-    timeMs: number        // delay time in ms (0 = off)
-    feedback: number      // 0..0.95
-    mix: number           // 0..1 wet mix
+    timeMs: number // delay time in ms (0 = off)
+    feedback: number // 0..0.95
+    mix: number // 0..1 wet mix
     stereoOffsetMs: number // L vs R offset for stereo ping-pong
   }
   reverb: {
-    roomSize: number      // 0..1
-    decaySec: number      // 0.3..5.0
-    damping: number       // 0..1 (high frequency absorption)
-    mix: number           // 0..1 wet mix
+    roomSize: number // 0..1
+    decaySec: number // 0.3..5.0
+    damping: number // 0..1 (high frequency absorption)
+    mix: number // 0..1 wet mix
   }
-  pan: number             // -1 = full left, 0 = center, +1 = full right
-  width: number           // 0 = mono, 1 = full stereo (applied via Haas/width)
+  pan: number // -1 = full left, 0 = center, +1 = full right
+  width: number // 0 = mono, 1 = full stereo (applied via Haas/width)
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ class BiquadShelf {
     freqHz: number,
     gainDb: number,
     sampleRate: number,
-    slope: number = 1.0
+    slope = 1.0
   ) {
     this.setCoeffs(kind, freqHz, gainDb, sampleRate, slope)
   }
@@ -81,7 +81,7 @@ class BiquadShelf {
     freqHz: number,
     gainDb: number,
     sampleRate: number,
-    slope: number = 1.0
+    slope = 1.0
   ): void {
     const A = Math.pow(10, gainDb / 40) // sqrt(linear gain)
     const w0 = (2 * Math.PI * freqHz) / sampleRate
@@ -105,22 +105,22 @@ class BiquadShelf {
       // Shelf alpha (for low and high)
       const alpha = (sinw0 / 2) * Math.sqrt((A + 1 / A) * (1 / slope - 1) + 2)
       if (kind === 'low') {
-      // Low shelf: boosts/cuts frequencies below freqHz
-      b0 = A * ((A + 1) - (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha)
-      b1 = 2 * A * ((A - 1) - (A + 1) * cosw0)
-      b2 = A * ((A + 1) - (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha)
-      a0 = (A + 1) + (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha
-      a1 = -2 * ((A - 1) + (A + 1) * cosw0)
-      a2 = (A + 1) + (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha
-    } else {
-      // High shelf: boosts/cuts frequencies above freqHz
-      b0 = A * ((A + 1) + (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha)
-      b1 = -2 * A * ((A - 1) + (A + 1) * cosw0)
-      b2 = A * ((A + 1) + (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha)
-      a0 = (A + 1) - (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha
-      a1 = 2 * ((A - 1) - (A + 1) * cosw0)
-      a2 = (A + 1) - (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha
-    }
+        // Low shelf: boosts/cuts frequencies below freqHz
+        b0 = A * (A + 1 - (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha)
+        b1 = 2 * A * (A - 1 - (A + 1) * cosw0)
+        b2 = A * (A + 1 - (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha)
+        a0 = A + 1 + (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha
+        a1 = -2 * (A - 1 + (A + 1) * cosw0)
+        a2 = A + 1 + (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha
+      } else {
+        // High shelf: boosts/cuts frequencies above freqHz
+        b0 = A * (A + 1 + (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha)
+        b1 = -2 * A * (A - 1 + (A + 1) * cosw0)
+        b2 = A * (A + 1 + (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha)
+        a0 = A + 1 - (A - 1) * cosw0 + 2 * Math.sqrt(A) * alpha
+        a1 = 2 * (A - 1 - (A + 1) * cosw0)
+        a2 = A + 1 - (A - 1) * cosw0 - 2 * Math.sqrt(A) * alpha
+      }
     } // end else (shelf)
 
     // Normalize by a0 so the filter is expressed with a0 = 1
@@ -164,7 +164,7 @@ class CompactReverb {
 
   private combBufs: Float32Array[]
   private combIdx: Int32Array
-  private combLP: Float32Array  // one-pole damping LP state per comb
+  private combLP: Float32Array // one-pole damping LP state per comb
   private combFeedback: number
   private combDamping: number
 
@@ -313,11 +313,11 @@ export class ChannelFX {
 
   // Width (Haas + M/S)
   private readonly widthDelaySamples: number
-  private readonly widthSideGain: number   // 0..1.3 — kills side at width=0 → mono
+  private readonly widthSideGain: number // 0..1.3 — kills side at width=0 → mono
   private readonly widthBuf: Float32Array
   private widthIdx = 0
 
-  constructor(config: ChannelFXConfig, sampleRate: number = 44100) {
+  constructor(config: ChannelFXConfig, sampleRate = 44100) {
     this.sampleRate = sampleRate
 
     // ── EQ ────────────────────────────────────────────────────────────────
@@ -325,7 +325,13 @@ export class ChannelFX {
     this.highShelf = new BiquadShelf('high', config.eq.highFreqHz, config.eq.highGainDb, sampleRate)
     // Mid peak filter (optional — for 3-4kHz "boxiness" cut)
     if (config.eq.midGainDb && config.eq.midGainDb !== 0 && config.eq.midFreqHz) {
-      this.midPeak = new BiquadShelf('peak', config.eq.midFreqHz, config.eq.midGainDb, sampleRate, 1.5)
+      this.midPeak = new BiquadShelf(
+        'peak',
+        config.eq.midFreqHz,
+        config.eq.midGainDb,
+        sampleRate,
+        1.5
+      )
     } else {
       this.midPeak = null
     }
