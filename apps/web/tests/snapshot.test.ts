@@ -28,8 +28,8 @@ import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
-// Phase 3 Day 2 baseline (limiter ceiling=-1.0 + bass/lead/pad improvements)
-const BASELINE_MD5 = '2ca57039a2645bc633ede199379b819a'
+// Phase D baseline (kick 50Hz, bass 0.12s, lead 9000Hz, bus 1.2, full LUFS correction, ISP 0.65)
+const BASELINE_MD5 = '190e35410bba7464727a96a79b4ab32b'
 const BASELINE_DURATION_SEC = 13.24
 
 // BEST_CONFIG from /api/render-forensic/route.ts

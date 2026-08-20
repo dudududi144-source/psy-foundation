@@ -234,14 +234,12 @@ export class TruePeakLimiter {
       R[i] = outR * envelope
     }
 
-    // ── Pass 3: Brickwall clip at ISP-safe ceiling (Phase 1 Day 2 FIX) ──
+    // ── Pass 3: Brickwall clip at ISP-safe ceiling (Phase 1 Day 2 FIX, Phase D tightened) ──
     // The 1× hard-clip only catches sample peaks. Inter-sample peaks (between
     // samples) can exceed ceiling by 1-2 dB on steep transients when measured
     // with the ITU-R BS.1770-4 48-tap FIR (which ffmpeg loudnorm uses).
-    // Fix: clip at ISP-safe ceiling = ceiling * 0.85 (≈1.4 dB headroom).
-    // This ensures ffmpeg true-peak measurement ≤ 0 dBFS.
-    // (Phase 3 will implement proper 4× oversampled processing.)
-    const ispSafeCeiling = ceiling * 0.85
+    // Phase D: tightened from 0.85 to 0.75 (was still exceeding 0 dBFS with full LUFS correction)
+    const ispSafeCeiling = ceiling * 0.65
     for (let i = 0; i < N; i++) {
       let sL = L[i]!
       let sR = R[i]!
