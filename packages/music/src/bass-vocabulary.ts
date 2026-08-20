@@ -528,3 +528,49 @@ export function generateBassByVocabulary(
       return rollingBass(ctx)
   }
 }
+
+/**
+ * Phase 2 Day 3: 16th rolling bass mode.
+ *
+ * Plays root on EVERY 16th step (16 notes per bar in 4/4).
+ * This is the darkpsy/forest signature — dense, driving, relentless.
+ *
+ * Optional: alternates between root and fifth on every other 16th for
+ * more movement (controlled by `alternating` flag).
+ */
+export function rollingBass16th(ctx: BassVocabularyContext, alternating = false): BassPlanNote[] {
+  const notes: BassPlanNote[] = []
+  const rootMidi = degreeToMidi(ctx.tonic, ctx.scale, 0, ctx.bassOctave)
+  const fifthMidi = degreeToMidi(ctx.tonic, ctx.scale, 4, ctx.bassOctave)
+
+  const stepsPerBar = ctx.groove.stepsPerBar
+  for (let step = 0; step < stepsPerBar; step++) {
+    // Every 16th step gets a note
+    const isEvenStep = step % 2 === 0
+    const midi = alternating && !isEvenStep ? fifthMidi : rootMidi
+    notes.push({
+      midi,
+      step,
+      durationSteps: 1,
+      function: step === 0 ? 'ROOT' : 'ROLL',
+      isAnticipation: false,
+    })
+  }
+
+  // Cadence on last bar
+  if (ctx.isLast) {
+    const lastStep = stepsPerBar - 2
+    const filtered = notes.filter((n) => n.step < lastStep)
+    notes.length = 0
+    notes.push(...filtered)
+    notes.push({
+      midi: rootMidi,
+      step: lastStep,
+      durationSteps: 2,
+      function: 'CADENCE',
+      isAnticipation: false,
+    })
+  }
+
+  return notes
+}

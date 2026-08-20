@@ -9,9 +9,29 @@
  * cadence the lead preferentially resolves toward root/third/fifth (by role).
  * During tension the lead may use passing/approach/suspension/chromatic
  * tones — but these must be intentional decisions, not random sampling.
+ *
+ * Phase 2 Day 3 FIX: added PSYTRANCE_PROGRESSIONS support. Previously
+ * the plan always used T-S-T-D rotation (pop music). Now accepts a
+ * progression name and uses the appropriate degree sequence.
  */
 
 import { degreeToPc, getScale, scalePcs } from './scales.ts'
+
+/**
+ * Common psytrance progressions (degree sequences, 0-indexed).
+ * Phase 2 Day 3: moved from psy4/harmony.ts to foundation/music so
+ * harmonic-plan.ts can use them without cross-layer imports.
+ */
+export const PSYTRANCE_PROGRESSIONS: Record<string, number[]> = {
+  hypnotic: [0, 0, 0, 0], // I-I-I-I (drone — most psytrance)
+  dark: [0, 1, 0, 1], // I-II-I-II (Phrygian)
+  uplifting: [0, 5, 3, 4], // I-vi-IV-V
+  epic: [0, 3, 5, 4], // I-IV-vi-V
+  classic: [0, 4, 5, 3], // I-V-vi-IV
+  minor: [0, 5, 3, 4], // i-VI-III-VII (minor)
+  'psy-dominant': [0, 1, 0, 6], // I-II-I-VII (Phrygian dominant)
+  't-s-t-d': [0, 3, 0, 4], // I-IV-I-V (classic T-S-T-D, was the only option before)
+}
 
 export type HarmonicFunction = 'TONIC' | 'SUBDOMINANT' | 'DOMINANT' | 'PREDOMINANT'
 export type CadenceTargetFunction = 'ROOT' | 'THIRD' | 'FIFTH'
@@ -71,6 +91,12 @@ export interface BuildHarmonicPlanOptions {
   learnedPcProfile?: number[]
   /** Learned confidence 0..1 — gates whether learned profile influences harmony. */
   learnedConfidence?: number
+  /**
+   * Phase 2 Day 3: progression name from PSYTRANCE_PROGRESSIONS.
+   * If provided, uses the named progression instead of T-S-T-D rotation.
+   * Default: 't-s-t-d' (preserves backward compatibility).
+   */
+  progressionName?: string
 }
 
 function functionForPhrase(phraseIndex: number, isLastPhrase: boolean): HarmonicFunction {
@@ -106,16 +132,21 @@ function cadenceTargetForRole(
 }
 
 /**
- * Build a HarmonicPlan for a phrase. The chord sequence rotates through
- * tonic / subdominant / tonic / dominant across phrases so harmonic rhythm is
- * non-zero. When a learned pitch-class profile is present and confidence is
- * high, one chord tone per chord is replaced with a learned-preferred pc.
+ * Build a HarmonicPlan for a phrase.
+ *
+ * Phase 2 Day 3: now supports PSYTRANCE_PROGRESSIONS via progressionName option.
+ * If provided, uses the named progression (e.g., 'hypnotic' for drone, 'dark'
+ * for Phrygian I-II-I-II). Default: 't-s-t-d' (preserves backward compat).
  */
 export function buildHarmonicPlan(opts: BuildHarmonicPlanOptions): HarmonicPlan {
   const scale = getScale(opts.scaleName)
   const tonic = opts.tonic
   const pcs = scale ? scalePcs(tonic, scale) : [tonic, (tonic + 7) % 12]
   const functionSeq: HarmonicFunction[] = ['TONIC', 'SUBDOMINANT', 'TONIC', 'DOMINANT']
+
+  // Phase 2 Day 3: get progression degrees if specified
+  const progressionName = opts.progressionName ?? 't-s-t-d'
+  const progressionDegrees = PSYTRANCE_PROGRESSIONS[progressionName] ?? PSYTRANCE_PROGRESSIONS['t-s-t-d']!
 
   // Determine how many chord slots the phrase gets.
   const changeRate = opts.chordChangeRate ?? 0.25
@@ -132,7 +163,11 @@ export function buildHarmonicPlan(opts: BuildHarmonicPlanOptions): HarmonicPlan 
 
   for (let bar = 0; bar < opts.bars; bar += barsPerChord) {
     const slotIdx = Math.floor(bar / barsPerChord)
+    // Phase 2 Day 3: use progression degrees to determine chord root
+    const degree = progressionDegrees[((slotIdx % progressionDegrees.length) + progressionDegrees.length) % progressionDegrees.length] ?? 0
     const fn = functionSeq[((slotIdx % 4) + 4) % 4] ?? 'TONIC'
+
+    // Build chord tones from scale degree
     let chordTones: number[]
     if (fn === 'TONIC') {
       chordTones = [pcs[0] ?? tonic, pcs[2] ?? (tonic + 4) % 12, pcs[4] ?? (tonic + 7) % 12]

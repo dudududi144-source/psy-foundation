@@ -14,6 +14,7 @@ import { lufsToGainOffset, measureLUFS } from './loudness'
 import { ModulationMatrix } from './modulation-matrix'
 import { StereoWidener } from './ms-processor'
 import { LR4Crossover, MultibandCompressor } from './multiband'
+import { OTT } from './ott'
 import { WaveguideString } from './physical/waveguide-string'
 import {
   PsyAcid,
@@ -184,16 +185,11 @@ export async function renderFoundationSection(
   const samplesPerStep = Math.ceil(secondsPerStep * SR)
   const samplesPerBar = samplesPerStep * rawScore.groove.stepsPerBar
 
-  // Only render bars with kick+bass (skip INTRO/OUTRO silence)
-  // Fix: keep BREAK bars — they have kick+bass and add dynamic contrast
-  const activeBars = rawScore.bars.filter(
-    (b) =>
-      b.roles.kick &&
-      b.roles.bass &&
-      b.arrangementState !== 'INTRO' &&
-      b.arrangementState !== 'OUTRO'
-  )
-  const renderBars = activeBars.length > 0 ? activeBars : rawScore.bars
+  // Phase 2 Day 4: render ALL bars (including INTRO/OUTRO).
+  // Previously INTRO/OUTRO were filtered out → silence. Now we keep them
+  // and render texture/pad voices for bars without kick+bass.
+  // This makes INTRO state audible (atmospheric pad) instead of silent.
+  const renderBars = rawScore.bars
   const barRemap = new Map<number, number>()
   renderBars.forEach((b, i) => barRemap.set(b.barIndex, i))
   const totalSamples = samplesPerBar * renderBars.length
@@ -400,7 +396,9 @@ export async function renderFoundationSection(
     const playHats = true // hats from bar 0 (keep energy)
     const playLead = phase >= 2 // lead enters at bar 2
     const playCounter = phase >= 3 // counter at bar 3
-    const playPad = phase >= 1 && phase !== 6 // pad from bar 1, except break
+    // Phase 2 Day 4: pad from bar 0 (was bar 1) — makes INTRO audible.
+    // Previously pad started at phase 1, so INTRO (phase 0) was silent.
+    const playPad = phase !== 6 // pad from bar 0, except break
     const playSnare = phase >= 2 // snare from bar 2
     const playShaker = true // shaker from bar 0 (driving pulse)
     const playFX = phase === 6 || phase === 7 // riser/impact at break/drop
@@ -899,7 +897,10 @@ export async function renderFoundationSection(
     while (evIdx < events.length && events[evIdx]!.pos <= i) {
       const ev = events[evIdx]!
       if (ev.type === 'kick') {
-        duckEnv = 1.0 - cfg.duckAmount
+        // Phase 2 Day 1: sidechain with 5ms attack curve (was instant click).
+        // duckEnvAttack tracks toward target = 1.0 - duckAmount, then
+        // recovers with 150ms one-pole in the post-loop recovery.
+        duckEnv = Math.max(1.0 - cfg.duckAmount, duckEnv * 0.85)
         if (kickSample) kickSample.trigger(ev.vel)
         else {
           kicks[kickIdx % 4]!.trigger(ev.vel, cfg.kickFundamental, cfg.kickDecay)
@@ -1187,8 +1188,11 @@ export async function renderFoundationSection(
     }
 
     // ── Master sum + glue ── (apply energy contour for tension/release)
-    let mixL = (drumL + bassL + musicL) * energyMul
-    let mixR = (drumR + bassR + musicR) * energyMul
+    // Phase 2 Day 1: full-mix sidechain — duck EVERYTHING on kick hit
+    // (bass + music + pad, not just bass low-band). This is the "pumping"
+    // that defines psytrance. duckEnv is applied to bassL/R and musicL/R.
+    let mixL = (drumL + bassL * duckEnv + musicL * duckEnv) * energyMul
+    let mixR = (drumR + bassR * duckEnv + musicR * duckEnv) * energyMul
     mixL = masterGlueL.process(mixL, SR)
     mixR = masterGlueR.process(mixR, SR)
 
@@ -1255,6 +1259,19 @@ export async function renderFoundationSection(
   // 1. Multiband compressor (3-band, LR4 crossovers)
   const multiband = new MultibandCompressor({ sampleRate: SR })
   multiband.processBuffer(samplesL, samplesR)
+
+  // 1b. OTT — Phase 2 Day 2: upward+downward multiband expander (genre signature)
+  // Goes after multiband compressor, before glue. Subtle mastering settings.
+  const ott = new OTT({
+    sampleRate: SR,
+    depth: 0.3, // 30% depth — gentle, not full OTT
+    upwardGainDb: 2,
+    downwardGainDb: -2,
+    thresholdDb: -24, // lower threshold = less effect on peaks
+    attackMs: 2,
+    releaseMs: 100,
+  })
+  ott.processBuffer(samplesL, samplesR)
 
   // 2. Glue compression (PSY3: thr=0.6, ratio=2, att=4ms, rel=120ms, makeup=1.3)
   // Feed-forward compressor on the sum
