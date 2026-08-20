@@ -3249,3 +3249,46 @@ Stage Summary:
 - noteOff support added.
 - 712 tests pass, 0 regressions.
 - Ready for Phase 4 merge + tag.
+
+
+---
+Task ID: PROJECT-FINAL-SUMMARY
+Agent: PSY Engineer
+Task: Final project summary — Phase 4 complete, README updated.
+
+Project Complete: PSY Foundation v0.8.0
+
+Phases completed:
+- Phase 0 (5 days): Foundation deploy + cleanup + docs + snapshot tests → v0.4.0
+- Phase 1 (5 days): 11 DSP bugs fixed (StereoWidener, TruePeakLimiter ISP, FFT, etc.) → v0.5.0
+- Phase 2 (4 days): Full-mix sidechain + OTT + INTRO not silent + PSYTRANCE_PROGRESSIONS + 16th bass → v0.6.0
+- Phase 3 (2 days): Club loudness (-6.5 LUFS) + voice improvements + reference benchmark → v0.7.0
+- Phase 4 (2 days): VST PluginEditor + DSP headers + 13-voice AudioWorklet + stereo → v0.8.0
+
+Total: 18 days, 5 phases, 712 tests, 0 failures.
+
+Key achievements:
+1. Foundation deployed from hidden zip (13 packages, 646 tests)
+2. 11 critical DSP bugs fixed (ISP, StereoWidener, FFT, learning-kernel, etc.)
+3. Full-mix sidechain implemented (genre signature #1)
+4. OTT multiband expander implemented (genre signature #2)
+5. INTRO no longer silent (atmospheric pad from bar 0)
+6. Club loudness target achieved (-6.5 LUFS, was -10.6)
+7. ISP-safe limiter (dBTP -0.3, was +0.2 clipping)
+8. VST plugin buildable (PluginEditor + DSP headers)
+9. 13-voice AudioWorklet (was 1 voice, claimed 13)
+10. Stereo output via Haas delay
+
+What's NOT done (honestly):
+- Phase 5 (AI/ML): optional, requires GPU — not attempted
+- VST full 13 voices in C++ (currently 3 voice types)
+- VST modulation matrix (forward declared, not implemented)
+- VST stereo output (currently mono)
+- Producer blind test (no producer available)
+
+Final metrics:
+- 712 tests pass, 0 fail (414,845 expect() calls, 42 files)
+- ffmpeg: -6.5 LUFS, -0.3 dBTP, 2.5 LU LRA
+- Duration: 13.24s (INTRO/OUTRO included)
+- bun install: ~1s (was 89s — 120× faster)
+- Tracked files: 343 (was 1800 — 81% reduction)
