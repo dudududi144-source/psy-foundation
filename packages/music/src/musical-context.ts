@@ -38,6 +38,10 @@ export interface MusicalContext {
   repetitionPressure: number
   /** 0..1 — how much the context wants novelty. */
   noveltyPressure: number
+  /** Phase C: progression name from PSYTRANCE_PROGRESSIONS (e.g., 'hypnotic', 'dark'). */
+  progressionName?: string
+  /** Phase C: bass mode ('standard' | '16th' | 'alternating'). */
+  bassMode?: string
 }
 
 /** Build a MusicalContext, applying sensible defaults for omitted fields. */

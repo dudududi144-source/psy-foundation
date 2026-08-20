@@ -298,6 +298,7 @@ export class CompositionEngine {
       tensionPreference: this.grammar.tensionPreference,
       learnedPcProfile: this.learned.harmony.pitchClassProfile,
       learnedConfidence: this.learned.meta.confidence,
+      progressionName: this.context.progressionName,
     })
 
     // ── F20 STEP 2: PhraseMaterial ──
