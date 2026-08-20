@@ -33,6 +33,7 @@ export type BassFunction =
   | 'APPROACH'
   | 'CADENCE'
   | 'ANTICIPATION'
+  | 'ROLL' // Phase A: added for rollingBass16th
 
 export interface BassPlanNote {
   midi: number

@@ -1,6 +1,6 @@
 {
   "name": "@psy-foundation/web",
-  "version": "0.4.0-phase-0",
+  "version": "0.8.0",
   "private": true,
   "description": "PSY4 Next.js web app — render engine + critique + arrangement APIs",
   "type": "module",

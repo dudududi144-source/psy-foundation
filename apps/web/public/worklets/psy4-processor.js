@@ -198,19 +198,40 @@ class BLSquare {
   process(inc) {
     this.lastPhase = this.phase
     this.phase += inc
-    let blep1 = 0, blep2 = 0
+    // Naive square: +1 for first half, -1 for second half
+    let square = this.lastPhase < 0.5 ? 1 : -1
+
+    // PolyBLEP at phase=0 wraparound (falling edge: +1 → -1)
     if (this.phase >= 1) {
       this.phase -= 1
       const t = this.phase / inc
-      blep1 = -t * t * (1 - t) * 0.5 * inc * 4
+      // Correction: the discontinuity is -2 (from +1 to -1)
+      // PolyBLEP residual * amplitude
+      const blep = -t * t * (1 - t) * 0.5 * inc * 4
+      square += blep * (-2) // scale by discontinuity magnitude
     }
-    // Square = saw at phase 0 + inverted saw at phase 0.5
-    const halfPhase = this.lastPhase + 0.5
-    if (halfPhase >= 1) {
-      // crossing at 0.5 happened
+
+    // PolyBLEP at phase=0.5 transition (rising edge: -1 → +1)
+    // Check if we crossed 0.5 this sample
+    const prevHalf = this.lastPhase < 0.5
+    const currHalf = (this.phase < 0.5) && (this.phase < this.lastPhase || this.phase >= 0.5 - inc)
+    // Actually: if lastPhase < 0.5 and phase >= 0.5 (didn't wrap), OR
+    // if lastPhase >= 0.5 and phase wrapped and phase+1 >= 0.5
+    const crossedHalf = (this.lastPhase < 0.5 && this.phase >= 0.5) ||
+                        (this.lastPhase >= 0.5 && this.phase < this.lastPhase && this.phase + 1 >= 0.5)
+    if (crossedHalf) {
+      // Distance from 0.5 in sample units
+      const crossPoint = 0.5
+      const dist = (this.phase >= this.lastPhase)
+        ? (this.phase - crossPoint) / inc  // didn't wrap
+        : (this.phase + 1 - crossPoint) / inc  // wrapped
+      const t = Math.abs(dist)
+      if (t < 1) {
+        const blep = -t * t * (1 - t) * 0.5 * inc * 4
+        square += blep * 2 // scale by +2 (rising edge)
+      }
     }
-    const saw = 2 * this.lastPhase - 1
-    const square = (this.lastPhase < 0.5 ? 1 : -1) + blep1
+
     return square
   }
 }
