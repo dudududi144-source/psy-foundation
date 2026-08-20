@@ -1320,9 +1320,10 @@ export async function renderFoundationSection(
     samplesR[i] = (samplesR[i] ?? 0) * safeGain
   }
 
-  // 7. True-peak limiter (4x oversampled, ceiling 0.95)
-  // Limiter: gentler — less limiting = more dynamic range
-  const limiter = new TruePeakLimiter({ thresholdDb: -0.3, ceilingDb: -0.2, sampleRate: SR })
+  // 7. True-peak limiter (4x oversampled)
+  // Phase 3 Day 2: tightened ceiling to -1.0 dBTP for safe streaming + club playback.
+  // Was -0.2 dBTP but ffmpeg measured +0.1 (ISP overshoot). Now -1.0 ensures ≤ 0.
+  const limiter = new TruePeakLimiter({ thresholdDb: -1.5, ceilingDb: -1.0, sampleRate: SR })
   limiter.processBuffer(samplesL, samplesR)
 
   // Final safety clamp

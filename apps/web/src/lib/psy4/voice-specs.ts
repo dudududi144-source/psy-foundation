@@ -76,10 +76,10 @@ export const BASS_SPEC: BassSpec = {
   cutoffStart: 1200,
   cutoffEnd: 150,
   res: 0.3,
-  pluckDecay: 0.05,
+  pluckDecay: 0.08, // Phase 3 Day 2: longer pluck (was 0.05 — too short for psytrance)
   sustainLevel: 0.6,
   sustainRelease: 0.004,
-  hpFreq: 45,
+  hpFreq: 40, // Phase 3 Day 2: lower HP (was 45 — let more sub through)
   saturation: 2.0,
   sidechainDepth: 0.75,
 }
@@ -116,12 +116,12 @@ export const LEAD_SPEC: LeadSpec = {
   detune: 12,
   octaveLevel: 0.6,
   octaveDetune: 7,
-  airLevel: 0.12,
+  airLevel: 0.18, // Phase 3 Day 2: more air (was 0.12 — too dark for psytrance)
   airDecay: 0.15,
   fmLevel: 0.35,
   fmRatio: 2.0,
   fmIndex: 180,
-  cutoff: 4200,
+  cutoff: 5200, // Phase 3 Day 2: brighter (was 4200 — needs more high end)
   res: 0.7,
   filterEnvAmount: 5.0,
   filterEnvDecay: 0.25,
@@ -161,13 +161,13 @@ export const PAD_SPEC: PadSpec = {
   oscCount: 3,
   detune: 7,
   octaveOsc: true,
-  chorusDepth: 0.5,
+  chorusDepth: 0.7, // Phase 3 Day 2: deeper chorus (was 0.5 — more movement)
   chorusRate: 0.3,
-  shimmerLevel: 0.3,
+  shimmerLevel: 0.4, // Phase 3 Day 2: more shimmer (was 0.3 — more air)
   cutoff: 600,
   res: 0.3,
   filterLfoRate: 0.15,
-  filterLfoDepth: 0.5,
+  filterLfoDepth: 0.6, // Phase 3 Day 2: deeper filter sweep (was 0.5)
   saturation: 1.0,
   reverbSend: 0.4,
   hpFreq: 80,
