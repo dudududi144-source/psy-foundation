@@ -507,7 +507,7 @@ export {
   acidBass,
   generateBassByVocabulary,
   melodicBass,
-  rollingBass,
+  rollingBass, rollingBass16th,
   sparseBass,
   syncopatedBass,
   tensionBass,

@@ -2979,3 +2979,54 @@ Stage Summary:
 - The OTT is the second psytrance signature (after sidechain).
 - 708 tests pass, 0 regressions.
 - Ready for Phase 2 Day 3: harmonic-plan fix + 16th rolling bass mode.
+
+
+---
+Task ID: PHASE-2-DAY-3
+Agent: PSY Engineer
+Task: Phase 2 Day 3 — harmonic-plan PSYTRANCE_PROGRESSIONS + 16th rolling bass mode.
+
+Work Log:
+
+FIX 1: harmonic-plan.ts — PSYTRANCE_PROGRESSIONS support (packages/music/src)
+- Bug: buildHarmonicPlan always used T-S-T-D rotation (pop music progression).
+  Real psytrance uses drone (I-I-I-I), Phrygian (I-II-I-II), etc.
+- Fix:
+  1. Added PSYTRANCE_PROGRESSIONS constant to harmonic-plan.ts:
+     - hypnotic: [0,0,0,0] (drone — most psytrance)
+     - dark: [0,1,0,1] (Phrygian I-II-I-II)
+     - uplifting: [0,5,3,4] (I-vi-IV-V)
+     - epic: [0,3,5,4] (I-IV-vi-V)
+     - classic: [0,4,5,3] (I-V-vi-IV)
+     - minor: [0,5,3,4] (i-VI-III-VII)
+     - psy-dominant: [0,1,0,6] (I-II-I-VII)
+     - t-s-t-d: [0,3,0,4] (I-IV-I-V — backward compat default)
+  2. Added progressionName option to BuildHarmonicPlanOptions
+  3. buildHarmonicPlan now reads progression degrees and uses them to
+     determine chord root per slot (instead of fixed T-S-T-D function rotation)
+- Default: 't-s-t-d' (preserves backward compatibility — no render change)
+
+FIX 2: bass-vocabulary.ts — 16th rolling bass mode (packages/music/src)
+- Bug: rollingBass only produced 8th-note pattern (kick + 1 off-beat per kick).
+  Darkpsy/forest requires 16th-note rolling bass (16 notes per bar).
+- Fix: added rollingBass16th() function:
+  - Plays root on EVERY 16th step (16 notes per bar in 4/4)
+  - Optional alternating mode: root on even steps, fifth on odd steps
+  - Cadence on last bar (same as rollingBass)
+  - Exported from packages/music/src/index.ts
+- This is the darkpsy/forest signature — dense, driving, relentless
+
+API additions (not wired to renderer yet — Phase 3 will use them):
+- buildHarmonicPlan now accepts progressionName option
+- rollingBass16th exported from @psy-foundation/music
+
+Verification:
+- bun test (all): 708 pass, 14 skip, 0 fail
+- Snapshot baseline unchanged (default progression = 't-s-t-d', same as before)
+- 414,841 expect() calls across 41 files
+
+Stage Summary:
+- Phase 2 Day 3 COMPLETE: PSYTRANCE_PROGRESSIONS + 16th rolling bass added.
+- Both are API additions — available for Phase 3 tuning.
+- 708 tests pass, 0 regressions.
+- Ready for Phase 2 Day 4: texture voice + transition FX.
