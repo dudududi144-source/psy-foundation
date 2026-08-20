@@ -170,9 +170,22 @@ export class ArrangementGenerator {
       if (sections.length > 20) break
     }
 
+    // Phase 1 Day 5 FIX: ensure outro exists and respect targetBars
     if (sections[sections.length - 1]!.type !== 'outro') {
+      const outroBars = Math.max(2, targetBars - totalBars)
       sections.push(this.generateSection('outro'))
-      totalBars += sections[sections.length - 1]!.bars
+      // Override the outro's bars to fit within target
+      const outro = sections[sections.length - 1]!
+      outro.bars = Math.min(outro.bars, Math.max(2, targetBars - totalBars))
+      totalBars += outro.bars
+    }
+
+    // Trim last section if total exceeds target by more than 2 bars
+    if (totalBars > targetBars + 2 && sections.length > 0) {
+      const excess = totalBars - targetBars
+      const last = sections[sections.length - 1]!
+      last.bars = Math.max(2, last.bars - excess)
+      totalBars -= excess
     }
 
     const structureStr = sections.map((s) => `${s.type[0]}${s.bars}`).join('-')

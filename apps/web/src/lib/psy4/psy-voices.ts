@@ -39,7 +39,7 @@ import {
 } from './voice-specs'
 import type { Wavetable } from './wavetable'
 
-const SR = 44100
+import { DEFAULT_SR as SR } from './constants'
 
 // ═══════════════════════════════════════════════════════════════
 // KICK — 3-layer: SUB (dominant) + mid + click
@@ -685,7 +685,7 @@ export class PsySample {
   active = false
   pos = 0
   data: Float32Array | null = null
-  sampleRate = 44100
+  sampleRate = SR
   amp = 1
   playbackRate = 1
 

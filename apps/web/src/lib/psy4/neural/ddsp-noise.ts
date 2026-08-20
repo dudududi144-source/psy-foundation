@@ -17,12 +17,13 @@
  *   const sample = synth.process()
  */
 
+import { DEFAULT_SR } from '../constants'
 import type { Rng } from '../forensic/prng'
 
 export class DDSPNoise {
   private bands: Float32Array // 0..1 gains per band
   private amp = 0.4 // master amplitude
-  private readonly SR = 44100
+  private readonly SR = DEFAULT_SR
   private active = false
   private ampEnv = 0
   private rng: Rng

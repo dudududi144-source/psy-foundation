@@ -26,6 +26,45 @@ import { applyDevelopment, chooseDevelopment } from './phrase-development.ts'
 import type { PhraseMaterial } from './phrase-material.ts'
 import { getScale, scalePcs } from './scales.ts'
 
+// ── SEMITONES TO DEGREE (Phase 1 Day 5 FIX) ──
+
+/**
+ * Maps a semitone interval to a scale degree (0-6) for diatonic scales.
+ * Uses the major scale pattern [2,2,1,2,2,2,1] (whole-whole-half-whole-whole-whole-half).
+ *
+ * Examples:
+ *   0 semitones → degree 0 (root)
+ *   2 semitones → degree 1 (major second)
+ *   3 semitones → degree 2 (minor third, maps to degree 2 in minor scale)
+ *   4 semitones → degree 2 (major third)
+ *   5 semitones → degree 3 (perfect fourth)
+ *   7 semitones → degree 4 (perfect fifth)
+ *   9 semitones → degree 5 (major sixth)
+ *   11 semitones → degree 6 (major seventh)
+ *   12 semitones → degree 0 (octave, wraps to root)
+ */
+function semitonesToDegree(semitones: number): number {
+  // Normalize to 0-11 range
+  const s = ((semitones % 12) + 12) % 12
+  // Major scale semitone positions: 0, 2, 4, 5, 7, 9, 11
+  // Map each semitone to the nearest degree
+  const map: Record<number, number> = {
+    0: 0,   // root
+    1: 0,   // minor second → degree 0 (chromatic approach)
+    2: 1,   // major second
+    3: 2,   // minor third
+    4: 2,   // major third
+    5: 3,   // perfect fourth
+    6: 3,   // tritone → degree 3 (chromatic)
+    7: 4,   // perfect fifth
+    8: 4,   // minor sixth → degree 4 (chromatic)
+    9: 5,   // major sixth
+    10: 5,  // minor seventh → degree 5
+    11: 6,  // major seventh
+  }
+  return map[s] ?? 0
+}
+
 // ── OBSERVATION ──
 export interface MusicalObservation {
   /** What was heard — abstract features, NOT note sequences */
@@ -168,8 +207,11 @@ export class MusicalLearningKernel {
     // BASS: degree preferences from bass intervals
     if (obs.bassIntervals && obs.bassIntervals.length > 0) {
       for (const interval of obs.bassIntervals) {
-        // Map interval to scale degree (simplified: 0=root, 7=fifth, 12=octave)
-        const degree = interval === 0 ? 0 : interval === 7 ? 4 : interval === 12 ? 0 : interval % 7
+        // Phase 1 Day 5 FIX: correct interval→degree mapping for diatonic scales.
+        // Previous: `interval % 7` was wrong (minor third = 3 semitones → degree 3,
+        // but should be degree 2 in minor/major scale).
+        // New: use proper semitone→degree lookup for major/minor scales.
+        const degree = semitonesToDegree(interval)
         this.bassDegreeWeights[degree] = (this.bassDegreeWeights[degree] ?? 0) + 0.1 * conf
       }
       // Normalize
@@ -619,7 +661,10 @@ export class MusicalLearningKernel {
     const total = Object.values(weights).reduce((s, v) => s + v, 0)
     if (total > 0) {
       for (const k in weights) {
-        weights[k] = weights[k] ?? 0 / total
+        // Phase 1 Day 5 FIX: precedence bug — was `weights[k] ?? 0 / total`
+        // which evaluated as `weights[k] ?? (0/total)` = `weights[k] ?? 0` = `weights[k]`
+        // (a no-op). Now correctly normalizes: (weights[k] ?? 0) / total
+        weights[k] = (weights[k] ?? 0) / total
       }
     }
   }

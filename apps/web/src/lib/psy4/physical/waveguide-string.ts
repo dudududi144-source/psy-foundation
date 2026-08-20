@@ -16,6 +16,7 @@
  */
 
 import type { Rng } from '../forensic/prng'
+import { DEFAULT_SR } from '../constants'
 
 export class WaveguideString {
   private delayLine: Float32Array
@@ -24,7 +25,7 @@ export class WaveguideString {
   private damping = 0.5
   private active = false
   private amp = 0
-  private readonly SR = 44100
+  private readonly SR = DEFAULT_SR
 
   constructor() {
     this.delayLine = new Float32Array(4410)
