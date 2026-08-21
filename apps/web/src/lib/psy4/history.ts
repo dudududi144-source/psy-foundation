@@ -107,7 +107,9 @@ export class HistoryManager {
   }
 
   private notifyListeners(): void {
-    this.listeners.forEach((l) => l())
+    for (const l of this.listeners) {
+      l()
+    }
   }
 
   /** Get history stats */

@@ -95,7 +95,7 @@ export function SpectrumAnalyzer({
       ctx.strokeStyle = 'rgba(255,255,255,0.05)'
       ctx.lineWidth = 1
       const freqMarks = [50, 100, 200, 500, 1000, 2000, 5000, 10000]
-      freqMarks.forEach((freq) => {
+      for (const freq of freqMarks) {
         const x = freqToX(freq, width)
         ctx.beginPath()
         ctx.moveTo(x, 0)
@@ -107,7 +107,7 @@ export function SpectrumAnalyzer({
         ctx.textAlign = 'center'
         const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`
         ctx.fillText(label, x, height - 4)
-      })
+      }
 
       // Draw spectrum bars
       const barWidth = (width / bufferLength) * 2

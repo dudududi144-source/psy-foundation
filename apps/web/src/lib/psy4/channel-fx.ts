@@ -392,10 +392,10 @@ export class ChannelFX {
    * pair. Do NOT call it with a buffer.
    */
   process(monoIn: number): [number, number] {
-    if (!Number.isFinite(monoIn)) monoIn = 0
+    const input = Number.isFinite(monoIn) ? monoIn : 0
 
     // 1) EQ (mono) — low shelf then high shelf
-    let sig = this.lowShelf.process(monoIn)
+    let sig = this.lowShelf.process(input)
     if (this.midPeak) sig = this.midPeak.process(sig)
     sig = this.highShelf.process(sig)
 
