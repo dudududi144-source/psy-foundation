@@ -66,7 +66,11 @@ export function analyzeReference(
   }
   const rms = Math.sqrt(sumSq / (N * 2))
   const crestFactor = peak / Math.max(0.0001, rms)
-  const truePeakDb = 20 * Math.log10(Math.max(0.0001, peak))
+  // Roast-fix: use the true peak from measureLUFS (4x Catmull-Rom oversampled)
+  // instead of the sample peak. The old code computed truePeakDb from `peak`
+  // which is actually sample peak, not true peak. The UI then displayed this
+  // as "dBTP" which was misleading by up to 4 dB on transient-heavy signals.
+  const truePeakDb = lufs.truePeakDb
 
   // Stereo width
   let sumDiff = 0

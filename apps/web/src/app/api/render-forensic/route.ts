@@ -4,12 +4,7 @@ import {
   encodeWav,
   renderFoundationSection,
 } from '@/lib/psy4/forensic-bridge'
-import {
-  type ExportFormat,
-  encodeAiff,
-  encodeFlacPlaceholder,
-  getMimeType,
-} from '@/lib/psy4/multi-export'
+import { type ExportFormat, encodeAiff, getMimeType } from '@/lib/psy4/multi-export'
 import { FACTORY_PRESETS } from '@/lib/psy4/preset-manager'
 import { CompositionEngine } from '@psy-foundation/music'
 import { createIdentityA } from '@psy-foundation/music'
@@ -173,20 +168,32 @@ export async function GET(req: NextRequest) {
 
   // Default path: full stereo mix with multi-format support.
   let audioBuffer: ArrayBuffer
+  const actualFormat: ExportFormat = format
   if (format === 'aiff') {
     audioBuffer = encodeAiff(result.samplesL, result.samplesR, result.sampleRate)
   } else if (format === 'flac') {
-    audioBuffer = encodeFlacPlaceholder(result.samplesL, result.samplesR, result.sampleRate)
+    // Roast-fix: FLAC is not supported in pure TS. Previous code returned a
+    // broken file (WAV with fLaC magic, neither valid FLAC nor valid WAV).
+    // Now we honestly reject the request and tell the user to use wav/aiff.
+    return NextResponse.json(
+      {
+        error:
+          'FLAC export is not supported in pure TypeScript. Use ?format=wav or ?format=aiff. To add FLAC support, install a FLAC encoder library and wire it into multi-export.ts.',
+        format: 'flac',
+        alternatives: ['wav', 'aiff'],
+      },
+      { status: 501, headers: { 'X-Export-Format': 'flac-unsupported' } }
+    )
   } else {
     audioBuffer = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
   }
 
   return new NextResponse(audioBuffer, {
     headers: {
-      'Content-Type': getMimeType(format),
+      'Content-Type': getMimeType(actualFormat),
       'Content-Length': audioBuffer.byteLength.toString(),
       'Cache-Control': 'no-cache',
-      'X-Export-Format': format,
+      'X-Export-Format': actualFormat,
     },
   })
 }

@@ -558,3 +558,97 @@ describe('Roast Fix 3: truePeakDb is 4x-oversampled (was sample peak)', () => {
     expect(result.samplePeakDb).toBeCloseTo(20 * Math.log10(0.5), 1)
   })
 })
+
+// ─── Roast Fix 4: reference-analyzer + multi-export ─────────────────────────
+
+describe('Roast Fix 4: reference-analyzer uses true peak (not sample peak)', () => {
+  test('analyzeReference.truePeakDb matches measureLUFS.truePeakDb', async () => {
+    const { analyzeReference } = await import('@/lib/psy4/reference-analyzer')
+    const { measureLUFS } = await import('@/lib/psy4/loudness')
+
+    // Generate a signal with significant ISPs (square wave)
+    const L = new Float32Array(SR * 1)
+    const R = new Float32Array(SR * 1)
+    for (let i = 0; i < L.length; i++) {
+      L[i] = 0.5 * Math.sign(Math.sin((2 * Math.PI * 2000 * i) / SR))
+      R[i] = L[i]!
+    }
+    const analysis = analyzeReference(L, R, SR)
+    const meter = measureLUFS(L, R, SR)
+
+    expect(analysis.profile.truePeakDb).toBeCloseTo(meter.truePeakDb, 1)
+    // Should NOT equal sample peak (would indicate the bug is back)
+    expect(analysis.profile.truePeakDb).not.toBeCloseTo(meter.samplePeakDb, 0)
+  })
+})
+
+describe('Roast Fix 4: multi-export FLAC honestly rejects (was broken file)', () => {
+  test('encodeFlacPlaceholder throws (not returns broken WAV)', async () => {
+    const { encodeFlacPlaceholder, FlacNotSupportedError } = await import('@/lib/psy4/multi-export')
+    expect(() => encodeFlacPlaceholder(new Float32Array(1), new Float32Array(1), 44100)).toThrow(
+      FlacNotSupportedError
+    )
+  })
+
+  test('FlacNotSupportedError message mentions wav/aiff alternatives', async () => {
+    const { FlacNotSupportedError } = await import('@/lib/psy4/multi-export')
+    const err = new FlacNotSupportedError()
+    expect(err.message.toLowerCase()).toContain('wav')
+    expect(err.message.toLowerCase()).toContain('aiff')
+  })
+})
+
+describe('Roast Fix 4: AIFF writeExtendedFloat supports all sample rates', () => {
+  test('encodeAiff produces valid AIFF for 44100 Hz', async () => {
+    const { encodeAiff } = await import('@/lib/psy4/multi-export')
+    const L = new Float32Array(100)
+    const R = new Float32Array(100)
+    for (let i = 0; i < 100; i++) {
+      L[i] = 0.1 * Math.sin((2 * Math.PI * 1000 * i) / 44100)
+      R[i] = L[i]!
+    }
+    const buf = encodeAiff(L, R, 44100)
+    expect(buf.byteLength).toBeGreaterThan(100)
+    // Check FORM/AIFF magic
+    const view = new DataView(buf)
+    expect(view.getUint32(0, false)).toBe(0x464f524d) // 'FORM'
+    expect(view.getUint32(8, false)).toBe(0x41494646) // 'AIFF'
+  })
+
+  test('encodeAiff supports non-standard rates (was 44100 fallback bug)', async () => {
+    const { encodeAiff } = await import('@/lib/psy4/multi-export')
+    const L = new Float32Array(100)
+    const R = new Float32Array(100)
+    // 96000 Hz — would have been silently written as 44100 in the old code
+    const buf = encodeAiff(L, R, 96000)
+    const view = new DataView(buf)
+    // The COMM chunk starts at offset 20 (after FORM header + COMM id/size).
+    // Sample rate is the 80-bit extended float at offset 28.
+    // Read the exponent (16 bits, big-endian) — for 96000, msb is at position 16
+    // (2^16 = 65536 < 96000 < 131072 = 2^17), so exponent = 16 + 16383 = 16399 = 0x400F
+    const exponent = view.getUint16(28, false)
+    expect(exponent).toBe(0x400f) // 16399, not 0x400e (16398 = 44100's exponent)
+  })
+
+  test('encodeAiff 88200 Hz has correct exponent', async () => {
+    const { encodeAiff } = await import('@/lib/psy4/multi-export')
+    const L = new Float32Array(100)
+    const R = new Float32Array(100)
+    // 88200 = 44100 * 2 = 2^16.43... msb = 16, exponent = 16399 = 0x400F
+    const buf = encodeAiff(L, R, 88200)
+    const view = new DataView(buf)
+    const exponent = view.getUint16(28, false)
+    expect(exponent).toBe(0x400f)
+  })
+
+  test('encodeAiff 22050 Hz has correct exponent', async () => {
+    const { encodeAiff } = await import('@/lib/psy4/multi-export')
+    const L = new Float32Array(100)
+    const R = new Float32Array(100)
+    // 22050 < 32768 = 2^15, msb = 14, exponent = 14 + 16383 = 16397 = 0x400D
+    const buf = encodeAiff(L, R, 22050)
+    const view = new DataView(buf)
+    const exponent = view.getUint16(28, false)
+    expect(exponent).toBe(0x400d)
+  })
+})
