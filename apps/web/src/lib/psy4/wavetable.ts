@@ -8,6 +8,11 @@ export class Wavetable {
     this.tables = tables
   }
 
+  /** Get the raw table data (for createMulti). */
+  getTables(): Float32Array[] {
+    return this.tables
+  }
+
   setPosition(pos: number): void {
     this.position = Math.max(0, Math.min(1, pos))
   }
@@ -119,12 +124,12 @@ export class Wavetable {
    * 0.6 = psyLead, 0.8 = acidSquelch, 1.0 = vocalFormant
    */
   static createMulti(): Wavetable {
-    const saw = (Wavetable.createSaw() as any).tables[0] as Float32Array
-    const sq = (Wavetable.createSquare() as any).tables[0] as Float32Array
-    const tri = (Wavetable.createTriangle() as any).tables[0] as Float32Array
-    const psy = (Wavetable.createPsyLead() as any).tables[0] as Float32Array
-    const acid = (Wavetable.createAcidSquelch() as any).tables[0] as Float32Array
-    const vocal = (Wavetable.createVocalFormant() as any).tables[0] as Float32Array
+    const saw = Wavetable.createSaw().getTables()[0]!
+    const sq = Wavetable.createSquare().getTables()[0]!
+    const tri = Wavetable.createTriangle().getTables()[0]!
+    const psy = Wavetable.createPsyLead().getTables()[0]!
+    const acid = Wavetable.createAcidSquelch().getTables()[0]!
+    const vocal = Wavetable.createVocalFormant().getTables()[0]!
     return new Wavetable([saw, sq, tri, psy, acid, vocal])
   }
 

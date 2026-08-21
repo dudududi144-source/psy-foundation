@@ -202,7 +202,9 @@ export class AutomationEngine {
   }
 
   private notifyListeners(): void {
-    this.listeners.forEach((l) => l())
+    for (const l of this.listeners) {
+      l()
+    }
   }
 
   /** Get stats */

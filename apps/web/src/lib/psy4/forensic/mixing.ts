@@ -47,13 +47,14 @@ export class BusProcessor {
     // Guard: prevent NaN/Infinity from corrupting compressor envelope
     if (!Number.isFinite(sample)) return 0
     const dt = 1 / sr
+    let s = sample // local copy to avoid parameter reassignment
     if (this.config.hpFreq > 0) {
       const hpA = (1 / sr) * 2 * Math.PI * this.config.hpFreq
-      this.hpState += (hpA * (sample - this.hpState)) / (1 + hpA)
-      sample = sample - this.hpState
+      this.hpState += (hpA * (s - this.hpState)) / (1 + hpA)
+      s = s - this.hpState
     }
     if (this.config.compThr > 0) {
-      const abs = Math.abs(sample)
+      const abs = Math.abs(s)
       if (abs > this.compEnv) {
         this.compEnv += (abs - this.compEnv) * (dt / this.config.compAtt)
       } else {
@@ -63,14 +64,14 @@ export class BusProcessor {
         const over = this.compEnv - this.config.compThr
         const reduction = over * (1 - 1 / this.config.compRatio)
         const compGain = (this.compEnv - reduction) / this.compEnv
-        sample *= compGain
+        s *= compGain
       }
-      sample *= this.config.compMakeup
+      s *= this.config.compMakeup
     }
     if (this.drive > 1.0) {
-      sample = fastTanh(sample * this.drive)
+      s = fastTanh(s * this.drive)
     }
-    return sample * this.gain
+    return s * this.gain
   }
 }
 
@@ -283,8 +284,8 @@ export class StereoDelay {
 
   process(leftIn: number, rightIn: number, sr: number): [number, number] {
     // Guard: prevent NaN/Infinity from entering feedback loops
-    if (!Number.isFinite(leftIn)) leftIn = 0
-    if (!Number.isFinite(rightIn)) rightIn = 0
+    const l = Number.isFinite(leftIn) ? leftIn : 0
+    const r = Number.isFinite(rightIn) ? rightIn : 0
     const leftDelaySamples = Math.floor(this.leftDelay * sr)
     const rightDelaySamples = Math.floor(this.rightDelay * sr)
     const leftReadIdx = (this.leftIdx - leftDelaySamples + this.bufferSize) % this.bufferSize
@@ -294,8 +295,8 @@ export class StereoDelay {
     const fbCutoff = 0.3
     this.fbLP[0] = this.fbLP[0] + fbCutoff * (leftDelayed - this.fbLP[0])
     this.fbLP[1] = this.fbLP[1] + fbCutoff * (rightDelayed - this.fbLP[1])
-    const leftWrite = leftIn * this.inputGain + this.fbLP[1] * this.feedback
-    const rightWrite = rightIn * this.inputGain + this.fbLP[0] * this.feedback
+    const leftWrite = l * this.inputGain + this.fbLP[1] * this.feedback
+    const rightWrite = r * this.inputGain + this.fbLP[0] * this.feedback
     this.leftBuf[this.leftIdx] = leftWrite
     this.rightBuf[this.rightIdx] = rightWrite
     this.leftIdx = (this.leftIdx + 1) % this.bufferSize

@@ -125,16 +125,16 @@ export class PSY4AudioEngine {
   getMIDIInputs(): string[] {
     if (!this.midiAccess) return []
     const inputs: string[] = []
-    this.midiAccess.inputs.forEach((input) => {
+    for (const input of this.midiAccess.inputs.values()) {
       inputs.push(input.name)
-    })
+    }
     return inputs
   }
 
   connectMIDIInput(name: string): boolean {
     if (!this.midiAccess) return false
     let found = false
-    this.midiAccess.inputs.forEach((input) => {
+    for (const input of this.midiAccess.inputs.values()) {
       if (input.name === name) {
         input.onmidimessage = (message) => {
           const [status, data1, data2] = message.data
@@ -144,7 +144,7 @@ export class PSY4AudioEngine {
         }
         found = true
       }
-    })
+    }
     return found
   }
 
