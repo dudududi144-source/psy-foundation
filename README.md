@@ -1,14 +1,14 @@
 # PSY Foundation — Procedural Psytrance Synthesis Engine
 
-> **Status: Phase G complete — E2E verified, v0.9.0**
+> **Status: Roast-Fix-4 complete — 768 tests pass, LUFS accuracy verified against ffmpeg ebur128**
 > A TypeScript DSP engine that renders psytrance audio via HTTP API,
 > with a 13-package musical foundation, buildable VST plugin, and
 > 13-voice real-time AudioWorklet. All claims verified.
 
-[![tests](https://img.shields.io/badge/tests-729%20pass%2C%200%20fail-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-768%20pass%2C%200%20fail-brightgreen)]()
 [![packages](https://img.shields.io/badge/packages-13%20foundation%20+%201%20app-blue)]()
 [![license](https://img.shields.io/badge/license-MIT-blue)]()
-[![status](https://img.shields.io/badge/status-Phase%20G%20%7C%20v0.9.0-success)]()
+[![status](https://img.shields.io/badge/status-Roast%2DFix%2D4%20%7C%20v0.9.1-success)]()
 
 ---
 
@@ -16,7 +16,7 @@
 
 ```bash
 bun install          # ~15s
-bun test             # 729 pass, 0 fail (414,896 expect() calls, 44 files)
+bun test             # 768 pass, 0 fail (421,162 expect() calls, 46 files)
 bun run dev          # apps/web on http://localhost:3000
 
 # render audio (deterministic — same seed → same WAV)
@@ -35,24 +35,24 @@ curl "http://localhost:3000/api/render-forensic?bars=8&progression=hypnotic" -o 
 
 `GET /api/render-forensic?bars=8&seed=42`:
 
-| Metric | Value | Source |
-|--------|-------|--------|
-| Duration | 13.24s | ffprobe |
-| LUFS | **-7.6** | ffmpeg loudnorm (club target: -6 to -8) |
-| True Peak | **-0.9 dBTP** | ffmpeg loudnorm (safely below 0) |
-| LRA | 2.9 LU | ffmpeg loudnorm |
-| Sample rate | 44100 Hz | ffprobe |
-| Channels | 2 (stereo) | ffprobe |
+| Metric | Our meter | ffmpeg ebur128 | Delta | Source |
+|--------|-----------|----------------|-------|--------|
+| Duration | 13.24s | 13.24s | 0 | ffprobe |
+| Integrated LUFS | **-9.12** | -8.90 | 0.22 LU | ffmpeg ebur128 (was 1.78 LU off before K-weighting fix) |
+| True Peak | -4.01 (4x Catmull-Rom) | -1.10 (ITU FIR) | 2.91 dB | ffmpeg ebur128 (documented: Catmull-Rom underestimates ITU FIR) |
+| LRA | 3.77 LU | 3.80 LU | 0.03 LU | ffmpeg ebur128 |
+| Sample rate | 44100 Hz | 44100 Hz | 0 | ffprobe |
+| Channels | 2 (stereo) | 2 (stereo) | 0 | ffprobe |
 
 ---
 
 ## What's Here (verified by E2E audit)
 
-### Foundation packages (10) — 646 tests
+### Foundation packages (10) — 569 tests
 dsp, music, transport, protocol, analysis, learning, material, scheduler, device-sdk, fixtures
 
 ### Web app (`apps/web/`)
-- **729 tests** pass, 0 fail
+- **768 tests** pass, 0 fail (was 739 at Phase G; +29 roast-fix tests)
 - 6 HTTP API endpoints
 - **13-voice AudioWorklet** with:
   - Per-voice pan (equal-power, true stereo)
@@ -68,7 +68,7 @@ dsp, music, transport, protocol, analysis, learning, material, scheduler, device
 - SpectrumAnalyzer (real-time FFT, 60fps)
 - Undo/Redo (100 steps)
 - Automation (breakpoint curves)
-- Multi-export (WAV/AIFF/FLAC)
+- Multi-export (WAV/AIFF — FLAC honestly rejected with 501, was silently broken)
 - Stems export (drum/bass/music)
 
 ### VST plugin (`apps/vst/`) — buildable
