@@ -33,7 +33,7 @@
 const BARK_BANDS = 32 // bark-spaced frequency bands (psychoacoustic)
 const FFT_SIZE = 2048
 
-import { DEFAULT_SR } from '../constants'
+import { DEFAULT_SR } from '../../constants'
 
 export interface LatentVector {
   bands: Float32Array // BARK_BANDS log magnitudes (the "latent" representation)
