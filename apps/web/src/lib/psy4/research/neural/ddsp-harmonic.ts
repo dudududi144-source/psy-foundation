@@ -26,7 +26,7 @@
  *   synth.setHarmonics(params.harmonics)
  */
 
-import { DEFAULT_SR } from '../constants'
+import { DEFAULT_SR } from '../../constants'
 
 export class DDSPHarmonic {
   private phase = 0 // 0..1

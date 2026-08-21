@@ -26,8 +26,8 @@ import {
 import { Rng } from './forensic/prng'
 import { GrainCloud } from './granular'
 import type { ModulationMatrix } from './modulation-matrix'
-import type { DDSPHarmonic } from './neural/ddsp-harmonic'
 import type { WaveguideString } from './physical/waveguide-string'
+import type { DDSPHarmonic } from './research/neural/ddsp-harmonic'
 import {
   ACID_SPEC,
   BASS_SPEC,

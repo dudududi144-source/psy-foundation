@@ -17,8 +17,8 @@
  *   const sample = synth.process()
  */
 
-import { DEFAULT_SR } from '../constants'
-import type { Rng } from '../forensic/prng'
+import { DEFAULT_SR } from '../../constants'
+import type { Rng } from '../../forensic/prng'
 
 export class DDSPNoise {
   private bands: Float32Array // 0..1 gains per band

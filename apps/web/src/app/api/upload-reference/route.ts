@@ -1,4 +1,4 @@
-import { NeuralStyleTransfer } from '@/lib/psy4/neural/latent-decoder'
+import { NeuralStyleTransfer } from '@/lib/psy4/research/neural/latent-decoder'
 import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
