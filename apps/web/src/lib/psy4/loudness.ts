@@ -139,8 +139,15 @@ export interface LUFSResult {
   momentaryLUFS: number
   /** Maximum 3000 ms short-term loudness (LUFS). */
   shortTermLUFS: number
-  /** Sample-peak in dBFS (max |sample| → 20·log10). Not true-peak. */
+  /**
+   * 4x-oversampled true-peak in dBFS (Catmull-Rom interpolation).
+   * ≥ samplePeakDb. Note: Catmull-Rom underestimates the ITU-R BS.1770-4
+   * 48-tap FIR true-peak by 1-3 dB on steep transients. For exact ITU
+   * compliance, verify with `ffmpeg -af ebur128=peak=true`.
+   */
   truePeakDb: number
+  /** Sample-peak in dBFS (max |sample| → 20·log10). Always ≤ truePeakDb. */
+  samplePeakDb: number
   /** Simplified loudness range: 95th - 10th percentile of short-term blocks (LU). */
   rangeLU: number
 }
@@ -214,13 +221,13 @@ function percentile(sortedAsc: number[], p: number): number {
  *   4. Momentary: max of 400 ms block LUFS values.
  *   5. Short-term: max of 3000 ms block LUFS values (same gating convention
  *      but with the longer window).
- *   6. truePeakDb: 20·log10(max |sample|) — sample peak, NOT 4x-oversampled
- *      true peak. The TruePeakLimiter module handles the oversampled version.
+ *   6. truePeakDb: 4x-oversampled true-peak via Catmull-Rom (matches limiter's
+ *      detector). samplePeakDb: plain sample peak (max |sample|).
  *   7. rangeLU: 95th - 10th percentile of short-term block LUFS values.
  *
  * Edge cases:
  *   - Empty or all-silent input → all loudness fields return -70 LUFS,
- *     rangeLU = 0, truePeakDb = -70.
+ *     rangeLU = 0, truePeakDb = -70, samplePeakDb = -70.
  *
  * Deterministic. No Math.random, no I/O.
  */
@@ -234,6 +241,7 @@ export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number
       momentaryLUFS: SILENCE_LUFS,
       shortTermLUFS: SILENCE_LUFS,
       truePeakDb: SILENCE_LUFS,
+      samplePeakDb: SILENCE_LUFS,
       rangeLU: 0,
     }
   }
@@ -254,7 +262,48 @@ export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number
     if (al > maxAbs) maxAbs = al
     if (ar > maxAbs) maxAbs = ar
   }
-  const truePeakDb = maxAbs > 0 ? 20 * Math.log10(maxAbs) : SILENCE_LUFS
+  // ── True-peak: 4x Catmull-Rom oversampling (matches TruePeakLimiter detector) ──
+  // Phase 0 = identity (already counted as sample peak above). Phases 1-3
+  // interpolate between samples and can exceed the sample peak by up to ~1 dB
+  // on steep transients. This gives a closer match to ffmpeg's ebur128 true-peak.
+  let truePeakMax = maxAbs
+  for (let i = 0; i < N; i++) {
+    const im1 = i > 0 ? i - 1 : 0
+    const ip1 = i < N - 1 ? i + 1 : i
+    const ip2 = i < N - 2 ? i + 2 : ip1
+    const lP = L[im1]!
+    const lC = L[i]!
+    const lN = L[ip1]!
+    const lN2 = L[ip2]!
+    const rP = R[im1]!
+    const rC = R[i]!
+    const rN = R[ip1]!
+    const rN2 = R[ip2]!
+    // Phase 1: t=0.25
+    let v = -0.0703125 * lP + 0.8671875 * lC + 0.2265625 * lN - 0.0234375 * lN2
+    if (v > truePeakMax) truePeakMax = v
+    else if (-v > truePeakMax) truePeakMax = -v
+    // Phase 2: t=0.5
+    v = -0.0625 * lP + 0.5625 * lC + 0.5625 * lN - 0.0625 * lN2
+    if (v > truePeakMax) truePeakMax = v
+    else if (-v > truePeakMax) truePeakMax = -v
+    // Phase 3: t=0.75
+    v = -0.0234375 * lP + 0.2265625 * lC + 0.8671875 * lN - 0.0703125 * lN2
+    if (v > truePeakMax) truePeakMax = v
+    else if (-v > truePeakMax) truePeakMax = -v
+    // R channel
+    v = -0.0703125 * rP + 0.8671875 * rC + 0.2265625 * rN - 0.0234375 * rN2
+    if (v > truePeakMax) truePeakMax = v
+    else if (-v > truePeakMax) truePeakMax = -v
+    v = -0.0625 * rP + 0.5625 * rC + 0.5625 * rN - 0.0625 * rN2
+    if (v > truePeakMax) truePeakMax = v
+    else if (-v > truePeakMax) truePeakMax = -v
+    v = -0.0234375 * rP + 0.2265625 * rC + 0.8671875 * rN - 0.0703125 * rN2
+    if (v > truePeakMax) truePeakMax = v
+    else if (-v > truePeakMax) truePeakMax = -v
+  }
+  const truePeakDb = truePeakMax > 0 ? 20 * Math.log10(truePeakMax) : SILENCE_LUFS
+  const samplePeakDb = maxAbs > 0 ? 20 * Math.log10(maxAbs) : SILENCE_LUFS
 
   // Block geometry. 400 ms momentary, 3000 ms short-term, 100 ms hop.
   const momentaryBlockSize = Math.floor(0.4 * sampleRate)
@@ -325,6 +374,7 @@ export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number
     momentaryLUFS,
     shortTermLUFS,
     truePeakDb,
+    samplePeakDb,
     rangeLU,
   }
 }

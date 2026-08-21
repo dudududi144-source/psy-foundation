@@ -139,6 +139,7 @@ export async function GET(req: NextRequest) {
       samples: useSamples,
       lufs: result.lufs,
       truePeakDb: result.truePeakDb,
+      samplePeakDb: result.samplePeakDb,
       stereoWidth: result.stereoWidth,
       monoCompatibility: result.monoCompatibility,
       gainReductionDb: result.gainReductionDb,

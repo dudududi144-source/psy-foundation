@@ -34,6 +34,7 @@ interface CritiqueData {
     samples: boolean
     lufs?: number
     truePeakDb?: number
+    samplePeakDb?: number
     stereoWidth?: number
     monoCompatibility?: number
     gainReductionDb?: number

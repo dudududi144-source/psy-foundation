@@ -498,3 +498,63 @@ describe('roast-fix: WaveguideString determinism', () => {
     }
   })
 })
+
+// ─── True-peak fix (Roast-Fix-3) ───────────────────────────────────────────
+
+// measureLUFS already imported above
+
+describe('Roast Fix 3: truePeakDb is 4x-oversampled (was sample peak)', () => {
+  test('truePeakDb >= samplePeakDb for all signals', () => {
+    // Pure sine (minimal ISP)
+    const L = new Float32Array(SR * 2)
+    const R = new Float32Array(SR * 2)
+    for (let i = 0; i < L.length; i++) {
+      L[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / SR)
+      R[i] = L[i]!
+    }
+    const result = measureLUFS(L, R, SR)
+    expect(result.truePeakDb).toBeGreaterThanOrEqual(result.samplePeakDb)
+  })
+
+  test('truePeakDb > samplePeakDb for signal with inter-sample peaks', () => {
+    // Create a signal that has known inter-sample peaks: a steep transient
+    // where samples go from -0.9 to +0.9 in one step. Catmull-Rom interpolation
+    // will produce an overshoot between the samples that exceeds both.
+    const L = new Float32Array(SR * 1)
+    const R = new Float32Array(SR * 1)
+    for (let i = 0; i < L.length; i++) {
+      // Square wave at 2000 Hz — has steep edges that create ISPs
+      L[i] = 0.5 * Math.sign(Math.sin((2 * Math.PI * 2000 * i) / SR))
+      R[i] = L[i]!
+    }
+    const result = measureLUFS(L, R, SR)
+    expect(result.truePeakDb).toBeGreaterThanOrEqual(result.samplePeakDb)
+    // Square waves have ISPs due to Gibbs phenomenon at the edges
+    // The Catmull-Rom should detect some overshoot
+    expect(result.truePeakDb).toBeGreaterThan(result.samplePeakDb + 0.01)
+  })
+
+  test('truePeakDb is finite (no NaN/Inf)', () => {
+    const L = new Float32Array(SR * 1)
+    const R = new Float32Array(SR * 1)
+    for (let i = 0; i < L.length; i++) {
+      L[i] = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / SR)
+      R[i] = L[i]!
+    }
+    const result = measureLUFS(L, R, SR)
+    expect(Number.isFinite(result.truePeakDb)).toBe(true)
+    expect(Number.isFinite(result.samplePeakDb)).toBe(true)
+  })
+
+  test('samplePeakDb matches old behavior (max |sample|)', () => {
+    const L = new Float32Array(1000)
+    const R = new Float32Array(1000)
+    for (let i = 0; i < 1000; i++) {
+      L[i] = 0.5 * Math.sin((2 * Math.PI * 100 * i) / SR)
+      R[i] = -0.3
+    }
+    const result = measureLUFS(L, R, SR)
+    // Max |sample| = 0.5 (from L channel) → 20*log10(0.5) = -6.02 dBFS
+    expect(result.samplePeakDb).toBeCloseTo(20 * Math.log10(0.5), 1)
+  })
+})

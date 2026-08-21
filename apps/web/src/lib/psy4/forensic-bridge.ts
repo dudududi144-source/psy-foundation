@@ -226,6 +226,7 @@ export interface RenderResult {
   events: number
   lufs: number
   truePeakDb: number
+  samplePeakDb: number
   stereoWidth: number
   monoCompatibility: number
   gainReductionDb: number
@@ -1425,6 +1426,7 @@ export async function renderFoundationSection(
     events: events.length,
     lufs: finalLufs.integratedLUFS,
     truePeakDb: finalLufs.truePeakDb,
+    samplePeakDb: finalLufs.samplePeakDb,
     stereoWidth,
     monoCompatibility: monoCompat,
     gainReductionDb: limiter.getMaxGainReductionDb(),
