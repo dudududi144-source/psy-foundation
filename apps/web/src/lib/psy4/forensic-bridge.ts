@@ -44,49 +44,123 @@ import {
 import { Wavetable } from './wavetable'
 
 import { DEFAULT_SR as SR } from './constants'
-const _TARGET_LUFS = MASTER_SPEC.targetLufs
 
 // ── WAV decoder ──
 
-function decodeWav(buffer: ArrayBuffer): { data: Float32Array; sampleRate: number } {
+/**
+ * Decode a WAV file's first data chunk into a mono Float32Array.
+ *
+ * ROAST-FIX-2: rewritten to walk chunks dynamically instead of reading fmt
+ * fields at hardcoded offsets (24/22/34). The old reader assumed `fmt ` was
+ * the FIRST chunk (offset 12). Real-world WAV files from Logic Pro / Pro
+ * Tools / Audition often have LIST / fact / junk chunks BEFORE fmt, in which
+ * case the hardcoded reads returned GARBAGE (e.g., sampleRate = 1.87 billion,
+ * decoded.length = 0).
+ *
+ * The new reader:
+ *   1. Checks the RIFF + WAVE magic at offsets 0 and 8.
+ *   2. Walks every chunk from offset 12, finding `fmt ` and `data`.
+ *   3. Reads fmt fields relative to the fmt body (audioFormat, numChannels,
+ *      sampleRate, bitsPerSample) — works regardless of chunk order.
+ *   4. Validates audioFormat (only PCM=1 and IEEE-float=3 supported).
+ *   5. Validates fmt chunk size and numChannels/bytesPerSample > 0.
+ *   6. Supports 8-bit PCM, 16-bit PCM, 24-bit PCM, 32-bit PCM, and 32-bit float.
+ *   7. Truncated-data fix: divides by the number of channels actually read,
+ *      not numChannels (so a truncated last frame doesn't divide by zero).
+ */
+export function decodeWav(buffer: ArrayBuffer): { data: Float32Array; sampleRate: number } {
   const view = new DataView(buffer)
-  if (view.getUint32(0, false) !== 0x52494646) throw new Error('Not WAV')
-  let dataOffset = 44
+  if (view.getUint32(0, false) !== 0x52494646) throw new Error('Not WAV (missing RIFF magic)')
+  if (view.getUint32(8, false) !== 0x57415645) throw new Error('Not WAV (missing WAVE magic)')
+
+  let fmtOffset = -1 // absolute offset of the fmt body (audioFormat field)
+  let fmtSize = 0
+  let dataOffset = -1
   let dataSize = 0
+
+  // Walk chunks from offset 12 (immediately after the 12-byte RIFF/WAVE header).
   let offset = 12
-  while (offset < buffer.byteLength - 8) {
+  while (offset + 8 <= buffer.byteLength) {
     const chunkId = view.getUint32(offset, false)
     const chunkSize = view.getUint32(offset + 4, true)
-    if (chunkId === 0x64617461) {
+    if (chunkId === 0x666d7420) {
+      // "fmt "
+      fmtOffset = offset + 8
+      fmtSize = chunkSize
+      if (fmtSize < 16) throw new Error(`Invalid fmt chunk size: ${fmtSize}`)
+    } else if (chunkId === 0x64617461) {
+      // "data"
       dataOffset = offset + 8
       dataSize = chunkSize
       break
     }
+    // Chunks are word-aligned (padded to an even byte length).
     offset += 8 + chunkSize + (chunkSize % 2)
   }
-  if (dataSize === 0) throw new Error('No data chunk')
-  const sampleRate = view.getUint32(24, true)
-  const numChannels = view.getUint16(22, true)
-  const bitsPerSample = view.getUint16(34, true)
+
+  if (fmtOffset === -1) throw new Error('No fmt chunk')
+  if (dataOffset === -1 || dataSize === 0) throw new Error('No data chunk')
+
+  const audioFormat = view.getUint16(fmtOffset, true)
+  const numChannels = view.getUint16(fmtOffset + 2, true)
+  const sampleRate = view.getUint32(fmtOffset + 4, true)
+  const bitsPerSample = view.getUint16(fmtOffset + 14, true)
   const bytesPerSample = bitsPerSample / 8
-  const samples = Math.floor(dataSize / (bytesPerSample * numChannels))
-  const output = new Float32Array(samples)
-  for (let i = 0; i < samples; i++) {
+
+  if (audioFormat !== 1 && audioFormat !== 3) {
+    throw new Error(
+      `Unsupported WAV audioFormat: ${audioFormat} (only PCM=1 and float=3 supported)`
+    )
+  }
+  if (audioFormat === 3 && bitsPerSample !== 32) {
+    throw new Error(`IEEE-float WAV supports only 32-bit, got ${bitsPerSample}-bit`)
+  }
+  if (numChannels === 0) throw new Error('numChannels === 0')
+  if (bytesPerSample === 0) throw new Error('bitsPerSample must be 8/16/24/32')
+  if (sampleRate === 0) throw new Error('sampleRate === 0')
+
+  const supportedBits = [8, 16, 24, 32]
+  if (!supportedBits.includes(bitsPerSample)) {
+    throw new Error(`Unsupported bitsPerSample: ${bitsPerSample}`)
+  }
+
+  // Truncated-data fix: how many full sample-frames actually fit in the data chunk?
+  // (The data chunk may be padded with junk at the end if the file was truncated.)
+  const bytesAvailable = Math.min(dataSize, buffer.byteLength - dataOffset)
+  const framesAvailable = Math.floor(bytesAvailable / (bytesPerSample * numChannels))
+  const output = new Float32Array(framesAvailable)
+
+  for (let i = 0; i < framesAvailable; i++) {
     let sum = 0
+    let chRead = 0
     for (let ch = 0; ch < numChannels; ch++) {
       const so = dataOffset + (i * numChannels + ch) * bytesPerSample
       if (so + bytesPerSample > buffer.byteLength) break
-      if (bitsPerSample === 16) sum += view.getInt16(so, true) / 32768
-      else if (bitsPerSample === 24) {
-        const b0 = view.getUint8(so) ?? 0
-        const b1 = view.getUint8(so + 1) ?? 0
-        const b2 = view.getUint8(so + 2) ?? 0
-        let val = (b2 << 16) | (b1 << 8) | b0
-        if (val & 0x800000) val |= 0xff000000
-        sum += val / 8388608
+      chRead++
+      if (audioFormat === 1) {
+        // PCM
+        if (bitsPerSample === 8) {
+          // 8-bit PCM is unsigned (0..255), center at 128.
+          sum += (view.getUint8(so) - 128) / 128
+        } else if (bitsPerSample === 16) {
+          sum += view.getInt16(so, true) / 32768
+        } else if (bitsPerSample === 24) {
+          const b0 = view.getUint8(so) ?? 0
+          const b1 = view.getUint8(so + 1) ?? 0
+          const b2 = view.getUint8(so + 2) ?? 0
+          let val = (b2 << 16) | (b1 << 8) | b0
+          if (val & 0x800000) val |= 0xff000000
+          sum += val / 8388608
+        } else if (bitsPerSample === 32) {
+          sum += view.getInt32(so, true) / 2147483648
+        }
+      } else {
+        // audioFormat === 3 (IEEE float, only 32-bit supported here)
+        sum += view.getFloat32(so, true)
       }
     }
-    output[i] = sum / numChannels
+    // Divide by channels actually read (handles truncated last frame).
+    output[i] = chRead > 0 ? sum / chRead : 0
   }
   return { data: output, sampleRate }
 }

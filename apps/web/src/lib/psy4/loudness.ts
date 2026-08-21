@@ -24,24 +24,30 @@
 /**
  * Two-stage cascaded biquad implementing the ITU-R BS.1770-4 K-weighting curve.
  *
+ * ROAST-FIX-1: stage 1 (high shelf) and stage 2 (RLB high-pass) coefficients
+ * are now computed from the RBJ Audio EQ Cookbook formulas. The previous
+ * implementation used an ITU-style K-based formula where the stage-1 `b1`
+ * term was transcribed incorrectly; that biased the K-weighting curve by
+ * ~2 dB at 997 Hz and ~3.7 dB at the 1682 Hz corner, which translated to
+ * ~2 LU error in the integrated LUFS reading (the worklog's open item).
+ *
+ * RBJ Audio EQ Cookbook (Robert Bristow-Johnson):
+ *   high-shelf:  A = 10^(G/40),  w0 = 2π·f0/fs,  alpha = sin(w0)/(2·Q)
+ *     b0 =  A·((A+1) + (A−1)·cos w0 + 2·√A·alpha)
+ *     b1 = -2·A·((A−1) + (A+1)·cos w0)
+ *     b2 =  A·((A+1) + (A−1)·cos w0 − 2·√A·alpha)
+ *     a0 =      (A+1) − (A−1)·cos w0 + 2·√A·alpha
+ *     a1 =  2·((A−1) − (A+1)·cos w0)
+ *     a2 =      (A+1) − (A−1)·cos w0 − 2·√A·alpha
+ *   high-pass:
+ *     b0 =  (1+cos w0)/2,  b1 = -(1+cos w0),  b2 = (1+cos w0)/2
+ *     a0 =  1 + alpha,     a1 = -2·cos w0,   a2 = 1 − alpha
+ *
  * Stage 1 — "pre-filter" high shelf:
  *   f0 = 1681.974450955533 Hz, G = 3.999843853973347 dB, Q = 0.7071752369554196
- *   K  = tan(π·f0/fs)
- *   Vh = 10^(G/20)    (high-frequency gain)
- *   Vb = Vh^0.5       (shelf transition gain)
- *   a0 = 1 + K/Q + K²·Vh
- *   b0 = (Vh + Vb·K + K²·Vh) / a0
- *   b1 = -2·(Vh - K²·Vh) / a0     ← NEGATIVE (sign-corrected for DC gain = 1)
- *   b2 = (Vh - Vb·K + K²·Vh) / a0
- *   a1 = 2·(K²·Vh - 1) / a0
- *   a2 = (1 - K/Q + K²·Vh) / a0
  *
  * Stage 2 — "RLB" high-pass:
  *   f0 = 38.13547087602444 Hz, Q = 0.5003270373238773
- *   K  = tan(π·f0/fs)
- *   a0 = 1 + K/Q + K²
- *   b0 = 1 / a0,  b1 = -2 / a0,  b2 = 1 / a0
- *   a1 = 2·(K² - 1) / a0,  a2 = (1 - K/Q + K²) / a0
  *
  * Each stage uses Direct Form II Transposed (numerically robust for audio).
  * Difference equation per stage:
@@ -69,30 +75,36 @@ class KWeightFilter {
   private s2_z2 = 0
 
   constructor(sampleRate: number) {
-    // ── Stage 1: pre-filter (high shelf) ──
+    // ── Stage 1: pre-filter (high shelf) — RBJ Audio EQ Cookbook ──
     const f0a = 1681.974450955533
     const Ga = 3.999843853973347
     const Qa = 0.7071752369554196
-    const Ka = Math.tan((Math.PI * f0a) / sampleRate)
-    const Vha = 10 ** (Ga / 20)
-    const Vba = Vha ** 0.5
-    const a0a = 1 + Ka / Qa + Ka * Ka * Vha
-    this.s1_b0 = (Vha + Vba * Ka + Ka * Ka * Vha) / a0a
-    this.s1_b1 = (-2 * (Vha - Ka * Ka * Vha)) / a0a
-    this.s1_b2 = (Vha - Vba * Ka + Ka * Ka * Vha) / a0a
-    this.s1_a1 = (2 * (Ka * Ka * Vha - 1)) / a0a
-    this.s1_a2 = (1 - Ka / Qa + Ka * Ka * Vha) / a0a
+    const Aa = 10 ** (Ga / 40)
+    const w0a = (2 * Math.PI * f0a) / sampleRate
+    const cosA = Math.cos(w0a)
+    const sinA = Math.sin(w0a)
+    const alphaA = sinA / (2 * Qa)
+    const sqrtAa = Math.sqrt(Aa)
+    const a0a = Aa + 1 - (Aa - 1) * cosA + 2 * sqrtAa * alphaA
+    this.s1_b0 = (Aa * (Aa + 1 + (Aa - 1) * cosA + 2 * sqrtAa * alphaA)) / a0a
+    this.s1_b1 = (-2 * Aa * (Aa - 1 + (Aa + 1) * cosA)) / a0a
+    this.s1_b2 = (Aa * (Aa + 1 + (Aa - 1) * cosA - 2 * sqrtAa * alphaA)) / a0a
+    this.s1_a1 = (2 * (Aa - 1 - (Aa + 1) * cosA)) / a0a
+    this.s1_a2 = (Aa + 1 - (Aa - 1) * cosA - 2 * sqrtAa * alphaA) / a0a
 
-    // ── Stage 2: RLB (high-pass) ──
+    // ── Stage 2: RLB (high-pass) — RBJ Audio EQ Cookbook ──
     const f0b = 38.13547087602444
     const Qb = 0.5003270373238773
-    const Kb = Math.tan((Math.PI * f0b) / sampleRate)
-    const a0b = 1 + Kb / Qb + Kb * Kb
-    this.s2_b0 = 1 / a0b
-    this.s2_b1 = -2 / a0b
-    this.s2_b2 = 1 / a0b
-    this.s2_a1 = (2 * (Kb * Kb - 1)) / a0b
-    this.s2_a2 = (1 - Kb / Qb + Kb * Kb) / a0b
+    const w0b = (2 * Math.PI * f0b) / sampleRate
+    const cosB = Math.cos(w0b)
+    const sinB = Math.sin(w0b)
+    const alphaB = sinB / (2 * Qb)
+    const a0b = 1 + alphaB
+    this.s2_b0 = (1 + cosB) / 2 / a0b
+    this.s2_b1 = -(1 + cosB) / a0b
+    this.s2_b2 = (1 + cosB) / 2 / a0b
+    this.s2_a1 = (-2 * cosB) / a0b
+    this.s2_a2 = (1 - alphaB) / a0b
   }
 
   /** Run one sample through both biquad stages. */

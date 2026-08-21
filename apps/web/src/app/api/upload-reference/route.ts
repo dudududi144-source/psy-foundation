@@ -1,4 +1,4 @@
-import { NeuralStyleTransfer } from '@/lib/psy4/research/neural/latent-decoder'
+import { type LatentVector, NeuralStyleTransfer } from '@/lib/psy4/research/neural/latent-decoder'
 import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -22,8 +22,7 @@ export const maxDuration = 60
  */
 
 // In-memory storage for reference latents (production: use Supabase)
-// biome-ignore lint/suspicious/noExplicitAny: latent vector is dynamic
-const referenceStore = new Map<string, { latent: any; name: string; uploadedAt: number }>()
+const referenceStore = new Map<string, { latent: LatentVector; name: string; uploadedAt: number }>()
 
 // Simple WAV parser (mono, 16-bit PCM)
 function parseWav(buffer: ArrayBuffer): { samples: Float32Array; sampleRate: number } | null {
@@ -172,8 +171,7 @@ export async function POST(req: NextRequest) {
 }
 
 /** Get a stored reference latent by hash (for style-transfer route) */
-// biome-ignore lint/suspicious/noExplicitAny: returns dynamic latent
-export function getReferenceLatent(hash: string): any | null {
+export function getReferenceLatent(hash: string): LatentVector | null {
   const ref = referenceStore.get(hash)
   return ref ? ref.latent : null
 }

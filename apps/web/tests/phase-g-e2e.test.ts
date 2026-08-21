@@ -55,7 +55,8 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     })
     const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
     const hash = createHash('md5').update(Buffer.from(wav)).digest('hex')
-    expect(hash).toBe('b631454f96dcb4b6d48d8ee8fdd5fddf')
+    // Roast-fix baseline (2026-08): K-weighting b1 formula corrected → new hash.
+    expect(hash).toBe('b01123b3e7c33a29f3f83671cc02dc4a')
   }, 30000)
 
   test('G2: Render output is stereo (L ≠ R)', async () => {

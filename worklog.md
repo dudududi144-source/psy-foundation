@@ -3863,3 +3863,53 @@ Result:
 - bun test: 739 pass, 0 fail
 
 KEY ACHIEVEMENT: lint now PASSES (exit 0) for the first time in the project.
+
+---
+Task ID: ROAST-REAPPLY
+Agent: PSY Re-Apply Specialist
+Task: Re-apply all roast fixes after /home/z/psy-foundation-work/ was deleted between sessions. Re-cloned from github to /home/z/psy-foundation/ and re-applied all 9 file changes from ROAST-FIX-1 and ROAST-FIX-2.
+
+Work Log:
+- Verified clone state: /home/z/psy-foundation at commit a387f3e, baseline tests = 739 pass / 14 skip / 0 fail, lint = 0 errors / 11 warnings.
+- Fix 1 (latent-decoder.ts): COMPLETE DSP REWRITE. Removed parallel-32-band-one-pole-LP `* 10 / BARK_BANDS` decode (was 4× louder at blend=0). Added radix-2 Cooley-Tukey `fftRadix2`, `fftRadix2Forward`, `ifftRadix2`. Added `BandEdges`, `buildBandEdges`, `buildBinToBand` helpers. Rewrote `encode()` to use FFT magnitude per bark band (RMS of bins per band). Rewrote `decode()` to FFT input, apply per-band gain (clamped to [0.25, 4.0]) to magnitude while preserving phase, inverse FFT. Added `reset()` method, `applyReference()` method on NeuralStyleTransfer, and `cachedSampleRate` / `binToBand` / `bandEdges` / `fftRe` / `fftIm` fields plus private `rebuildForSampleRate` method on LatentDecoder. Updated header comment with HONEST NAMING NOTE ("not neural, just DSP"); kept `NeuralStyleTransfer` class name for import-path stability.
+- Fix 2 (upload-reference/route.ts): Changed import to `import { type LatentVector, NeuralStyleTransfer } from '@/lib/psy4/research/neural/latent-decoder'`. Changed `referenceStore` Map value type from `{ latent: any; ... }` to `{ latent: LatentVector; ... }`. Removed both biome-ignore comments for noExplicitAny. Changed `getReferenceLatent` return type from `any | null` to `LatentVector | null`. WAV parser and POST handler unchanged.
+- Fix 3 (style-transfer/route.ts): Replaced entire file with re-enabled implementation. Removed false "Phase F closure: NeuralStyleTransfer was a self-reference no-op" comment. Imports NeuralStyleTransfer and getReferenceLatent. Accepts `?reference=<hash>&blend=<0..1>` query params. If hash found: applies NeuralStyleTransfer per channel in FFT_BLOCK=2048 chunks via `processChannel()` helper. Reset decoder state between channels (separate NeuralStyleTransfer instances for L and R). Sets X-Style-Transfer header to honest status message ("applied (blend=…, hash=…)" / "missing-reference:…" / "none — no reference requested"). Same BEST_CONFIG and musical context as render-forensic route.
+- Fix 4 (forensic-bridge.ts): Removed dead `const _TARGET_LUFS = MASTER_SPEC.targetLufs` (was unused). Rewrote `decodeWav()` to walk chunks dynamically: explicit RIFF + WAVE magic checks, walks chunks from offset 12, finds 'fmt ' and 'data' chunks, reads fields relative to fmt body offset. Added audioFormat=1 (PCM) and audioFormat=3 (IEEE float) checks, fmt chunk size validation, `numChannels === 0` and `bytesPerSample === 0` validation. Added 8-bit unsigned PCM and 32-bit float support. Truncated-data fix: divides by channels actually read (`chRead`) instead of declared `numChannels` so the last partial frame doesn't divide by zero. Exported `decodeWav` so the new roast-fix tests can call it directly.
+- Fix 5 (loudness.ts): Rewrote K-weighting stage 1 (high-shelf) and stage 2 (RLB high-pass) coefficient computation per the RBJ Audio EQ Cookbook. Stage 1 uses `A = 10^(G/40)`, `w0 = 2π·f0/fs`, `alpha = sin(w0)/(2·Q)` and the standard high-shelf b/a formulas. Stage 2 uses the standard RBJ high-pass formulas. Constants f0a / Ga / Qa / f0b / Qb unchanged. Updated the comment block above the constructor to document the RBJ origin (the old comment described the wrong/biased K-based formula).
+- Fix 6 (limiter.ts): Replaced stale "Phase D: tightened from 0.85 to 0.75" comment with an honest multi-line note explaining that the code actually uses 0.65, why (margin for ISP overshoots that the Pass 2 envelope misses), and why tightening (0.85) or loosening (0.55) would be wrong. Code (`const ispSafeCeiling = ceiling * 0.65`) unchanged.
+- Fix 7 (snapshot.test.ts): Changed `BASELINE_MD5` from `b631454f96dcb4b6d48d8ee8fdd5fddf` to `b01123b3e7c33a29f3f83671cc02dc4a` with a 3-line comment explaining the K-weighting fix changed the baseline (old: biased ~2 LU low vs ffmpeg; new: ~0.22 LU vs ffmpeg).
+- Fix 8 (phase-g-e2e.test.ts): Updated the G1 baseline hash from `b631454f96dcb4b6d48d8ee8fdd5fddf` to `b01123b3e7c33a29f3f83671cc02dc4a` with the matching roast-fix comment.
+- Fix 9 (apps/web/tests/roast-fix.test.ts): NEW test file with 18 tests across 6 describe blocks: NeuralStyleTransfer blend=0 true no-op (max diff < 1e-4), bounded output at all blend levels (no clipping/NaN), blend=1 shapes spectrum of broadband input (200Hz/5000Hz goertzel ratio changes > 10%), non-self reference changes audio (refutes the "self-reference no-op" misdiagnosis), LatentDecoder FFT round-trip near-identity with gain=1, encode produces non-trivial latent, determinism (same input → bit-identical latent), determinism (same reference + render → bit-identical styled output), getReferenceLatent returns null for unknown hash, getReferenceLatent return type is LatentVector | null, ITU calibration (mono 997 Hz @ -23 dBFS RMS within 1 LU of -23), K-gain at 1682 Hz ≈ +2 dB, K-gain at 10000 Hz ≈ +4 dB, K-gain at 100 Hz RLB transition ≈ -1 dB, render LUFS in club-master range (-11..-7 LUFS), decodeWav with fmt at standard offset 12 (baseline), decodeWav with LIST chunk before fmt (regression test), WaveguideString triggerDeterministic determinism. Helpers: `goertzelMag`, `mulberry32` PRNG, `broadbandNoise`, `sine`, `brightReference` (440 + 880 Hz), `maxAbsDiff`, `buildWav` with optional prelude chunks, `buildListInfoChunk`.
+
+Verification:
+- bun test: 757 pass, 14 skip, 0 fail (was 739 before roast fixes; +18 new tests).
+- bun run lint: 0 errors, 11 warnings (after `bun run lint:fix` once to fix 4 organizeImports/format issues).
+- All 18 new roast-fix tests pass. All previously-passing tests still pass. Snapshot baseline MD5 updated to match the corrected K-weighting output.
+
+Stage Summary:
+- 9 files changed (8 modified, 1 new test file). All fixes from ROAST-FIX-1 and ROAST-FIX-2 re-applied.
+- Final state: bun test → 757 pass, 14 skip, 0 fail. bun run lint → 0 errors, 11 warnings.
+- No regressions introduced. The deleted audit work has been fully restored.
+
+---
+Task ID: ROAST-FIX-3
+Agent: PSY Engineer (final audit)
+Task: Final round of roasting before push to github. Audit remaining subsystems.
+
+Work Log:
+- audio-engine.ts (162 lines): VERIFIED OK. Clean client-side manager.
+- Worklet (467 lines, 4 voice classes, 13 voices total): VERIFIED OK.
+- packages/music: 345 tests pass, 0 fail.
+- packages/transport: 49 pass, 14 gap tests honestly skipped (documented).
+- All other packages (dsp, fixtures, scheduler, protocol, learning, material, analysis, device-sdk): all pass.
+- benchmarks (analysis-accuracy, transport-accuracy): both run successfully.
+- humanizer.ts: mulberry32 PRNG — fully deterministic.
+- modulation-matrix.ts: 6 LFOs + 3 bipolar macros. Verified modulates.
+- channel-fx.ts: applies per-preset gain + processing. Verified.
+- API routes (render-forensic, audio-critique, optimize, arrangement): all functional.
+- Dev server (my-project sandbox): GET / 200, Agent Browser loads page without errors.
+
+Stage Summary:
+- No new bugs found. All subsystems verified OK.
+- Final state: 757 pass, 14 skip, 0 fail. Lint: 0 errors, 11 warnings.
+- READY TO PUSH.

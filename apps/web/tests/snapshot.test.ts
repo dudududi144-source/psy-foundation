@@ -29,7 +29,10 @@ const APPS_WEB_DIR = resolve(import.meta.dir, '..')
 process.chdir(APPS_WEB_DIR)
 
 // Phase D baseline (kick 50Hz, bass 0.12s, lead 9000Hz, bus 1.2, full LUFS correction, ISP 0.65)
-const BASELINE_MD5 = 'b631454f96dcb4b6d48d8ee8fdd5fddf'
+// Roast-fix baseline (2026-08): K-weighting b1 formula corrected per RBJ cookbook.
+// Old: b631454f96dcb4b6d48d8ee8fdd5fddf (with biased K-weighting, ~2 LU low vs ffmpeg).
+// New: b01123b3e7c33a29f3f83671cc02dc4a (with correct K-weighting, ~0.22 LU vs ffmpeg).
+const BASELINE_MD5 = 'b01123b3e7c33a29f3f83671cc02dc4a'
 const BASELINE_DURATION_SEC = 13.24
 
 // BEST_CONFIG from /api/render-forensic/route.ts
