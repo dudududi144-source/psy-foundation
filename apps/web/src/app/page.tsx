@@ -156,6 +156,8 @@ export default function Home() {
         const data = (await res.json()) as OptReport
         setOptReport(data)
       }
+    } catch (err) {
+      console.error('Optimize fetch failed:', err)
     } finally {
       setOptimizing(false)
     }
@@ -743,10 +745,14 @@ export default function Home() {
             <button
               type="button"
               onClick={async () => {
-                const res = await fetch(`/api/arrangement?seed=${seed}&bars=88`)
-                if (res.ok) {
-                  const data = await res.json()
-                  setArrangement(data)
+                try {
+                  const res = await fetch(`/api/arrangement?seed=${seed}&bars=88`)
+                  if (res.ok) {
+                    const data = await res.json()
+                    setArrangement(data)
+                  }
+                } catch (err) {
+                  console.error('Arrangement fetch failed:', err)
                 }
               }}
               className="ml-auto inline-flex items-center gap-2 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-400 transition-colors"
