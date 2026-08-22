@@ -786,3 +786,59 @@ describe('Roast Fix 6: render seed propagation (was hardcoded 42)', () => {
     expect(hash).toBe('b01123b3e7c33a29f3f83671cc02dc4a')
   })
 })
+
+// ─── Roast Fix 8: MoogLadder guard against missing args ─────────────────────
+
+describe('Roast Fix 8: MoogLadder guards against invalid args (was NaN)', () => {
+  test('MoogLadder with missing drive (4 args) returns finite output', async () => {
+    const { MoogLadder } = await import('@/lib/psy4/forensic/dsp')
+    const moog = new MoogLadder()
+    const sr = 44100
+    let nanCount = 0
+    for (let i = 0; i < sr; i++) {
+      const x = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / sr)
+      const y = moog.process(x, 2000, 0.3, undefined as unknown as number, sr)
+      if (!Number.isFinite(y)) nanCount++
+    }
+    expect(nanCount).toBe(0)
+  })
+
+  test('MoogLadder with NaN drive returns finite output', async () => {
+    const { MoogLadder } = await import('@/lib/psy4/forensic/dsp')
+    const moog = new MoogLadder()
+    const sr = 44100
+    let nanCount = 0
+    for (let i = 0; i < sr; i++) {
+      const x = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / sr)
+      const y = moog.process(x, 2000, 0.3, Number.NaN, sr)
+      if (!Number.isFinite(y)) nanCount++
+    }
+    expect(nanCount).toBe(0)
+  })
+
+  test('MoogLadder with NaN sr returns finite output', async () => {
+    const { MoogLadder } = await import('@/lib/psy4/forensic/dsp')
+    const moog = new MoogLadder()
+    let nanCount = 0
+    for (let i = 0; i < 100; i++) {
+      const x = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / 44100)
+      const y = moog.process(x, 2000, 0.3, 1.0, Number.NaN)
+      if (!Number.isFinite(y)) nanCount++
+    }
+    expect(nanCount).toBe(0)
+  })
+
+  test('MoogLadder with correct args still works (no regression)', async () => {
+    const { MoogLadder } = await import('@/lib/psy4/forensic/dsp')
+    const moog = new MoogLadder()
+    const sr = 44100
+    let maxOut = 0
+    for (let i = 0; i < sr; i++) {
+      const x = 0.5 * Math.sin((2 * Math.PI * 1000 * i) / sr)
+      const y = moog.process(x, 2000, 0.3, 1.0, sr)
+      maxOut = Math.max(maxOut, Math.abs(y))
+    }
+    expect(maxOut).toBeGreaterThan(0.01) // produces signal
+    expect(maxOut).toBeLessThan(1.0) // doesn't blow up
+  })
+})

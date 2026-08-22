@@ -76,19 +76,27 @@ export class MoogLadder {
   }
 
   process(x: number, cutoff: number, res: number, drive: number, sr: number): number {
-    if (Math.abs(cutoff - this.lastCutoff) > 0.5) {
-      const fc = Math.min(0.45, cutoff / sr)
+    // Roast-fix: guard against missing/invalid args. Without this, calling
+    // process(x, cutoff, res, sr) (4 args, missing drive) makes drive=undefined,
+    // which NaN-propagates through the entire filter. Default drive to 1.0.
+    const safeDrive = Number.isFinite(drive) ? drive : 1.0
+    const safeSr = Number.isFinite(sr) && sr > 0 ? sr : 44100
+    const safeCutoff = Number.isFinite(cutoff) && cutoff > 0 ? cutoff : 1000
+    const safeRes = Number.isFinite(res) ? Math.max(0, Math.min(1, res)) : 0.3
+
+    if (Math.abs(safeCutoff - this.lastCutoff) > 0.5) {
+      const fc = Math.min(0.45, safeCutoff / safeSr)
       this.g = 1 - Math.exp(-2 * Math.PI * fc)
-      this.lastCutoff = cutoff
+      this.lastCutoff = safeCutoff
     }
     const g = this.g
     // k = resonance feedback (0..4). At 4, self-oscillates.
-    const k = Math.min(3.9, res * 4)
+    const k = Math.min(3.9, safeRes * 4)
 
     // Feedback: one-sample-delayed estimate (Stilson-Smith approach).
     // True ZDF would solve y = x - k*tanh(y) on the current sample via Newton.
     const fb = k * fastTanh(this.s3)
-    const u = fastTanh((x - fb) * drive)
+    const u = fastTanh((x - fb) * safeDrive)
 
     // 4 one-pole stages with thermal (tanh) saturation
     this.s0 += g * (u - fastTanh(this.s0))
