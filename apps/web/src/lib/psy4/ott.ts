@@ -95,6 +95,12 @@ class BandExpander {
       gain = this.upwardGain ** Math.log2(under)
     }
 
+    // Roast-fix: clamp gain to ±40 dB (0.01..100). Without this, extreme
+    // params or very quiet input bands can produce gain up to 60000+, which
+    // the limiter catches but is wasteful. ±40 dB is high enough to not
+    // affect normal renders but low enough to prevent pathological output.
+    gain = Math.max(0.01, Math.min(100, gain))
+
     // Blend between dry (depth=0) and wet (depth=1)
     const wetGain = 1 + (gain - 1) * this.depth
     return x * wetGain
@@ -120,9 +126,14 @@ export class OTT {
     const sr = opts.sampleRate ?? DEFAULT_SR
     const lowHz = opts.lowCrossoverHz ?? 200
     const midHz = opts.midCrossoverHz ?? 2000
-    const depth = opts.depth ?? 1.0
-    const upwardDb = opts.upwardGainDb ?? 6
-    const downwardDb = opts.downwardGainDb ?? -6
+    // Roast-fix: clamp depth to [0, 1] and gains to ±12 dB. Without clamping,
+    // depth=10 or upwardGainDb=20 produces output up to 685 billion — the
+    // limiter downstream catches it, but it's better to fail safely. The
+    // default depth=1.0 is the standard OTT setting; anything >1 is a bug
+    // in the caller. Gain ±12 dB is the practical max for musical use.
+    const depth = Math.max(0, Math.min(1, opts.depth ?? 1.0))
+    const upwardDb = Math.max(0, Math.min(12, opts.upwardGainDb ?? 6))
+    const downwardDb = Math.max(-12, Math.min(0, opts.downwardGainDb ?? -6))
     const thresholdDb = opts.thresholdDb ?? -18
     const attackMs = opts.attackMs ?? 1
     const releaseMs = opts.releaseMs ?? 100
