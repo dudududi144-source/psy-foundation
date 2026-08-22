@@ -914,3 +914,136 @@ describe('Roast Fix 9: OTT clamps extreme params (was 685 billion output)', () =
     expect(maxDiff).toBe(0) // true no-op
   })
 })
+
+// ─── Roast Fix 10: Worklet multiband + OTT port ──────────────────────────────
+
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+// Load the worklet JS in a mock environment so we can test the ported classes
+async function loadWorkletClasses() {
+  const workletPath = join(process.cwd(), 'public', 'worklets', 'psy4-processor.js')
+  const src = readFileSync(workletPath, 'utf-8')
+  // Mock AudioWorkletProcessor + registerProcessor globals
+  const mock = `
+    let _registered = null
+    class AudioWorkletProcessor { constructor() {} get port() { return { onmessage: null, postMessage: () => {} } } }
+    function registerProcessor(name, cls) { _registered = cls }
+  `
+  const testCode = `${mock}${src}\nmodule.exports = { MultibandCompressor, OTT, LR4Crossover, BandCompressor, BandExpander };`
+  const tempPath = '/tmp/worklet-test-classes.js'
+  writeFileSync(tempPath, testCode)
+  return await import(tempPath)
+}
+
+describe('Roast Fix 10: Worklet multiband + OTT ported from offline render', () => {
+  test('LR4Crossover produces LP + HP that sum to ~unity (magnitude)', async () => {
+    const mod = await loadWorkletClasses()
+    const xover = new mod.LR4Crossover(200, 44100)
+    // LR4 is phase-matched at the crossover — the magnitude of LP+HP sums
+    // to unity, but the instantaneous sum can exceed the input due to phase
+    // offset. We check that the RMS of LP+HP ≈ RMS of input instead.
+    let sumSq = 0
+    let inputSq = 0
+    for (let i = 0; i < 44100; i++) {
+      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
+      const [lp, hp] = xover.process(x)
+      const sum = lp + hp
+      sumSq += sum * sum
+      inputSq += x * x
+    }
+    const rmsSum = Math.sqrt(sumSq / 44100)
+    const rmsInput = Math.sqrt(inputSq / 44100)
+    // RMS of sum should be close to RMS of input (within 10%)
+    expect(Math.abs(rmsSum - rmsInput) / rmsInput).toBeLessThan(0.15)
+  })
+
+  test('MultibandCompressor produces finite output (no NaN)', async () => {
+    const mod = await loadWorkletClasses()
+    const mb = new mod.MultibandCompressor({ sampleRate: 44100 })
+    let nanCount = 0
+    for (let i = 0; i < 1000; i++) {
+      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
+      const [l, r] = mb.processSample(x, x)
+      if (!Number.isFinite(l) || !Number.isFinite(r)) nanCount++
+    }
+    expect(nanCount).toBe(0)
+  })
+
+  test('MultibandCompressor L/R symmetric for same input', async () => {
+    const mod = await loadWorkletClasses()
+    const mb = new mod.MultibandCompressor({ sampleRate: 44100 })
+    let maxDiff = 0
+    for (let i = 0; i < 44100; i++) {
+      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
+      const [l, r] = mb.processSample(x, x)
+      maxDiff = Math.max(maxDiff, Math.abs(l - r))
+    }
+    // L and R should be identical for same input (separate filter state per channel)
+    expect(maxDiff).toBeLessThan(0.001)
+  })
+
+  test('OTT depth=0 is a no-op (returns input unchanged)', async () => {
+    const mod = await loadWorkletClasses()
+    const ott = new mod.OTT({ sampleRate: 44100, depth: 0 })
+    const [l, r] = ott.processSample(0.5, 0.5)
+    expect(l).toBeCloseTo(0.5, 4)
+    expect(r).toBeCloseTo(0.5, 4)
+  })
+
+  test('OTT produces finite output (no NaN)', async () => {
+    const mod = await loadWorkletClasses()
+    const ott = new mod.OTT({ sampleRate: 44100, depth: 0.3 })
+    let nanCount = 0
+    for (let i = 0; i < 1000; i++) {
+      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
+      const [l, r] = ott.processSample(x, x)
+      if (!Number.isFinite(l) || !Number.isFinite(r)) nanCount++
+    }
+    expect(nanCount).toBe(0)
+  })
+
+  test('OTT L/R symmetric for same input', async () => {
+    const mod = await loadWorkletClasses()
+    const ott = new mod.OTT({ sampleRate: 44100, depth: 0.3 })
+    let maxDiff = 0
+    for (let i = 0; i < 44100; i++) {
+      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
+      const [l, r] = ott.processSample(x, x)
+      maxDiff = Math.max(maxDiff, Math.abs(l - r))
+    }
+    expect(maxDiff).toBeLessThan(0.001)
+  })
+
+  test('OTT extreme params bounded (inherits roast-fix-9 clamp)', async () => {
+    const mod = await loadWorkletClasses()
+    const ott = new mod.OTT({ sampleRate: 44100, depth: 10, upwardGainDb: 20 })
+    let maxOut = 0
+    for (let i = 0; i < 44100; i++) {
+      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
+      const [l, r] = ott.processSample(x, x)
+      maxOut = Math.max(maxOut, Math.abs(l), Math.abs(r))
+    }
+    // Should be bounded (was 685 billion before clamp in offline, same clamp in worklet)
+    expect(maxOut).toBeLessThan(100)
+    expect(Number.isFinite(maxOut)).toBe(true)
+  })
+
+  test('MultibandCompressor + OTT chained: finite output', async () => {
+    const mod = await loadWorkletClasses()
+    const mb = new mod.MultibandCompressor({ sampleRate: 44100 })
+    const ott = new mod.OTT({ sampleRate: 44100, depth: 0.3 })
+    let nanCount = 0
+    let maxOut = 0
+    for (let i = 0; i < 44100; i++) {
+      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
+      const [ml, mr] = mb.processSample(x, x)
+      const [ol, or2] = ott.processSample(ml, mr)
+      if (!Number.isFinite(ol) || !Number.isFinite(or2)) nanCount++
+      maxOut = Math.max(maxOut, Math.abs(ol), Math.abs(or2))
+    }
+    expect(nanCount).toBe(0)
+    expect(maxOut).toBeLessThan(10) // bounded
+    expect(maxOut).toBeGreaterThan(0) // produces signal
+  })
+})

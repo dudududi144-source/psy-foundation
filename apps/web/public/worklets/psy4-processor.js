@@ -276,6 +276,227 @@ class AcidVoice {
 LeadVoice.prototype.noteOff = function() { this.active = false }
 BassVoice.prototype.noteOff = function() { this.active = false }
 
+// ── Biquad Section (RBJ LP/HP) — for LR4Crossover ──────────────────────────
+// Ported from src/lib/psy4/multiband.ts BiquadSection.
+// Direct Form II Transposed: numerically well-conditioned for audio.
+
+const BUTTERWORTH_Q = Math.SQRT1_2 // 1/√2 — maximally flat 2nd-order
+
+class BiquadSection {
+  constructor(type, freq, Q, sampleRate) {
+    this.b0 = 0; this.b1 = 0; this.b2 = 0
+    this.a1 = 0; this.a2 = 0
+    this.z1 = 0; this.z2 = 0
+    const w0 = (2 * Math.PI * freq) / sampleRate
+    const cosw0 = Math.cos(w0)
+    const sinw0 = Math.sin(w0)
+    const alpha = sinw0 / (2 * Q)
+    let b0, b1, b2
+    if (type === 'lp') {
+      const c = 1 - cosw0
+      b0 = c / 2; b1 = c; b2 = c / 2
+    } else { // hp
+      const c = 1 + cosw0
+      b0 = c / 2; b1 = -c; b2 = c / 2
+    }
+    const a0 = 1 + alpha
+    const a1 = -2 * cosw0
+    const a2 = 1 - alpha
+    this.b0 = b0 / a0; this.b1 = b1 / a0; this.b2 = b2 / a0
+    this.a1 = a1 / a0; this.a2 = a2 / a0
+  }
+  process(x) {
+    const y = this.b0 * x + this.z1
+    this.z1 = this.b1 * x - this.a1 * y + this.z2
+    this.z2 = this.b2 * x - this.a2 * y
+    return y
+  }
+  reset() { this.z1 = 0; this.z2 = 0 }
+}
+
+// ── LR4 Crossover (24 dB/oct, phase-matched LP + HP) ─────────────────────
+// Ported from src/lib/psy4/multiband.ts LR4Crossover.
+// Two cascaded Butterworth sections per path. |LP|+|HP| = 1 (perfect reconstruction).
+
+class LR4Crossover {
+  constructor(crossoverFreq, sampleRate) {
+    this.lp1 = new BiquadSection('lp', crossoverFreq, BUTTERWORTH_Q, sampleRate)
+    this.lp2 = new BiquadSection('lp', crossoverFreq, BUTTERWORTH_Q, sampleRate)
+    this.hp1 = new BiquadSection('hp', crossoverFreq, BUTTERWORTH_Q, sampleRate)
+    this.hp2 = new BiquadSection('hp', crossoverFreq, BUTTERWORTH_Q, sampleRate)
+  }
+  process(input) {
+    const lp = this.lp2.process(this.lp1.process(input))
+    const hp = this.hp2.process(this.hp1.process(input))
+    return [lp, hp]
+  }
+  reset() { this.lp1.reset(); this.lp2.reset(); this.hp1.reset(); this.hp2.reset() }
+}
+
+// ── Band Compressor (feed-forward peak detector + smooth envelope) ────────
+// Ported from src/lib/psy4/multiband.ts BandCompressor.
+
+class BandCompressor {
+  constructor(opts) {
+    this.threshold = Math.pow(10, opts.thresholdDb / 20)
+    this.ratio = Math.max(1, opts.ratio)
+    this.makeupGain = Math.pow(10, opts.makeupDb / 20)
+    const attackSamples = Math.max(1e-6, opts.attackMs * 0.001 * opts.sampleRate)
+    const releaseSamples = Math.max(1e-6, opts.releaseMs * 0.001 * opts.sampleRate)
+    this.attackCoeff = 1 - Math.exp(-1 / attackSamples)
+    this.releaseCoeff = 1 - Math.exp(-1 / releaseSamples)
+    this.envFollower = 0
+  }
+  process(input) {
+    const rect = Math.abs(input)
+    const coeff = rect > this.envFollower ? this.attackCoeff : this.releaseCoeff
+    this.envFollower += (rect - this.envFollower) * coeff
+    let gr = 1
+    const env = this.envFollower
+    if (env > this.threshold) {
+      const exponent = 1 - 1 / this.ratio
+      gr = Math.pow(this.threshold / env, exponent)
+    }
+    return input * gr * this.makeupGain
+  }
+  reset() { this.envFollower = 0 }
+}
+
+// ── Multiband Compressor (3-band LR4 + per-band compression) ──────────────
+// Ported from src/lib/psy4/multiband.ts MultibandCompressor.
+// Matches the offline render's master chain step 1.
+
+class MultibandCompressor {
+  constructor(opts = {}) {
+    const sr = opts.sampleRate || SR
+    const lowHz = opts.lowCrossoverHz || 200
+    const midHz = opts.midCrossoverHz || 2000
+    // Separate crossovers for L and R — each channel needs its own filter
+    // state, otherwise processing R through the same crossover as L gives
+    // R a different filter response (the state was advanced by L).
+    this.lowXoverL = new LR4Crossover(lowHz, sr)
+    this.midXoverL = new LR4Crossover(midHz, sr)
+    this.lowXoverR = new LR4Crossover(lowHz, sr)
+    this.midXoverR = new LR4Crossover(midHz, sr)
+    // Defaults match the offline MultibandCompressor (subtle mastering).
+    const compOpts = {
+      thresholdDb: -18, ratio: 2.5, attackMs: 8, releaseMs: 80, makeupDb: 2,
+      sampleRate: sr,
+    }
+    // Separate compressors per channel too (envelope follower state).
+    this.lowCompL = new BandCompressor(compOpts)
+    this.midCompL = new BandCompressor({ ...compOpts, makeupDb: 1 })
+    this.highCompL = new BandCompressor({ ...compOpts, makeupDb: 1.5 })
+    this.lowCompR = new BandCompressor(compOpts)
+    this.midCompR = new BandCompressor({ ...compOpts, makeupDb: 1 })
+    this.highCompR = new BandCompressor({ ...compOpts, makeupDb: 1.5 })
+  }
+  // Process a single stereo sample. Returns [L, R].
+  processSample(l, r) {
+    const [lowL, restL] = this.lowXoverL.process(l)
+    const [midL, highL] = this.midXoverL.process(restL)
+    const [lowR, restR] = this.lowXoverR.process(r)
+    const [midR, highR] = this.midXoverR.process(restR)
+    const lowOutL = this.lowCompL.process(lowL)
+    const midOutL = this.midCompL.process(midL)
+    const highOutL = this.highCompL.process(highL)
+    const lowOutR = this.lowCompR.process(lowR)
+    const midOutR = this.midCompR.process(midR)
+    const highOutR = this.highCompR.process(highR)
+    return [lowOutL + midOutL + highOutL, lowOutR + midOutR + highOutR]
+  }
+  reset() {
+    this.lowXoverL.reset(); this.midXoverL.reset()
+    this.lowXoverR.reset(); this.midXoverR.reset()
+  }
+}
+
+// ── Band Expander (upward + downward, for OTT) ────────────────────────────
+// Ported from src/lib/psy4/ott.ts BandExpander (with roast-fix gain clamp).
+
+class BandExpander {
+  constructor(opts) {
+    this.threshold = Math.pow(10, opts.thresholdDb / 20)
+    this.upwardGain = Math.pow(10, opts.upwardGainDb / 20)
+    this.downwardGain = Math.pow(10, opts.downwardGainDb / 20)
+    this.depth = Math.max(0, Math.min(1, opts.depth))
+    const attackSec = Math.max(1e-6, opts.attackMs / 1000)
+    const releaseSec = Math.max(1e-6, opts.releaseMs / 1000)
+    this.attackCoef = 1 - Math.exp(-1 / (attackSec * opts.sampleRate))
+    this.releaseCoef = 1 - Math.exp(-1 / (releaseSec * opts.sampleRate))
+    this.env = 0
+  }
+  process(x) {
+    const abs = Math.abs(x)
+    const coef = abs > this.env ? this.attackCoef : this.releaseCoef
+    this.env += (abs - this.env) * coef
+    let gain = 1
+    if (this.env > this.threshold) {
+      const over = this.env / this.threshold
+      gain = Math.pow(this.downwardGain, Math.log2(over))
+    } else if (this.env > 1e-6) {
+      const under = this.threshold / Math.max(this.env, 1e-6)
+      gain = Math.pow(this.upwardGain, Math.log2(under))
+    }
+    // Roast-fix: clamp gain to ±40 dB (0.01..100) — matches offline OTT.
+    gain = Math.max(0.01, Math.min(100, gain))
+    const wetGain = 1 + (gain - 1) * this.depth
+    return x * wetGain
+  }
+  reset() { this.env = 0 }
+}
+
+// ── OTT (3-band upward+downward multiband expander) ───────────────────────
+// Ported from src/lib/psy4/ott.ts OTT (with roast-fix param clamps).
+// Matches the offline render's master chain step 1b.
+
+class OTT {
+  constructor(opts = {}) {
+    const sr = opts.sampleRate || SR
+    const lowHz = opts.lowCrossoverHz || 200
+    const midHz = opts.midCrossoverHz || 2000
+    // Roast-fix: clamp params — matches offline OTT.
+    const depth = Math.max(0, Math.min(1, opts.depth ?? 0.3))
+    const upwardDb = Math.max(0, Math.min(12, opts.upwardGainDb ?? 2))
+    const downwardDb = Math.max(-12, Math.min(0, opts.downwardGainDb ?? -2))
+    const thresholdDb = opts.thresholdDb ?? -24
+    const attackMs = opts.attackMs ?? 2
+    const releaseMs = opts.releaseMs ?? 100
+    this.depth = depth
+    this.enabled = depth > 0.001
+    // Separate crossovers for L and R (same fix as MultibandCompressor).
+    this.lowXoverL = new LR4Crossover(lowHz, sr)
+    this.midXoverL = new LR4Crossover(midHz, sr)
+    this.lowXoverR = new LR4Crossover(lowHz, sr)
+    this.midXoverR = new LR4Crossover(midHz, sr)
+    const expOpts = {
+      thresholdDb, upwardGainDb: upwardDb, downwardGainDb: downwardDb,
+      depth, attackMs, releaseMs, sampleRate: sr,
+    }
+    // Separate expanders per channel too (envelope follower state).
+    this.lowExpL = new BandExpander(expOpts)
+    this.midExpL = new BandExpander({ ...expOpts, upwardGainDb: upwardDb * 0.8 })
+    this.highExpL = new BandExpander({ ...expOpts, upwardGainDb: upwardDb * 1.2 })
+    this.lowExpR = new BandExpander(expOpts)
+    this.midExpR = new BandExpander({ ...expOpts, upwardGainDb: upwardDb * 0.8 })
+    this.highExpR = new BandExpander({ ...expOpts, upwardGainDb: upwardDb * 1.2 })
+  }
+  processSample(l, r) {
+    if (!this.enabled) return [l, r]
+    const [lowL, restL] = this.lowXoverL.process(l)
+    const [midL, highL] = this.midXoverL.process(restL)
+    const [lowR, restR] = this.lowXoverR.process(r)
+    const [midR, highR] = this.midXoverR.process(restR)
+    const outL = this.lowExpL.process(lowL) + this.midExpL.process(midL) + this.highExpL.process(highL)
+    const outR = this.lowExpR.process(lowR) + this.midExpR.process(midR) + this.highExpR.process(highR)
+    return [outL, outR]
+  }
+  reset() {
+    this.lowXoverL.reset(); this.midXoverL.reset()
+    this.lowXoverR.reset(); this.midXoverR.reset()
+  }
+}
+
 // ── AudioWorklet Processor (13 voices + per-voice pan + master chain) ──
 // Phase B: replaced Haas fake stereo with per-voice pan + added master chain
 
@@ -313,6 +534,23 @@ class PSY4Processor extends AudioWorkletProcessor {
 
     // Phase B: M/S stereo widener state
     this.msWidth = 1.3 // stereo width factor
+
+    // Roast-fix-10: multiband compressor + OTT — ported from offline render.
+    // These match the offline forensic-bridge master chain steps 1 + 1b,
+    // so the real-time path now has the same mastering quality as the
+    // offline render. Previously the worklet only had saturation + M/S +
+    // simple limiter, missing the multiband + OTT that give psytrance its
+    // "glued" sound.
+    this.multiband = new MultibandCompressor({ sampleRate: SR })
+    this.ott = new OTT({
+      sampleRate: SR,
+      depth: 0.3,         // 30% — gentle, not full OTT (matches offline)
+      upwardGainDb: 2,
+      downwardGainDb: -2,
+      thresholdDb: -24,
+      attackMs: 2,
+      releaseMs: 100,
+    })
 
     this.allVoices = [...this.leadVoices, ...this.bassVoices, ...this.padVoices, this.acidVoice]
 
@@ -423,6 +661,16 @@ class PSY4Processor extends AudioWorkletProcessor {
       // ── 3. Master gain ──
       let outL = duckedL * this.masterGain
       let outR = duckedR * this.masterGain
+
+      // ── 3b. Multiband compressor + OTT (Roast-fix-10) ──
+      // Ported from the offline render. These add the "glued" mastering
+      // sound that was missing from the real-time path.
+      const mbOut = this.multiband.processSample(outL, outR)
+      outL = mbOut[0]
+      outR = mbOut[1]
+      const ottOut = this.ott.processSample(outL, outR)
+      outL = ottOut[0]
+      outR = ottOut[1]
 
       // ── 4. Soft saturation (tanh) ──
       outL = Math.tanh(outL * 1.2) * 0.7 + outL * 0.3
