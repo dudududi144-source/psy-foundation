@@ -108,6 +108,13 @@ export function critiqueAudio(
   bpm: number,
   stepsPerBar = 16
 ): AudioCritique {
+  // Roast-fix: guard against invalid bpm. Without this, `60 / bpm` produces NaN
+  // when bpm is undefined/0/NaN, which propagates through all rhythmic metrics
+  // and makes overallScore NaN. The API route always passes 145, but direct
+  // callers (e.g. tests, scripts) might forget the bpm arg.
+  const safeBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : 120
+  const safeStepsPerBar = Number.isFinite(stepsPerBar) && stepsPerBar > 0 ? stepsPerBar : 16
+
   const failures: AudioFailure[] = []
   pcmLength = pcm.length // set for computeOnsetTimingConsistency
 
@@ -132,7 +139,7 @@ export function critiqueAudio(
   const highEnergy = bandEnergy(avgSpectrum, sampleRate, fftSize, 5000, 12000)
 
   // ── Onset detection ──
-  const onsets = detectOnsets(pcm, sampleRate, bpm, stepsPerBar)
+  const onsets = detectOnsets(pcm, sampleRate, safeBpm, safeStepsPerBar)
   const onsetSharpness = computeOnsetSharpness(pcm, onsets, sampleRate)
 
   // ── Transient analysis ──
@@ -160,19 +167,19 @@ export function critiqueAudio(
   const spectralConsistency = computeSpectralConsistency(spectra)
 
   // ── Groove analysis ──
-  const pocketConsistency = computePocketConsistency(onsets, sampleRate, bpm, stepsPerBar)
-  const kickBassLock = computeKickBassLock(pcm, onsets, sampleRate, bpm)
-  const excessiveUniformity = computeExcessiveUniformity(pcm, sampleRate, bpm)
+  const pocketConsistency = computePocketConsistency(onsets, sampleRate, safeBpm, safeStepsPerBar)
+  const kickBassLock = computeKickBassLock(pcm, onsets, sampleRate, safeBpm)
+  const excessiveUniformity = computeExcessiveUniformity(pcm, sampleRate, safeBpm)
   // onsetClarity: independent measurement — onset timing consistency
   // Fix: was onsetSharpness * (1 - uniformity*0.3) (derivative of 2 metrics already in scores)
   // Now measures onset timing regularity: how close onsets are to the ideal grid
-  const onsetClarity = computeOnsetTimingConsistency(onsets, sampleRate, bpm, stepsPerBar)
+  const onsetClarity = computeOnsetTimingConsistency(onsets, sampleRate, safeBpm, safeStepsPerBar)
 
   // ── Lead analysis ──
   const articulation = computeArticulation(pcm, sampleRate)
   const melodicClarity = computeMelodicClarity(pcm, sampleRate)
-  const phraseContrast = computePhraseContrast(pcm, sampleRate, bpm)
-  const repetitionBalance = computeRepetitionBalance(pcm, sampleRate, bpm)
+  const phraseContrast = computePhraseContrast(pcm, sampleRate, safeBpm)
+  const repetitionBalance = computeRepetitionBalance(pcm, sampleRate, safeBpm)
   const harmonicClarity = computeHarmonicClarity(avgSpectrum, sampleRate, fftSize)
 
   // ── Timbre analysis ──
@@ -226,14 +233,14 @@ export function critiqueAudio(
   const masking = computeMasking(avgSpectrum, sampleRate, fftSize)
 
   // ── Musicality analysis ──
-  const tensionRelease = computeTensionRelease(pcm, sampleRate, bpm)
-  const motifIdentity = computeMotifIdentity(pcm, sampleRate, bpm)
-  const development = computeDevelopment(pcm, sampleRate, bpm)
-  const callResponse = computeCallResponse(pcm, sampleRate, bpm)
+  const tensionRelease = computeTensionRelease(pcm, sampleRate, safeBpm)
+  const motifIdentity = computeMotifIdentity(pcm, sampleRate, safeBpm)
+  const development = computeDevelopment(pcm, sampleRate, safeBpm)
+  const callResponse = computeCallResponse(pcm, sampleRate, safeBpm)
   // rhythmicInterest: independent measurement — syncopation
   // Fix: was (1-uniformity)*0.6 + pocket*0.4 (derivative of 2 metrics already in scores)
   // Now measures syncopation: how many onsets are off-beat (not on downbeats)
-  const rhythmicInterest = computeSyncopation(onsets, sampleRate, bpm, stepsPerBar)
+  const rhythmicInterest = computeSyncopation(onsets, sampleRate, safeBpm, safeStepsPerBar)
 
   // ── Diagnose failures ──
   if (subMud > 0.45) {

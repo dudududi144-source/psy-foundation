@@ -284,7 +284,15 @@ export async function renderFoundationSection(
   const stemsMusicL = stemsEnabled ? new Float32Array(totalSamples) : null
   const stemsMusicR = stemsEnabled ? new Float32Array(totalSamples) : null
 
-  const rng = new Rng(42)
+  // Roast-fix: use the section's seed for the render RNG, not a hardcoded 42.
+  // Without this, all renders with different CompositionEngine seeds produce
+  // bit-identical audio (the section's bars/phrases differ, but the voice
+  // excitation patterns — waveguide noise, filter modulation, etc. — were
+  // always seeded with 42, masking the seed effect on the actual audio).
+  // Verified: before fix, seeds 42/100/200/300 all produced the same MD5;
+  // after fix, they produce different MD5s.
+  const renderSeed = section.seed ?? 42
+  const rng = new Rng(renderSeed)
 
   // ── Voice pools ──
   const kicks = [new PsyKick(rng), new PsyKick(rng), new PsyKick(rng), new PsyKick(rng)]
@@ -883,8 +891,10 @@ export async function renderFoundationSection(
   events.sort((a, b) => a.pos - b.pos)
 
   // ── Apply humanization (from PSYSTAR humanizer) ──
-  // Subtle velocity jitter + timing drift for human feel
-  const humanRng = mulberry32(42)
+  // Subtle velocity jitter + timing drift for human feel.
+  // Roast-fix: use the section's seed for humanization RNG too, so
+  // different seeds produce different humanization patterns (was hardcoded 42).
+  const humanRng = mulberry32(renderSeed)
   const humanAmount = 0.3 // subtle (0..1)
   for (const ev of events) {
     // Velocity jitter (not on kick — kick needs consistency)

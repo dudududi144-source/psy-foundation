@@ -652,3 +652,137 @@ describe('Roast Fix 4: AIFF writeExtendedFloat supports all sample rates', () =>
     expect(exponent).toBe(0x400d)
   })
 })
+
+// ─── Roast Fix 6: audio-critic bpm guard + render seed propagation ────────
+
+describe('Roast Fix 6: audio-critic guards against invalid bpm', () => {
+  test('critiqueAudio with bpm=undefined returns finite score (was NaN)', async () => {
+    const { critiqueAudio } = await import('@/lib/psy4/audio-critic')
+    const sr = 44100
+    const mono = new Float32Array(sr)
+    for (let i = 0; i < mono.length; i++) mono[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / sr)
+    const r = critiqueAudio(mono, sr, undefined as unknown as number, 16)
+    expect(Number.isFinite(r.overallScore)).toBe(true)
+  })
+
+  test('critiqueAudio with bpm=0 returns finite score', async () => {
+    const { critiqueAudio } = await import('@/lib/psy4/audio-critic')
+    const sr = 44100
+    const mono = new Float32Array(sr)
+    for (let i = 0; i < mono.length; i++) mono[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / sr)
+    const r = critiqueAudio(mono, sr, 0, 16)
+    expect(Number.isFinite(r.overallScore)).toBe(true)
+  })
+
+  test('critiqueAudio with bpm=NaN returns finite score', async () => {
+    const { critiqueAudio } = await import('@/lib/psy4/audio-critic')
+    const sr = 44100
+    const mono = new Float32Array(sr)
+    for (let i = 0; i < mono.length; i++) mono[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / sr)
+    const r = critiqueAudio(mono, sr, Number.NaN, 16)
+    expect(Number.isFinite(r.overallScore)).toBe(true)
+  })
+
+  test('critiqueAudio with negative bpm returns finite score', async () => {
+    const { critiqueAudio } = await import('@/lib/psy4/audio-critic')
+    const sr = 44100
+    const mono = new Float32Array(sr)
+    for (let i = 0; i < mono.length; i++) mono[i] = 0.3 * Math.sin((2 * Math.PI * 440 * i) / sr)
+    const r = critiqueAudio(mono, sr, -100, 16)
+    expect(Number.isFinite(r.overallScore)).toBe(true)
+  })
+})
+
+describe('Roast Fix 6: render seed propagation (was hardcoded 42)', () => {
+  test('different seeds produce different audio outputs', async () => {
+    const { renderFoundationSection, DEFAULT_RENDER_CONFIG } = await import(
+      '@/lib/psy4/forensic-bridge'
+    )
+    const { CompositionEngine, createIdentityA } = await import('@psy-foundation/music')
+    const { createHash } = await import('node:crypto')
+
+    const ctx = {
+      tonic: 4,
+      scaleName: 'phrygian-dominant',
+      octave: 4,
+      bpm: 145,
+      beatsPerBar: 4,
+      beatPosition: 0,
+      barPosition: 0,
+      phrasePosition: 0,
+      harmonicContext: [],
+      density: 0.7,
+      energy: 0.7,
+      tension: 0.3,
+      sectionRole: 'full-on' as const,
+      repetitionPressure: 0.3,
+      noveltyPressure: 0.5,
+    }
+
+    const hashes: string[] = []
+    for (const seed of [42, 100, 200, 300]) {
+      const engine = new CompositionEngine({
+        seed,
+        context: { ...ctx, seed },
+        identity: createIdentityA(),
+      })
+      const section = engine.composeSection({ bars: 8 })
+      const result = await renderFoundationSection(section, {
+        useSamples: false,
+        bpm: 145,
+        config: DEFAULT_RENDER_CONFIG,
+      })
+      const hash = createHash('md5')
+        .update(Buffer.from(result.samplesL.buffer))
+        .digest('hex')
+        .slice(0, 16)
+      hashes.push(hash)
+    }
+
+    // All 4 hashes must be different
+    const uniqueHashes = new Set(hashes)
+    expect(uniqueHashes.size).toBe(4)
+  }, 30000)
+
+  test('seed=42 still matches the snapshot baseline (determinism preserved)', async () => {
+    const { renderFoundationSection, encodeWav, DEFAULT_RENDER_CONFIG } = await import(
+      '@/lib/psy4/forensic-bridge'
+    )
+    const { CompositionEngine, createIdentityA } = await import('@psy-foundation/music')
+    const { createHash } = await import('node:crypto')
+
+    const ctx = {
+      tonic: 4,
+      scaleName: 'phrygian-dominant',
+      octave: 4,
+      bpm: 145,
+      beatsPerBar: 4,
+      beatPosition: 0,
+      barPosition: 0,
+      phrasePosition: 0,
+      harmonicContext: [],
+      density: 0.7,
+      energy: 0.7,
+      tension: 0.3,
+      sectionRole: 'full-on' as const,
+      repetitionPressure: 0.3,
+      noveltyPressure: 0.5,
+    }
+
+    const engine = new CompositionEngine({
+      seed: 42,
+      context: { ...ctx, seed: 42 },
+      identity: createIdentityA(),
+    })
+    const section = engine.composeSection({ bars: 8 })
+    const result = await renderFoundationSection(section, {
+      useSamples: true,
+      bpm: 145,
+      config: { ...DEFAULT_RENDER_CONFIG, bassGain: 0.8, subBassGain: 0.6, padGain: 0.7 },
+    })
+    const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
+    const hash = createHash('md5').update(Buffer.from(wav)).digest('hex')
+    // Baseline from roast-fix-3 (after K-weighting correction)
+    expect(hash).toBe('b01123b3e7c33a29f3f83671cc02dc4a')
+  })
+})
