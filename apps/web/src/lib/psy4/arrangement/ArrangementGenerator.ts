@@ -195,11 +195,15 @@ export class ArrangementGenerator {
   }
 
   private hashString(s: string): string {
+    // Roast-fix: removed 'hash = hash & hash' which is a no-op (identity).
+    // The intent was to keep the hash as a 32-bit signed integer, but in JS
+    // all bitwise operations already operate on 32-bit integers, so the
+    // explicit mask is unnecessary. The hash is converted to unsigned via
+    // Math.abs() below.
     let hash = 0
     for (let i = 0; i < s.length; i++) {
       const char = s.charCodeAt(i)
       hash = (hash << 5) - hash + char
-      hash = hash & hash
     }
     return Math.abs(hash).toString(16).padStart(8, '0')
   }
