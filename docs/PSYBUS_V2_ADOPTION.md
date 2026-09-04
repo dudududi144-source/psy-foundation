@@ -104,20 +104,23 @@ never defines it — deferred with the `PsyBus` runtime), `state.Material` / `Ma
 `MusicalAction` / `MusicalOutcome` / `Experience` (learning-domain records, not envelope
 styles).
 
-## 4. Package wiring (the one line the integrator must apply)
+## 4. Package wiring (APPLIED by the integrator)
 
-`packages/protocol/package.json` today exports only `"."`. Everything v2 is reachable from
-`packages/protocol/src/v2.ts`, which is **not** importable as a subpath until the exports map
-gains one line:
+Both wiring steps are now applied:
 
 ```jsonc
 // packages/protocol/package.json → "exports"
 "exports": { ".": "./src/index.ts", "./v2": "./src/v2.ts" }
 ```
 
-Alternative (also one line, if the integrator prefers the root entry):
-`export * from './v2.ts'` appended to `packages/protocol/src/index.ts`.
-The v2 module is self-contained (no edits to any other file are required, none were made).
+```ts
+// packages/protocol/src/index.ts (appended) — root entry namespace
+export * as v2 from './v2.ts'
+```
+
+So consumers can `import { v2 } from '@psy-foundation/protocol'` or
+`import { buildEnvelope } from '@psy-foundation/protocol/v2'`.
+The v2 module is self-contained (no other file edits were needed).
 
 ## 5. Verification (measured)
 

@@ -4,7 +4,9 @@
   "description": "Sync lab — simulate devices A/B/C and show BPM, beat, bar, phase, offset, jitter, drift, relock.",
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "bun test",
     "build": "tsc -p tsconfig.json",
@@ -18,5 +20,14 @@
     "@psy-foundation/device-sdk": "workspace:*",
     "@psy-foundation/fixtures": "workspace:*"
   },
-  "devDependencies": { "typescript": "^5.6.0", "@types/bun": "latest" }
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/bun": "latest"
+  },
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dudududi144-source/psy-foundation.git"
+  }
 }

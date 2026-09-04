@@ -4,7 +4,9 @@
   "description": "Reference lab — browser research tool. Feed stream/audio → BPM, beat grid, phase, confidence, key, energy, features, sections.",
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "bun test",
     "build": "tsc -p tsconfig.json",
@@ -16,5 +18,14 @@
     "@psy-foundation/analysis": "workspace:*",
     "@psy-foundation/fixtures": "workspace:*"
   },
-  "devDependencies": { "typescript": "^5.6.0", "@types/bun": "latest" }
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/bun": "latest"
+  },
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dudududi144-source/psy-foundation.git"
+  }
 }

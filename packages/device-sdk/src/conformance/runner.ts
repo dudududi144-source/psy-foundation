@@ -8,7 +8,7 @@
  * the suite always completes with a full report.
  */
 
-import type { PsyDevice } from '../src/device.ts'
+import type { PsyDevice } from '../device.ts'
 import { CONFORMANCE_CHECKS } from './checks.ts'
 import type { CheckContext, ConformanceCheckResult } from './checks.ts'
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { MusicalEvent } from '@psy-foundation/protocol'
-import { runDeviceConformance } from '../conformance/runner.ts'
+import { runDeviceConformance } from '../src/conformance/runner.ts'
 import type { PsyDevice } from '../src/device.ts'
 import { ReferenceDevice } from '../src/reference.ts'
 

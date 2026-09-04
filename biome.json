@@ -9,6 +9,7 @@
       "**/.bun/**",
       "**/coverage/**",
       "**/public/**",
+      "release/**",
       "**/*.json",
       "**/next.config.mjs",
       "**/postcss.config.mjs",

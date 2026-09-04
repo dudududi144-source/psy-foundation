@@ -106,6 +106,37 @@ function ffmpegLoudness(file) {
 async function main() {
   console.log(`\nPSY Foundation — verify @ ${new Date().toISOString()}\n`)
 
+  // ── release version integrity (PLAN_V3 3.1; no server needed) ────────────
+  {
+    const rootPkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'))
+    const versionTs = readFileSync(join(process.cwd(), 'packages/dsp/src/version.ts'), 'utf8')
+    const constMatch = versionTs.match(/FOUNDATION_VERSION\s*=\s*'([^']+)'/)
+    const workletPath = join(process.cwd(), 'apps/web/public/worklets/psy4-processor.js')
+    let workletVersion = null
+    try {
+      workletVersion =
+        (readFileSync(workletPath, 'utf8').match(/PSY-FOUNDATION-VERSION:\s*(\S+)/) ?? [])[1] ??
+        null
+    } catch {
+      /* artifact missing → claim fails below */
+    }
+    let bundleVersion = null
+    try {
+      bundleVersion =
+        (readFileSync(join(process.cwd(), 'release/psy-foundation.esm.js'), 'utf8').match(
+          /PSY-FOUNDATION-VERSION:\s*(\S+)/
+        ) ?? [])[1] ?? null
+    } catch {
+      /* artifact missing → claim fails below */
+    }
+    const all = [rootPkg.version, constMatch?.[1] ?? null, workletVersion, bundleVersion]
+    claim(
+      'release-version-integrity',
+      all.every((v) => v === rootPkg.version),
+      `package.json=${rootPkg.version} version.ts=${constMatch?.[1] ?? 'MISSING'} worklet=${workletVersion ?? 'MISSING'} bundle=${bundleVersion ?? 'MISSING'}`
+    )
+  }
+
   // ── boot server ──────────────────────────────────────────────────────────
   console.log('Booting dev server…')
   const server = spawn('bun', ['run', 'dev'], {

@@ -13,5 +13,14 @@
     "@psy-foundation/device-sdk": "workspace:*",
     "@psy-foundation/fixtures": "workspace:*"
   },
-  "devDependencies": { "typescript": "^5.6.0", "@types/bun": "latest" }
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/bun": "latest"
+  },
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dudududi144-source/psy-foundation.git"
+  }
 }

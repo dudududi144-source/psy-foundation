@@ -33,5 +33,10 @@
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dudududi144-source/psy-foundation.git"
   }
 }

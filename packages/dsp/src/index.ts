@@ -68,3 +68,6 @@ export { TruePeakLimiter } from './master/limiter.ts'
 export type { TruePeakLimiterOptions } from './master/limiter.ts'
 export { measureLUFS, lufsToGainOffset } from './master/loudness.ts'
 export type { LUFSResult } from './master/loudness.ts'
+
+/** Release version of the foundation (single source of truth — see version.ts). */
+export { FOUNDATION_VERSION } from './version.ts'

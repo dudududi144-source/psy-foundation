@@ -23,3 +23,6 @@ export type {
 } from './state.ts'
 export type { Channel, ChannelListener, Unsubscribe } from './channel.ts'
 export { InMemoryChannel } from './channel.ts'
+
+/** PSYBUS v2 — the canonical bus envelope (phase 3.6). Legacy shapes above are deprecated in favor of it. */
+export * as v2 from './v2.ts'

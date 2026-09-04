@@ -1,6 +1,6 @@
 # Device Conformance Suite (phase 3.4)
 
-`runDeviceConformance(makeDevice, opts?)` is the runnable replacement for the
+`runDeviceConformance(makeDevice, opts?)` in `packages/device-sdk/src/conformance/` is the runnable replacement for the
 old "shim-sync" test that skipped in CI: each PSY device repo runs the suite
 **against itself**, in its own CI, and either passes or fails with named
 checks. No test-framework imports — it returns a plain report object, so it
@@ -19,17 +19,17 @@ if (!report.pass) throw new Error('device is not conformance-clean')
 
 Import notes:
 
+- **From any repo that depends on the foundation**: the suite is part of the
+  package's public API — `import { runDeviceConformance } from '@psy-foundation/device-sdk'`.
 - **Inside the psy-foundation workspace**: import by relative path
-  (`../../device-sdk/conformance/index.ts` from a sibling package, or
-  `../conformance/index.ts` from within device-sdk). Typecheck it with
-  `bunx tsc -p packages/device-sdk/conformance/tsconfig.json --noEmit`.
+  (`../src/conformance/index.ts` from a device-sdk test, or
+  `../../device-sdk/src/conformance/index.ts` from a sibling package).
 - **From an external device repo** (psy-sampler-style, dependency not yet
-  published to npm): add the foundation workspace dependency, or vendor the
-  four files in this directory (`checks.ts`, `runner.ts`, `index.ts`,
-  `tsconfig.json` — no runtime deps beyond the `PsyDevice`/protocol types you
-  already mirror). The package `exports` map does not yet expose a
-  `./conformance` subpath (owner-gated `package.json` change — tracked as a
-  follow-up); until then, deep subpath imports will not resolve.
+  published to npm): add the foundation workspace dependency, vendor the three
+  files in `packages/device-sdk/src/conformance/` (`checks.ts`, `runner.ts`,
+  `index.ts` — no runtime deps beyond the `PsyDevice`/protocol types you
+  already mirror), or import from the release ESM bundle
+  (`deviceSdk.runDeviceConformance`).
 
 ## Options
 

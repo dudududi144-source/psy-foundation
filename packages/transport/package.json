@@ -1,14 +1,26 @@
 {
   "name": "@psy-foundation/transport",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "type": "module",
   "main": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "bun test",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "biome check src"
   },
-  "devDependencies": { "typescript": "^5.6.0" }
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dudududi144-source/psy-foundation.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

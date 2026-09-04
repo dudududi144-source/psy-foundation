@@ -9,7 +9,7 @@
 
 import type { BeatEvent, MusicalEvent, NoteEvent } from '@psy-foundation/protocol'
 import type { MusicalTransport } from '@psy-foundation/transport'
-import type { PsyDevice } from '../src/device.ts'
+import type { PsyDevice } from '../device.ts'
 
 export interface ConformanceCheckResult {
   /** Stable check id, e.g. 'C1'. */
@@ -194,7 +194,7 @@ export const checkCapabilities: CheckFn = (ctx) => {
     if (first === null || typeof first !== 'object') {
       problems.push(`capabilities is ${String(first)}, not an object`)
     } else {
-      const c = first as Record<string, unknown>
+      const c = first as unknown as Record<string, unknown>
       if (typeof c.audio !== 'boolean') problems.push('audio is not a boolean')
       if (typeof c.midi !== 'boolean') problems.push('midi is not a boolean')
       for (const key of ['inputs', 'outputs', 'voices'] as const) {
