@@ -3998,3 +3998,17 @@ Work Log:
 
 Stage Summary:
 - One DSP is real: limiter/multiband/OTT/LUFS/ZDFSVF each exist in exactly ONE implementation, used by offline render AND the generated worklet. Fake LufsMeter gone. OTT per-channel bug fixed with locked behavior tests. Backlog: none blocking from 1.1.
+
+---
+Task ID: 5-b
+Agent: Z.ai Code (lead engineer + metrics subagent)
+Task: Phase 2 honest metrics (DECISIONS_V3 D8.1–D8.6).
+
+Work Log:
+- Subagent executed D8.1–D8.4 + D8.6 (both critics de-gamed, contextKey fix, data/*.json + vanity benchmark deleted, docs corrected, responsiveness tests); timed out before D8.5/gates/commit.
+- Lead completion: verified no hidden constants in the new metric implementations (unknown→0.5/null conventions documented; thresholds recalibrated on honest scales); added the missing D8.5 lock — full-on composition behavior test over 5 seeds (lead-bearing states MUST emit lead notes; lead-off states MUST stay silent) after confirming via probe that Phase 1's seeding work already resolved the original leadNotes=0 root cause.
+- Five Gates: bun test 867/0 (+14 behavior tests), tsc 0, biome 0, verify --quick 19/19.
+- Commits 9a00067 (+75dad8a, 1a3b21e) PUSHED to origin/main (bd2d77f..9a00067).
+
+Stage Summary:
+- Critics can no longer pass audio with fabricated constants; every metric is a real measurement or an honest unknown. All Phase 0+1+2 plan items from PLAN_V3_MASTER are now COMPLETE and pushed. Remaining roadmap: Phase 3 (family adoption path), Phase 4 (product: rate limiting, streaming, UI tools), Phase 5 (VST decision). Full (non-quick) verify launched for final confirmation.
