@@ -3970,3 +3970,16 @@ Stage Summary:
 - Phase 1 core GATE: GREEN. The repo's worst DSP bugs (C3 limiter, unstable filter, SR lie, render nondeterminism) are fixed and behavior-tested.
 - Discovered for backlog: composition engine produces ZERO leadNotes at seed 42/full-on/4 bars (F22 was passing on render noise) — Phase 2 investigation.
 - Commits pushed to origin/main.
+
+---
+Task ID: 5-prep
+Agent: Z.ai Code (lead engineer)
+Task: Architectural decisions for Phase 1.1 (One DSP) + Phase 2 (honest metrics).
+
+Work Log:
+- Reconned current state: master chain files (limiter/ott/multiband/loudness ~1.1k LOC) consumed only inside psy4 (index, forensic-bridge, reference-analyzer); zero web tests import them directly; fake LufsMeter used only by dsp's own tests; contextKey bpmBin(ctx.energy) confirmed at packages/learning/src/contextKey.ts:34.
+- Wrote docs/DECISIONS_V3.md — D1 master chain → packages/dsp, no shims; D2 sampleRate required; D3 OTT per-channel expanders; D4 one ZDF SVF; D5 fake LufsMeter dies; D6 worklet becomes build artifact via scripts/build-worklet.mjs (Bun.build) from TS source importing dsp; D7 parity fixtures captured BEFORE move; D8 Phase 2 honesty (critic de-gaming both copies, contextKey term removed, data/*.json deleted, vanity benchmark deleted, leadNotes=0 fix, grep tests rewritten).
+- Explicit non-goals: transport v0 deletion, critic consolidation, pipeline-as-library, family repos.
+
+Stage Summary:
+- Decision record committed. Launching Task 5-a (One DSP migration) as subagent; 5-b (honest metrics) follows sequentially per charter.
