@@ -62,7 +62,21 @@ export async function GET(req: NextRequest) {
     mono[i] = ((result.samplesL[i] ?? 0) + (result.samplesR[i] ?? 0)) * 0.5
   }
 
-  const critique = critiqueAudio(mono, result.sampleRate, 145, 16)
+  // D8.1: supply stereo channels + the composed lead notes so the critic's
+  // stereoContrast / melodicClarity / motifIdentity / callResponse are REAL
+  // measurements instead of constants or spectral stand-ins.
+  const notes = section.bars.flatMap((bar) =>
+    bar.leadNotes.map((n) => ({
+      pitchMidi: n.midi,
+      startStep: bar.barIndex * section.groove.stepsPerBar + n.step,
+      durationSteps: n.durationSteps,
+      velocity: n.velocity,
+    }))
+  )
+  const critique = critiqueAudio(mono, result.sampleRate, 145, 16, {
+    stereo: { left: result.samplesL, right: result.samplesR },
+    notes,
+  })
 
   // Reference profile (new in v6.7)
   const analysis = analyzeReference(result.samplesL, result.samplesR, result.sampleRate)

@@ -66,7 +66,13 @@ export interface AudioCritique {
     lowMidMud: number
     harshness: number
     highEndPresence: number
-    stereoContrast: number
+    /**
+     * Real inter-channel contrast: RMS(L−R) / RMS(L+R), clamped to [0,1].
+     * 0 = mono content, →1 = decorrelated / hard-panned content.
+     * `null` when no stereo audio was supplied (mono-only input) — honesty
+     * over fabrication. (Was a mislabeled SPECTRAL contrast measurement.)
+     */
+    stereoContrast: number | null
     dynamicRange: number
     masking: number
   }
@@ -94,6 +100,31 @@ export interface AudioFailure {
   severity: number
 }
 
+/** A note event the critic can use for note-level (not spectral) metrics. */
+export interface CriticNoteEvent {
+  /** MIDI pitch. */
+  pitchMidi: number
+  /** Onset position in steps from the start of the section (absolute). */
+  startStep: number
+  /** Duration in steps. */
+  durationSteps?: number
+  /** Velocity 0..1. */
+  velocity?: number
+}
+
+/**
+ * Optional inputs for metrics that need more than mono PCM.
+ * Phase 2 honesty (D8.1): a metric whose required input is absent must return
+ * `null` (stereoContrast) or fall back to a real spectral/onset measurement —
+ * NEVER a hardcoded constant.
+ */
+export interface CriticExtras {
+  /** Inter-channel audio — enables a REAL stereoContrast measurement. Without it stereoContrast is `null`. */
+  stereo?: { left: Float32Array; right: Float32Array }
+  /** Lead-line note events — enable note-based melodicClarity / motifIdentity / callResponse. */
+  notes?: CriticNoteEvent[]
+}
+
 /**
  * Analyze a rendered PCM buffer and return an actionable critique.
  *
@@ -101,12 +132,14 @@ export interface AudioFailure {
  * @param sampleRate — sample rate
  * @param bpm — BPM (for rhythmic analysis)
  * @param stepsPerBar — steps per bar (for onset grid analysis)
+ * @param extras — optional stereo audio + note events (see CriticExtras)
  */
 export function critiqueAudio(
   pcm: Float32Array,
   sampleRate: number,
   bpm: number,
-  stepsPerBar = 16
+  stepsPerBar = 16,
+  extras?: CriticExtras
 ): AudioCritique {
   // Roast-fix: guard against invalid bpm. Without this, `60 / bpm` produces NaN
   // when bpm is undefined/0/NaN, which propagates through all rhythmic metrics
@@ -177,7 +210,12 @@ export function critiqueAudio(
 
   // ── Lead analysis ──
   const articulation = computeArticulation(pcm, sampleRate)
-  const melodicClarity = computeMelodicClarity(pcm, sampleRate)
+  // D8.1: prefer real note-event data when supplied; otherwise a spectral
+  // tonality proxy (peak-energy ratio — NO centroid buckets).
+  const melodicClarity =
+    extras?.notes && extras.notes.length >= 4
+      ? computeMelodicClarityFromNotes(extras.notes)
+      : computeMelodicClaritySpectral(avgSpectrum)
   const phraseContrast = computePhraseContrast(pcm, sampleRate, safeBpm)
   const repetitionBalance = computeRepetitionBalance(pcm, sampleRate, safeBpm)
   const harmonicClarity = computeHarmonicClarity(avgSpectrum, sampleRate, fftSize)
@@ -220,23 +258,28 @@ export function critiqueAudio(
   const highEndPresence =
     highEnergy /
     Math.max(0.01, subEnergy + bassEnergy + lowMidEnergy + midEnergy + highMidEnergy + highEnergy)
-  // stereoContrast: measured from the spectral difference between low and high bins
-  // (a proxy for stereo width when we only have mono — wide mixes have more high-freq
-  // energy relative to low because reverb/delay add high-end ambience).
-  // spectralContrast: measures the dynamic range of the spectrum itself.
-  // High contrast = peaks (harmonics) stand out from valleys (noise floor).
-  // Low contrast = flat spectrum (noise-like).
-  // This replaces the old "stereoContrast" which was actually high/low ratio
-  // (same as highEndPresence — redundant).
-  const spectralContrastRaw = computeSpectralContrast(avgSpectrum)
-  const stereoContrast = spectralContrastRaw
+  // D8.1: REAL inter-channel contrast (RMS of L−R over RMS of L+R) when
+  // stereo audio is supplied; `null` otherwise. Was computeSpectralContrast()
+  // — a mislabeled spectral measurement that never measured stereo.
+  const stereoContrast: number | null = extras?.stereo
+    ? computeStereoContrast(extras.stereo.left, extras.stereo.right)
+    : null
   const masking = computeMasking(avgSpectrum, sampleRate, fftSize)
 
   // ── Musicality analysis ──
   const tensionRelease = computeTensionRelease(pcm, sampleRate, safeBpm)
-  const motifIdentity = computeMotifIdentity(pcm, sampleRate, safeBpm)
+  // D8.1: real self-similarity — n-gram repetition of the note sequence when
+  // notes are supplied, else onset-pattern autocorrelation at bar lags.
+  const motifIdentity =
+    extras?.notes && extras.notes.length >= 4
+      ? computeMotifIdentityFromNotes(extras.notes, safeStepsPerBar)
+      : computeOnsetPatternAutocorrelation(onsets, safeStepsPerBar)
   const development = computeDevelopment(pcm, sampleRate, safeBpm)
-  const callResponse = computeCallResponse(pcm, sampleRate, safeBpm)
+  // D8.1: real phrase-echo detection. Was: correlation × 2 + 0.3 floor.
+  const callResponse =
+    extras?.notes && extras.notes.length >= 4
+      ? computeCallResponseFromNotes(extras.notes, safeStepsPerBar)
+      : computeCallResponseFromOnsets(onsets)
   // rhythmicInterest: independent measurement — syncopation
   // Fix: was (1-uniformity)*0.6 + pocket*0.4 (derivative of 2 metrics already in scores)
   // Now measures syncopation: how many onsets are off-beat (not on downbeats)
@@ -326,7 +369,11 @@ export function critiqueAudio(
       severity: (0.2 - kickBassSeparation) * 3,
     })
   }
-  if (melodicClarity < 0.4) {
+  // LEAD_TOO_STATIC threshold 0.3, recalibrated for the honest scale:
+  // note-based clarity = scale-adherence × (0.5 + 0.5·variety); a scale-locked
+  // melody with interval variety scores ≈0.35–0.6, chromatic randomness ≈0–0.1.
+  // (Was 0.4 on the old spectral-crest scale.)
+  if (melodicClarity < 0.3) {
     failures.push({
       code: 'LEAD_TOO_STATIC',
       diagnosis: `Lead melodic clarity is low (${melodicClarity.toFixed(3)}) — the phrase lacks articulation and movement.`,
@@ -344,7 +391,11 @@ export function critiqueAudio(
       severity: (masking - 0.5) * 2,
     })
   }
-  if (motifIdentity < 0.4) {
+  // WEAK_MOTIF_IDENTITY threshold 0.3, recalibrated for the honest scale:
+  // motifIdentity = fraction of repeated 3-grams in the (pitch-class, step)
+  // token sequence, or onset-pattern autocorrelation. A motif that returns at
+  // least once per 8 notes scores ≈0.4+; fully through-random ≈0.
+  if (motifIdentity < 0.3) {
     failures.push({
       code: 'WEAK_MOTIF_IDENTITY',
       diagnosis: `Motif identity is weak (${motifIdentity.toFixed(3)}) — the listener cannot recognize a returning motif.`,
@@ -386,7 +437,7 @@ export function critiqueAudio(
     1 - lowMidMud,
     1 - harshness,
     highEndPresence * 10,
-    stereoContrast,
+    ...(stereoContrast === null ? [] : [stereoContrast]), // null = unmeasured, excluded honestly
     Math.min(1, dynamicRange / 10),
     1 - masking,
     tensionRelease,
@@ -1161,28 +1212,66 @@ function computeArticulation(pcm: Float32Array, sampleRate: number): number {
   return Math.min(1, (changes / Math.max(1, count)) * 30)
 }
 
-function computeMelodicClarity(pcm: Float32Array, sampleRate: number): number {
-  // Melodic clarity = spectral peakiness. A clear melody has distinct harmonic peaks
-  // (high spectral crest factor). A noisy/muddy mix has flat spectrum.
-  const fftSize = 2048
-  const spectrum = computeDFT(pcm.slice(0, Math.min(pcm.length, fftSize)), 512)
-  // Spectral crest factor = max(bin) / mean(bin) in the lead range (500-5000Hz)
-  const lowBin = Math.floor((500 * fftSize) / sampleRate)
-  const highBin = Math.ceil((5000 * fftSize) / sampleRate)
-  let maxBin = 0
-  let sumBins = 0
-  let binCount = 0
-  for (let i = lowBin; i <= highBin && i < spectrum.length; i++) {
-    const v = spectrum[i] ?? 0
-    if (v > maxBin) maxBin = v
-    sumBins += v
-    binCount++
+/**
+ * D8.1 melodicClarity — NOTE-EVENT path (preferred when notes are supplied).
+ * Real measurement of the note sequence itself:
+ *   1. Scale adherence, two complementary components (both real measurements
+ *      of the pitch-class distribution):
+ *        a. class concentration — distinct pitch classes used, mapped linearly
+ *           from ≤7 classes (a 7-note scale → 1.0) to ≥11 classes (chromatic
+ *           → 0.0).
+ *        b. 1 − normalized Shannon entropy of the pitch-class distribution
+ *           (captures tonic emphasis, not just the class count).
+ *   2. Interval variety = distinct absolute interval sizes between consecutive
+ *      notes, normalized (≥4 distinct intervals = full variety).
+ *   clarity = adherence × (0.5 + 0.5 · variety), clamped to [0,1].
+ */
+function computeMelodicClarityFromNotes(notes: CriticNoteEvent[]): number {
+  const hist = new Array<number>(12).fill(0)
+  for (const n of notes) hist[((n.pitchMidi % 12) + 12) % 12] += 1
+  const total = notes.length
+  let distinct = 0
+  let entropy = 0
+  for (const h of hist) {
+    if (h <= 0) continue
+    distinct += 1
+    const p = h / total
+    entropy -= p * Math.log(p)
   }
-  if (binCount === 0 || sumBins < 1e-8) return 0.3
-  const meanBin = sumBins / binCount
-  const crest = maxBin / meanBin
-  // crest > 5 = very clear peaks (good melody), crest < 2 = flat/noisy
-  return Math.max(0, Math.min(1, (crest - 1) / 4))
+  const classConcentration = Math.max(0, Math.min(1, (11 - distinct) / 4))
+  const entropyConcentration = Math.max(0, 1 - entropy / Math.log(12))
+  const adherence = 0.5 * classConcentration + 0.5 * entropyConcentration
+  const intervals = new Set<number>()
+  for (let i = 1; i < notes.length; i++) {
+    intervals.add(Math.abs((notes[i]?.pitchMidi ?? 0) - (notes[i - 1]?.pitchMidi ?? 0)))
+  }
+  const variety = Math.min(1, intervals.size / 4)
+  return Math.max(0, Math.min(1, adherence * (0.5 + 0.5 * variety)))
+}
+
+/**
+ * D8.1 melodicClarity — SPECTRAL fallback (no note events).
+ * Spectral tonality proxy: fraction of the spectral energy held by PEAK bins
+ * (local maxima above 2× the spectrum mean). Tonal material concentrates
+ * energy in a few harmonic peaks (ratio → 1); noise spreads it (ratio → 0).
+ * Was a spectral crest factor with a hardcoded 0.3 on silence.
+ */
+function computeMelodicClaritySpectral(spectrum: number[]): number {
+  if (spectrum.length === 0) return 0.5 // unknown — no spectral data
+  let mean = 0
+  let total = 0
+  for (const v of spectrum) mean += v
+  mean /= spectrum.length
+  let peakEnergy = 0
+  for (let i = 0; i < spectrum.length; i++) {
+    const v = spectrum[i] ?? 0
+    total += v
+    const prev = spectrum[i - 1] ?? 0
+    const next = spectrum[i + 1] ?? 0
+    if (v > prev && v >= next && v > 2 * mean) peakEnergy += v
+  }
+  if (total < 1e-9) return 0.5 // unknown — silence
+  return Math.max(0, Math.min(1, peakEnergy / total))
 }
 
 function computePhraseContrast(pcm: Float32Array, sampleRate: number, _bpm: number): number {
@@ -1327,34 +1416,6 @@ function computeIdentityStrength(spectra: number[][]): number {
   return totalCorr / spectra.length
 }
 
-function computeSpectralContrast(spectrum: number[]): number {
-  // Spectral contrast = how much peaks stand out from valleys.
-  // Divides spectrum into 24 bark bands, finds max/min ratio per band,
-  // averages. High = harmonic content (good), low = noise (bad).
-  if (spectrum.length < 10) return 0.5
-  const numBands = 24
-  const bandSize = Math.floor(spectrum.length / numBands)
-  let totalContrast = 0
-  let validBands = 0
-  for (let b = 0; b < numBands; b++) {
-    const start = b * bandSize
-    const end = Math.min(start + bandSize, spectrum.length)
-    let maxVal = 0
-    let minVal = Number.POSITIVE_INFINITY
-    for (let i = start; i < end; i++) {
-      const v = spectrum[i] ?? 0
-      if (v > maxVal) maxVal = v
-      if (v < minVal) minVal = v
-    }
-    if (maxVal > 1e-8) {
-      // Contrast = (max - min) / max. 1 = sharp peak, 0 = flat.
-      totalContrast += (maxVal - minVal) / maxVal
-      validBands++
-    }
-  }
-  return validBands > 0 ? totalContrast / validBands : 0.5
-}
-
 function computeLowMidMud(spectrum: number[], sampleRate: number, fftSize: number): number {
   const lowMid = bandEnergy(spectrum, sampleRate, fftSize, 200, 500)
   const total = spectrum.reduce((s, v) => s + v, 0)
@@ -1410,34 +1471,61 @@ function computeTensionRelease(pcm: Float32Array, _sampleRate: number, _bpm: num
   return Math.min(1, cv * 2.0 * 0.5 + drRatio * 0.5)
 }
 
-function computeMotifIdentity(pcm: Float32Array, sampleRate: number, bpm: number): number {
-  // Fix: was uniformity * 1.5 (pure derivative of excessiveUniformity).
-  // Now measures autocorrelation at 1-bar lag — if the motif repeats
-  // at the bar level, autocorrelation will be high.
-  const secondsPerBar = (60 / bpm) * 4
-  const samplesPerBar = Math.floor(secondsPerBar * sampleRate)
-  if (pcm.length < samplesPerBar * 2) return 0.5
+/**
+ * D8.1 motifIdentity — NOTE-EVENT path (preferred when notes are supplied).
+ * Real self-similarity: repetition rate of 3-grams over (pitch-class,
+ * in-bar step) tokens. A recurring motif repeats its 3-grams; a random
+ * sequence rarely does. Returns 0.5 (unknown) when there are too few notes
+ * to form any 3-gram.
+ */
+function computeMotifIdentityFromNotes(notes: CriticNoteEvent[], stepsPerBar: number): number {
+  const n = 3
+  if (notes.length < n + 1) return 0.5 // unknown — too few notes for a 3-gram
+  const tokens = notes.map(
+    (nt) =>
+      `${((nt.pitchMidi % 12) + 12) % 12}@${((nt.startStep % stepsPerBar) + stepsPerBar) % stepsPerBar}`
+  )
+  const counts = new Map<string, number>()
+  for (let i = 0; i + n <= tokens.length; i++) {
+    const gram = `${tokens[i]}>${tokens[i + 1]}>${tokens[i + 2]}`
+    counts.set(gram, (counts.get(gram) ?? 0) + 1)
+  }
+  const totalGrams = tokens.length - n + 1
+  let repeatedGrams = 0
+  for (const c of counts.values()) if (c > 1) repeatedGrams += c
+  return Math.max(0, Math.min(1, repeatedGrams / totalGrams))
+}
 
-  // Measure autocorrelation at 1-bar, 2-bar, and 4-bar lags
-  let bestCorr = 0
-  for (const lagBars of [1, 2, 4]) {
-    const lag = lagBars * samplesPerBar
-    if (pcm.length < lag * 2) continue
+/**
+ * D8.1 motifIdentity — ONSET fallback (no note events).
+ * Onset-pattern autocorrelation: normalized correlation of the per-step onset
+ * energy contour with itself shifted by 1 and 2 bars (max over lags).
+ * Replaces the previous raw-PCM bar-lag autocorrelation (phase-sensitive).
+ * Returns 0.5 (unknown) when the contour is too short or silent.
+ */
+function computeOnsetPatternAutocorrelation(onsets: number[], stepsPerBar: number): number {
+  if (onsets.length < stepsPerBar * 2) return 0.5 // unknown — shorter than 2 bars
+  let totalEnergy = 0
+  for (const v of onsets) totalEnergy += v
+  if (totalEnergy < 1e-9) return 0.5 // unknown — silence
+  let best = 0
+  for (const lagBars of [1, 2]) {
+    const lag = lagBars * stepsPerBar
+    if (onsets.length <= lag) continue
     let dot = 0
     let normA = 0
     let normB = 0
-    const windowSize = Math.min(pcm.length - lag, samplesPerBar * 4)
-    for (let i = 0; i < windowSize; i++) {
-      const a = pcm[i] ?? 0
-      const b = pcm[lag + i] ?? 0
+    for (let i = 0; i + lag < onsets.length; i++) {
+      const a = onsets[i] ?? 0
+      const b = onsets[i + lag] ?? 0
       dot += a * b
       normA += a * a
       normB += b * b
     }
-    const corr = dot / Math.max(1e-8, Math.sqrt(normA * normB))
-    if (corr > bestCorr) bestCorr = corr
+    const corr = dot / Math.max(1e-12, Math.sqrt(normA * normB))
+    if (corr > best) best = corr
   }
-  return Math.max(0, Math.min(1, bestCorr))
+  return Math.max(0, Math.min(1, best))
 }
 
 function computeDevelopment(pcm: Float32Array, sampleRate: number, bpm: number): number {
@@ -1474,21 +1562,151 @@ function computeDevelopment(pcm: Float32Array, sampleRate: number, bpm: number):
   return Math.max(0, Math.min(1, cv * 2)) // scale ×2 for sensitivity
 }
 
-function computeCallResponse(pcm: Float32Array, sampleRate: number, _bpm: number): number {
-  // Simplified: check if the second half mirrors the first (response).
-  const half = Math.floor(pcm.length / 2)
-  let corr = 0
-  let energy = 0
-  const windowSize = Math.floor(sampleRate * 0.05)
-  for (let i = 0; i < half - windowSize; i += windowSize) {
-    let a = 0
-    let b = 0
-    for (let j = 0; j < windowSize; j++) {
-      a += pcm[i + j] ?? 0
-      b += pcm[half + i + j] ?? 0
-    }
-    corr += a * b
-    energy += a * a + b * b
+/**
+ * D8.1 stereoContrast — REAL inter-channel contrast.
+ * RMS(L−R) / max(RMS(L+R), ε), clamped to [0,1]. Mono content (L === R)
+ * → 0; hard-panned or decorrelated content → 1; out-of-phase content
+ * clamps at 1. Computed on the supplied stereo buffers only — never
+ * fabricated from mono data. (Replaces computeSpectralContrast, a mislabeled
+ * spectral measurement that was assigned to the "stereoContrast" field.)
+ */
+function computeStereoContrast(left: Float32Array, right: Float32Array): number {
+  const n = Math.min(left.length, right.length)
+  if (n === 0) return 0 // no samples — no width to measure
+  let sumSide = 0
+  let sumMid = 0
+  for (let i = 0; i < n; i++) {
+    const l = left[i] ?? 0
+    const r = right[i] ?? 0
+    sumSide += (l - r) ** 2
+    sumMid += (l + r) ** 2
   }
-  return energy > 0 ? Math.min(1, (corr / energy) * 2 + 0.3) : 0.3
+  const rmsSide = Math.sqrt(sumSide / n)
+  const rmsMid = Math.sqrt(sumMid / n)
+  return Math.max(0, Math.min(1, rmsSide / Math.max(rmsMid, 1e-9)))
+}
+
+/**
+ * D8.1 callResponse — NOTE-EVENT path (preferred when notes are supplied).
+ * Phrase-echo detection: split the note sequence at the time midpoint of its
+ * own span; for each half build the average IN-BAR profiles (onset density,
+ * mean velocity, mean pitch — one slot per step of the bar, so the halves are
+ * phase-aligned by construction); Pearson-correlate the call profiles against
+ * the response profiles and average. Score = clamp(mean r, 0, 1): 0 = no
+ * detectable echo relationship, ->1 = the second half echoes the first.
+ * Inverted contours are not credited (clamped at 0). No +0.3 floor.
+ */
+function computeCallResponseFromNotes(notes: CriticNoteEvent[], stepsPerBar: number): number {
+  if (notes.length < 4) return 0.5 // unknown — too few notes to form phrases
+  const sorted = notes.slice().sort((a, b) => a.startStep - b.startStep)
+  const span = Math.max(1, (sorted[sorted.length - 1]?.startStep ?? 0) + 1)
+  const half = Math.floor(span / 2)
+  if (half < 1) return 0.5 // unknown — sequence too short to split
+  const barLen = Math.max(1, stepsPerBar)
+  const callOnset = new Array<number>(barLen).fill(0)
+  const respOnset = new Array<number>(barLen).fill(0)
+  const callVel = new Array<number>(barLen).fill(0)
+  const respVel = new Array<number>(barLen).fill(0)
+  const callPitch = new Array<number>(barLen).fill(0)
+  const respPitch = new Array<number>(barLen).fill(0)
+  const callCount = new Array<number>(barLen).fill(0)
+  const respCount = new Array<number>(barLen).fill(0)
+  for (const nt of sorted) {
+    const isCall = nt.startStep < half
+    const onset = isCall ? callOnset : respOnset
+    const vel = isCall ? callVel : respVel
+    const pitch = isCall ? callPitch : respPitch
+    const count = isCall ? callCount : respCount
+    const slot = ((nt.startStep % barLen) + barLen) % barLen
+    onset[slot] += 1
+    vel[slot] += nt.velocity ?? 0.7
+    pitch[slot] += nt.pitchMidi
+    count[slot] += 1
+  }
+  for (let s = 0; s < barLen; s++) {
+    if (callCount[s] > 0) {
+      callVel[s] /= callCount[s]
+      callPitch[s] /= callCount[s]
+    }
+    if (respCount[s] > 0) {
+      respVel[s] /= respCount[s]
+      respPitch[s] /= respCount[s]
+    }
+  }
+  // Union support: slots where at least one half has a note. Slots silent in
+  // BOTH halves carry no echo information (their shared zeros would inflate
+  // the correlation toward +1), so they are excluded from the statistics.
+  const support: number[] = []
+  for (let s = 0; s < barLen; s++) {
+    if ((callCount[s] ?? 0) > 0 || (respCount[s] ?? 0) > 0) support.push(s)
+  }
+  const nSup = Math.max(1, support.length)
+  const pairs: [number[], number[]][] = [
+    [callOnset, respOnset],
+    [callVel, respVel],
+    [callPitch, respPitch],
+  ]
+  let rSum = 0
+  let rPairs = 0
+  for (const [a, b] of pairs) {
+    let meanA = 0
+    let meanB = 0
+    for (const s of support) {
+      meanA += a[s] ?? 0
+      meanB += b[s] ?? 0
+    }
+    meanA /= nSup
+    meanB /= nSup
+    let cov = 0
+    let varA = 0
+    let varB = 0
+    for (const s of support) {
+      const da = (a[s] ?? 0) - meanA
+      const db = (b[s] ?? 0) - meanB
+      cov += da * db
+      varA += da * da
+      varB += db * db
+    }
+    // Pairs with zero variance on either side carry no echo information —
+    // skip them; if NO pair is informative the echo is unmeasurable.
+    if (varA < 1e-12 || varB < 1e-12) continue
+    rSum += cov / Math.sqrt(varA * varB)
+    rPairs += 1
+  }
+  if (rPairs === 0) return 0.5 // unknown — no informative contour pair
+  return Math.max(0, Math.min(1, rSum / rPairs))
+}
+
+/**
+ * D8.1 callResponse — ONSET fallback (no note events).
+ * Pearson correlation between the first-half and second-half onset-energy
+ * contours, clamped to [0,1]. 0 = no echo relationship; no +0.3 floor.
+ * 0.5 (unknown) when both halves are silent or too short.
+ */
+function computeCallResponseFromOnsets(onsets: number[]): number {
+  const half = Math.floor(onsets.length / 2)
+  if (half < 2) return 0.5 // unknown — too short to split
+  let energy = 0
+  for (let i = 0; i < half; i++) energy += (onsets[i] ?? 0) + (onsets[half + i] ?? 0)
+  if (energy < 1e-9) return 0.5 // unknown — silence
+  let meanA = 0
+  let meanB = 0
+  for (let i = 0; i < half; i++) {
+    meanA += onsets[i] ?? 0
+    meanB += onsets[half + i] ?? 0
+  }
+  meanA /= half
+  meanB /= half
+  let cov = 0
+  let varA = 0
+  let varB = 0
+  for (let i = 0; i < half; i++) {
+    const da = (onsets[i] ?? 0) - meanA
+    const db = (onsets[half + i] ?? 0) - meanB
+    cov += da * db
+    varA += da * da
+    varB += db * db
+  }
+  if (varA < 1e-12 || varB < 1e-12) return 0 // flat half = no echo structure
+  return Math.max(0, Math.min(1, cov / Math.sqrt(varA * varB)))
 }

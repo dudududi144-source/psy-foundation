@@ -206,7 +206,10 @@
   - Astrix — "Deep Space Walk" (full-on, ~138 BPM, -8 LUFS)
   - Vini Vici — "The Tribe" (progressive, ~134 BPM, -9 LUFS)
   - Infected Mushroom — "Becoming Insane" (full-on, ~145 BPM, -7 LUFS)
-- [ ] Build `compare-to-reference` CLI: `bun run benchmarks/compare-to-reference.ts <render.wav> <reference.wav>`
+- [x] ~~Build `compare-to-reference` CLI~~ RETIRED (Phase 2, D8.4): an early version
+      (`benchmarks/compare-to-reference.ts`) fabricated reference constants for these
+      named tracks and reported RMS as LUFS / crest as LRA — deleted. Rebuild ONLY
+      against real reference audio files with real BS.1770 metering.
 - [ ] Compare: LUFS, dBTP, LRA, spectral centroid, crest factor, dynamic range
 - [ ] Deviation from reference < 1.5 LU in LUFS = "close"
 - [ ] Tune iteratively until render is ±1.5 LU from reference

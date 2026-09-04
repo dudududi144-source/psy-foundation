@@ -138,7 +138,19 @@ export class RenderDevice implements PsyDevice {
       mono[i] = ((renderResult.samplesL[i] ?? 0) + (renderResult.samplesR[i] ?? 0)) * 0.5
     }
 
-    const critique = critiqueAudio(mono, renderResult.sampleRate, this.bpm, 16)
+    // D8.1: stereo + note events so the critic measures reality (no constants).
+    const notes = section.bars.flatMap((bar) =>
+      bar.leadNotes.map((n) => ({
+        pitchMidi: n.midi,
+        startStep: bar.barIndex * section.groove.stepsPerBar + n.step,
+        durationSteps: n.durationSteps,
+        velocity: n.velocity,
+      }))
+    )
+    const critique = critiqueAudio(mono, renderResult.sampleRate, this.bpm, 16, {
+      stereo: { left: renderResult.samplesL, right: renderResult.samplesR },
+      notes,
+    })
     const wav = encodeWav(renderResult.samplesL, renderResult.samplesR, renderResult.sampleRate)
 
     return { wav, render: renderResult, critique }

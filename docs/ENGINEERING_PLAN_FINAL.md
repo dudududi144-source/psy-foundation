@@ -406,7 +406,10 @@ psy-foundation/
 
 #### שבוע 11-12: Reference track comparison (14 days)
 - [ ] הכנסת 3 reference tracks ל-`apps/web/tests/fixtures/references/` (gitignored)
-- [ ] בניית `compare-to-reference` CLI: `bun run benchmarks/compare-to-reference.ts <render.wav> <reference.wav>`
+- [x] ~~בניית `compare-to-reference` CLI~~ — RETIRED (Phase 2, D8.4): הגרסה הקודמת
+      (`benchmarks/compare-to-reference.ts`) השוותה מול קבועי "reference" מומצאים
+      שיוחסו לשירים מסחריים (RMS שדווח כ-LUFS, crest כ-LRA) — נמחק. לבנות מחדש
+      רק מול קבצי אודיו אמיתיים עם מדידת BS.1770 אמיתית.
 - [ ] השוואה: LUFS, dBTP, LRA, spectral centroid, crest factor, dynamic range
 - [ ] סטייה מ-reference < 1.5 LU ב-LUFS = "קרוב"
 - [ ] tuning iteratively עד ש-render ב-±1.5 LU מ-reference

@@ -204,16 +204,43 @@ function clamp01(v: number): number {
 }
 
 /**
+ * Reduced narrative arcs for short sections.
+ *
+ * Phase 2 root-cause fix (D8.5): `planArrangement` previously forced ALL nine
+ * states into every section (minimum 2 bars each = 18 bars). For sections
+ * shorter than 18 bars the allocation silently over-subscribed and the slot
+ * loop stopped at `bars`, truncating the arc — a 4-bar full-on section became
+ * INTRO + GROOVE only, so NO state ever activated the lead and composed
+ * sections had ZERO lead notes (Phase 1 finding). Short sections now use a
+ * reduced arc that FITS, so the main lead-bearing states are always reached:
+ *   4–7 bars  → GROOVE → BUILD → PEAK
+ *   2–3 bars  → GROOVE → PEAK
+ *   1 bar     → GROOVE
+ */
+const SHORT_ARC: ArrangementState[] = ['GROOVE', 'BUILD', 'PEAK']
+const MINIMAL_ARC: ArrangementState[] = ['GROOVE', 'PEAK']
+const SINGLE_STATE: ArrangementState[] = ['GROOVE']
+
+function arcForBars(bars: number): ArrangementState[] {
+  if (bars >= 8) return STATE_ORDER
+  if (bars >= 4) return SHORT_ARC
+  if (bars >= 2) return MINIMAL_ARC
+  return SINGLE_STATE
+}
+
+/**
  * Plan an arrangement across `bars` bars.
  *
- * Walks through the nine arrangement states in narrative order, allocating
- * each state a proportional slice of the total bars. Each resulting
+ * Walks through the arrangement states in narrative order, allocating
+ * each state a proportional slice of the total bars. Sections shorter than
+ * 8 bars use a reduced arc (see {@link arcForBars}) so lead-bearing states
+ * are actually reached instead of being truncated away. Each resulting
  * {@link ArrangementSlot} carries the state's role activation and target
  * density/energy.
  *
  * The allocation is rounded to multiples of 2 so each state gets an even
  * number of bars (avoids odd-length phrases). If rounding causes the total
- * to differ from `bars`, the last state (OUTRO) absorbs the slack.
+ * to differ from `bars`, the last state absorbs the slack.
  */
 export function planArrangement(opts: {
   bars: number
@@ -224,10 +251,12 @@ export function planArrangement(opts: {
   const rng = new Rng(seed)
   void context // reserved for future style-aware allocation
 
+  const arc = arcForBars(bars)
+
   const slots: ArrangementSlot[] = []
   let bar = 0
   // First pass: compute raw allocations.
-  const rawCounts: number[] = STATE_ORDER.map((state) => {
+  const rawCounts: number[] = arc.map((state) => {
     const frac = STATE_FRACTIONS[state]
     // Round to nearest multiple of 2; minimum 2 bars per state.
     const raw = Math.max(2, Math.round((bars * frac) / 2) * 2)

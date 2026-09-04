@@ -53,11 +53,22 @@ export function runAudioQualityLoop(
     const result = renderSection(section, currentConfig)
 
     // ── ANALYZE ──
+    // D8.1: pass the composed lead notes so melodicClarity / motifIdentity /
+    // callResponse measure the actual note sequence, not a spectral proxy.
+    const notes = section.bars.flatMap((bar) =>
+      bar.leadNotes.map((n) => ({
+        pitchMidi: n.midi,
+        startStep: bar.barIndex * section.groove.stepsPerBar + n.step,
+        durationSteps: n.durationSteps,
+        velocity: n.velocity,
+      }))
+    )
     const critique = critiqueAudio(
       result.pcm,
       result.sampleRate,
       currentConfig.bpm,
-      section.groove.stepsPerBar
+      section.groove.stepsPerBar,
+      { notes }
     )
 
     // ── DIAGNOSE + CORRECT ──

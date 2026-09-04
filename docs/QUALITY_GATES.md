@@ -139,7 +139,10 @@
 
 ### Reference comparison
 - [ ] 3 reference tracks in `apps/web/tests/fixtures/references/` (gitignored)
-- [ ] `compare-to-reference` CLI: `bun run benchmarks/compare-to-reference.ts`
+- [x] ~~`compare-to-reference` CLI: `bun run benchmarks/compare-to-reference.ts`~~ RETIRED (Phase 2, D8.4):
+      the benchmark compared renders against FABRICATED "reference" constants
+      attributed to named commercial tracks (RMS reported as LUFS, crest as
+      LRA). Deleted — a comparison needs real licensed references, not invented numbers.
 - [ ] Compare: LUFS, dBTP, LRA, spectral centroid, crest factor, dynamic range
 - [ ] Deviation from reference < 1.5 LU in LUFS = "close"
 - [ ] Render is ±1.5 LU from all 3 references

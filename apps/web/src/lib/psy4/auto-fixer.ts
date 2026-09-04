@@ -275,7 +275,19 @@ async function renderAndCritique(
   for (let i = 0; i < mono.length; i++) {
     mono[i] = ((result.samplesL[i] ?? 0) + (result.samplesR[i] ?? 0)) * 0.5
   }
-  const critique = critiqueAudio(mono, result.sampleRate, BPM, STEPS_PER_BAR)
+  // D8.1: stereo + note events so the critic measures reality (no constants).
+  const notes = section.bars.flatMap((bar) =>
+    bar.leadNotes.map((n) => ({
+      pitchMidi: n.midi,
+      startStep: bar.barIndex * section.groove.stepsPerBar + n.step,
+      durationSteps: n.durationSteps,
+      velocity: n.velocity,
+    }))
+  )
+  const critique = critiqueAudio(mono, result.sampleRate, BPM, STEPS_PER_BAR, {
+    stereo: { left: result.samplesL, right: result.samplesR },
+    notes,
+  })
   return {
     score: critique.overallScore,
     failures: critique.failures.map((f) => ({ code: f.code, severity: f.severity })),

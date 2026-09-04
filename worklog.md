@@ -3983,3 +3983,18 @@ Work Log:
 
 Stage Summary:
 - Decision record committed. Launching Task 5-a (One DSP migration) as subagent; 5-b (honest metrics) follows sequentially per charter.
+
+---
+Task ID: 5-a
+Agent: Z.ai Code (lead engineer + migration subagent)
+Task: Phase 1.1 One DSP migration (DECISIONS_V3 D1–D7).
+
+Work Log:
+- Subagent executed the bulk (master chain move, ZDF SVF move, fake LufsMeter deletion, worklet TS port + Bun.build pipeline, parity fixtures); timed out before gates/commit.
+- Lead review + completion: fixed stale imports in apps/web/tests/roast-fix.test.ts (loudness/ott → @psy-foundation/dsp; OTT constructions + sampleRate per D2); re-baselined 3 md5 baselines a53cfc88→f2f81ed6 with D3 reason documented in code + commit table; added missing AudioWorkletProcessor/registerProcessor ambient declarations in worklet source (tsc 0).
+- Rewrote Roast Fix 10 section: it loaded the deleted vendored worklet copy; now locks behavior on the CANONICAL dsp classes (processBuffer semantics) + new artifact-contract test (generated IIFE parses, executes, registers 'psy4-processor' in mocked AudioWorkletGlobalScope).
+- Five Gates: bun test 848/0 (853 total), tsc 0, biome 0 (incl. clearing 9 inherited lint errors: noExplicitAny→typed, useMediaCaption documented ignore, useTemplate, dead consts), verify --quick 19/19 (LUFS I=-10.7, TP -1.2 dBTP, determinism md5=f2f81ed6…), build:worklet md5 ×2 identical (7bc1b986…).
+- Commit 75dad8a on main (NOT pushed yet — push after Phase 2 per plan).
+
+Stage Summary:
+- One DSP is real: limiter/multiband/OTT/LUFS/ZDFSVF each exist in exactly ONE implementation, used by offline render AND the generated worklet. Fake LufsMeter gone. OTT per-channel bug fixed with locked behavior tests. Backlog: none blocking from 1.1.

@@ -129,6 +129,29 @@ describe('F22 E2E: Foundation → RawScore', () => {
     expect(raw.groove._experimental?.swing).toBeGreaterThanOrEqual(0)
     expect(Array.isArray(raw.groove._experimental?.microtiming)).toBe(true)
   })
+
+  test('full-on composition produces lead notes in lead-bearing states (D8.5)', () => {
+    // Phase 1 discovered leadNotes===0 at full-on (vacuous F22 tests passed on
+    // render noise). Root cause was fixed by the Phase 1 determinism work;
+    // THIS test locks the behavior so it can never silently regress.
+    for (const seed of [42, 99, 13, 21, 7]) {
+      const engine = new CompositionEngine({
+        seed,
+        context: ctx,
+        identity: createIdentityA(),
+      })
+      const section = engine.composeSection({ bars: 8 })
+      for (const bar of section.bars) {
+        if (bar.roles.lead) {
+          expect(bar.leadNotes.length).toBeGreaterThan(0)
+        } else {
+          // States that deactivate the lead (INTRO/GROOVE/OUTRO) must stay
+          // silent — a lead there would be a different bug.
+          expect(bar.leadNotes.length).toBe(0)
+        }
+      }
+    }
+  })
 })
 
 describe('F22 E2E: Foundation audio renderer', () => {

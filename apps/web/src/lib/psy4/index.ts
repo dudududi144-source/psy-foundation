@@ -94,7 +94,12 @@ export type { RenderConfig, RenderResult } from './forensic-bridge'
 
 // Audio analysis
 export { critiqueAudio } from './audio-critic'
-export type { AudioCritique, AudioFailure } from './audio-critic'
+export type {
+  AudioCritique,
+  AudioFailure,
+  CriticExtras,
+  CriticNoteEvent,
+} from './audio-critic'
 
 // Wavetable synthesis (Phase 2)
 export { Wavetable } from './wavetable'

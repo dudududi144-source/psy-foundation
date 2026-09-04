@@ -44,6 +44,12 @@ describe('contextKey', () => {
   test('similar energy → same key (quantization)', () => {
     expect(contextKey(ctx(0.71), 'lead')).toBe(contextKey(ctx(0.74), 'lead'))
   })
+  test('key has exactly 5 terms — the fabricated bpm term is gone (D8.2)', () => {
+    // Format: style|role|section|rootPc|energyBin. MusicalContext has no bpm
+    // field, so the old sixth term (bpm binned from ENERGY) was a fake
+    // measurement. Key change intentionally invalidates prior bandit state.
+    expect(contextKey(ctx(), 'lead').split('|').length).toBe(5)
+  })
 })
 
 describe('actionKey', () => {
