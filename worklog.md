@@ -3913,3 +3913,18 @@ Stage Summary:
 - No new bugs found. All subsystems verified OK.
 - Final state: 757 pass, 14 skip, 0 fail. Lint: 0 errors, 11 warnings.
 - READY TO PUSH.
+
+---
+Task ID: 2
+Agent: Z.ai Code (Lead Foundation Engineer)
+Task: Synthesize forensic audit from 4 parallel auditors (1-a..1-d) into repo deliverables: audit report, master action plan v3, engineer charter.
+
+Work Log:
+- Wrote docs/AUDIT_FORENSIC_2026-09-04.md — measured claims-vs-reality table (799/5skip/0fail tests, lint 0/11, tsc 23 errors, LUFS/TP/LRA ffmpeg-exact, 4/6 endpoints alive, arrangement bars bug, ~5% realtime parity, DoS surface, family consumption 0/16), 10 critical findings C1-C10 with file:line, condensed high/med table, family map, 10-dimension scorecard (overall 3.5/10).
+- Wrote docs/PLAN_V3_MASTER.md — 6 phases (0 Truth, 1 One-DSP, 2 Honest metrics, 3 Family release channel, 4 Product, 5 VST fix-or-archive), per-task acceptance gates, sequencing, repo-level Definition of Done (>=7/10 target).
+- Wrote docs/ENGINEER_CHARTER.md — role, authority scope (foundation-only writes), 8 engineering laws, continuous control protocol (READ/CLAIM/BASE/DO/GATE/PROVE/LOG/TAG), Five Gates, red-flag tripwires, escalation rules.
+
+Stage Summary:
+- Deliverables committed locally. State: audit complete, plan ratified-ready, charter active from 2026-09-04.
+- Recommended immediate next step: Phase 0 (kills all false claims: 2 dead endpoints, param clamps, tsc 0, verify.mjs, README regen).
+- Push to remote pending owner credentials (uploaded token was redacted by gateway); local commits ready.
