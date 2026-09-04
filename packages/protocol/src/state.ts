@@ -1,4 +1,17 @@
+/**
+ * Protocol contract version (GAP-P1, PLAN_V3 3.5).
+ *
+ * ONE version number story for the foundation's wire/protocol contract:
+ * this matches PSYBUS_PROTOCOL_VERSION (2, packages/protocol/src/v2/types.ts)
+ * — the canonical bus envelope. Every TransportState snapshot carries the
+ * version it was produced under, so consumers can reject or adapt to
+ * mismatched peers instead of misreading fields.
+ */
+export const PROTOCOL_VERSION = 2
+
 export interface TransportState {
+  /** Protocol contract version of this snapshot (see PROTOCOL_VERSION). */
+  protocolVersion: number
   bpm: number
   beat: number
   bar: number

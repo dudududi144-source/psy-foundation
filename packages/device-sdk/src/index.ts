@@ -13,3 +13,5 @@ export {
   wellFormedNoteEvent,
 } from './conformance/index.ts'
 export type { ConformanceOptions, ConformanceReport } from './conformance/index.ts'
+export { LocalScheduler } from './scheduler.ts'
+export type { LocalSchedulerOptions, LocalSchedulerStats } from './scheduler.ts'

@@ -306,7 +306,7 @@ describe('Analyzer', () => {
   })
 
   test('corpus import works (fixtures workspace dependency resolves)', () => {
-    expect(corpus.length).toBe(14)
+    expect(corpus.length).toBe(17) // grew by GAP-F1..F3 specials (PLAN_V3 3.5)
     const fx = getFixture('perfect-150')
     expect(fx.id).toBe('perfect-150')
     expect(fx.sampleRate).toBe(SAMPLE_RATE)

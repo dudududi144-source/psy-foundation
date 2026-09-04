@@ -18,3 +18,4 @@ export {
   genTempoJump,
   genTempoRamp,
 } from './generators.ts'
+export { genMelodyPentatonic, genRhythm16thGrid, genWhiteNoise } from './special.ts'

@@ -317,3 +317,31 @@ stale events after tab suspension.
 **Blocking conflicts**: Transport (10 critical) + Radio (4 critical) + Scheduler (3 critical) = 17 critical gaps that MUST be closed before foundation can be canonical for those domains.
 
 **Current runtime safety**: SAFE. No migration is performed. PSY4's runtime is untouched.
+
+---
+
+## CLOSURE RECORD (2026-09-04, PLAN_V3 Phase 3.5)
+
+All transport-critical gaps (T1–T10) were closed by the roast-fix-11 +
+phase-1 work: the v1 transport (packages/transport/src/v1-transport.ts)
+implements epoch, source, holdover, seek, setTempo, predictBeats, subscribe
+and out-of-order rejection; contract tests T1–T6/T9 un-skipped and passing
+(commit 25a4fc3).
+
+The remaining five skips were closed in the phase-3-transport commit:
+
+| Gap | Status | Implementation | Proof |
+| --- | --- | --- | --- |
+| GAP-P1 (versioning) | **CLOSED** | `PROTOCOL_VERSION = 2` + required `protocolVersion` field on `TransportState` (packages/protocol/src/state.ts); consistent with `PSYBUS_PROTOCOL_VERSION` | contract test "TransportState carries a protocol version" |
+| GAP-D1 (local scheduling) | **CLOSED** | optional `PsyDevice.onScheduledEvent(event, transport)` + `LocalScheduler` helper (packages/device-sdk/src/scheduler.ts): release-at-beat, stale-beyond-grace, O(1) amortized, device never owns a clock | contract tests "device can schedule events locally" + "late events are staled" |
+| GAP-F1 (melody fixtures) | **CLOSED** | `melody-pentatonic` fixture, 8 notes at exact MIDI pitches + exact onsets (packages/fixtures/src/special.ts) | fixtures tests + contract test |
+| GAP-F2 (rhythm fixtures) | **CLOSED** | `rhythm-16th-grid` fixture: two bars, exact 16th timestamps (0.125s spacing at 120 BPM) | fixtures tests + contract test |
+| GAP-F3 (noise fixtures) | **CLOSED** | `noise-white-2s` fixture: seeded white noise with DECLARED spectral ground truth, MEASURED in tests (spectral flatness > 0.4, centroid within 2 kHz of Nyquist/2) | fixtures tests + contract test |
+
+Zero skipped tests remain in this file's domain. Gaps M1/M2 (material
+validation + provenance) remain open by decision: they are material-domain
+(low risk) and the material package is under rework in Phase 4; closing them
+now would mean a second migration of the same file.
+
+Runtime honesty: still no migration performed anywhere in the family repos —
+this file's contract proofs only make foundation *eligible* to be canonical.

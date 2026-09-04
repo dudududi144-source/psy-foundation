@@ -13,6 +13,9 @@ export type Anomaly =
   | 'dense-bass'
   | 'lead-heavy'
   | 'breakdown'
+  | 'melody'
+  | 'sixteenth-grid'
+  | 'white-noise'
 
 export interface Fixture {
   id: string
@@ -24,4 +27,10 @@ export interface Fixture {
   groundTruthBeats: number[]
   groundTruthBpm: number | null
   description: string
+  /** GAP-F1: exact MIDI pitches of the melody notes, in time order. */
+  groundTruthPitches?: number[]
+  /** GAP-F2: exact timestamps (seconds) of every 16th-note position in the grid. */
+  groundTruthSixteenths?: number[]
+  /** GAP-F3: declared spectral character, measurable from `signal`. */
+  groundTruthSpectrum?: { kind: 'white' | 'pink'; centroidHz: number }
 }

@@ -97,7 +97,7 @@ describe('benchmark-lab — learning', () => {
 describe('benchmark-lab — full report', () => {
   test('runFullBenchmark returns all categories', () => {
     const report = runFullBenchmark()
-    expect(report.timing.length).toBe(14)
+    expect(report.timing.length).toBe(17)
     expect(report.runtime).toBeDefined()
     expect(report.music).toBeDefined()
     expect(report.learning).toBeDefined()

@@ -14,9 +14,11 @@ import {
   genTempoJump,
   genTempoRamp,
 } from './generators.ts'
+import { genMelodyPentatonic, genRhythm16thGrid, genWhiteNoise } from './special.ts'
 import type { Fixture } from './types.ts'
 
 export const corpus: Fixture[] = [
+  // Rhythmic / tempo anomalies (the original corpus).
   genPerfect150(),
   genJitter150(),
   genTempoRamp(),
@@ -31,6 +33,10 @@ export const corpus: Fixture[] = [
   genDenseBass(),
   genLeadHeavy(),
   genBreakdown(),
+  // GAP-F1/F2/F3 (PLAN_V3 3.5): melody, 16th grid, noise.
+  genMelodyPentatonic(),
+  genRhythm16thGrid(),
+  genWhiteNoise(),
 ]
 
 export function getFixture(id: string): Fixture {

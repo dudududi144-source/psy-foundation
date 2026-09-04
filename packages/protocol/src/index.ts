@@ -21,6 +21,7 @@ export type {
   MusicalOutcome,
   Experience,
 } from './state.ts'
+export { PROTOCOL_VERSION } from './state.ts'
 export type { Channel, ChannelListener, Unsubscribe } from './channel.ts'
 export { InMemoryChannel } from './channel.ts'
 

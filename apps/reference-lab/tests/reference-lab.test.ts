@@ -22,9 +22,9 @@ describe('reference-lab', () => {
     expect(text).toContain('Energy')
   })
 
-  test('analyzeAllFixtures returns 14 reports', () => {
+  test('analyzeAllFixtures returns 17 reports (corpus grew: GAP-F1..F3)', () => {
     const reports = analyzeAllFixtures()
-    expect(reports.length).toBe(14)
+    expect(reports.length).toBe(17)
     for (const r of reports) {
       expect(r.tempo.bpm).toBeGreaterThanOrEqual(0)
       expect(r.frameCount).toBeGreaterThan(0)
