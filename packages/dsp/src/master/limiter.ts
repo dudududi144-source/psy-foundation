@@ -1,11 +1,19 @@
 /**
- * Stage 5 (part 2) — True-Peak Lookahead Limiter
+ * Master chain — True-Peak Lookahead Limiter.
  *
- * Stereo lookahead brickwall limiter for the PSY4 master bus. Detects
- * inter-sample (true) peaks via 4x oversampling of the detector path, then
- * applies a smooth attack/release gain envelope. A final hard-clip at
- * `ceiling` is the brickwall safety net so the SAMPLE peak is guaranteed to
- * never exceed ceiling.
+ * Moved from `apps/web/src/lib/psy4/limiter.ts` into `@psy-foundation/dsp`
+ * (DECISIONS_V3 D1) so the web app, the worklet and any future consumer share
+ * ONE implementation.
+ *
+ * D2 (DECISIONS_V3): `sampleRate` is REQUIRED in `TruePeakLimiterOptions` —
+ * the old `DEFAULT_SR = 44100` fallback made "forgot to pass SR" a silent
+ * mistuned limiter instead of a compile error.
+ *
+ * Stereo lookahead brickwall limiter for the master bus. Detects inter-sample
+ * (true) peaks via 4x oversampling of the detector path, then applies a smooth
+ * attack/release gain envelope. A final hard-clip at `ceiling` is the
+ * brickwall safety net so the SAMPLE peak is guaranteed to never exceed
+ * ceiling.
  *
  * Phase 1.2 (PLAN_V3_MASTER) REWRITE — the previous implementation had two
  * structural bugs found by the 2026-09-04 forensic audit (C3):
@@ -53,8 +61,6 @@
  * Determinism: no Math.random, no I/O, no Date. Pure function of input.
  */
 
-import { DEFAULT_SR } from './constants'
-
 export interface TruePeakLimiterOptions {
   /** Limiter begins reducing gain above this level (dBTP). Default -1.0. */
   thresholdDb?: number
@@ -66,8 +72,8 @@ export interface TruePeakLimiterOptions {
   releaseMs?: number
   /** Lookahead window (ms). Default 5.0. */
   lookaheadMs?: number
-  /** Sample rate (Hz). Default 44100. */
-  sampleRate?: number
+  /** Sample rate (Hz). REQUIRED (DECISIONS_V3 D2) — no silent 44100 default. */
+  sampleRate: number
 }
 
 /** Catmull-Rom phase coefficients for 4x interpolation. Index order:
@@ -95,13 +101,13 @@ export class TruePeakLimiter {
   /** Most-negative gain reduction observed, in dB (e.g., -6.0 = 6 dB reduction). */
   private maxGainReductionDb = 0
 
-  constructor(opts: TruePeakLimiterOptions = {}) {
+  constructor(opts: TruePeakLimiterOptions) {
     const thresholdDb = opts.thresholdDb ?? -1.0
     const ceilingDb = opts.ceilingDb ?? -1.0
     const attackMs = opts.attackMs ?? 1.0
     const releaseMs = opts.releaseMs ?? 100.0
     const lookaheadMs = opts.lookaheadMs ?? 5.0
-    this.sampleRate = opts.sampleRate ?? DEFAULT_SR
+    this.sampleRate = opts.sampleRate
 
     this.threshold = 10 ** (thresholdDb / 20)
     this.ceiling = 10 ** (ceilingDb / 20)
@@ -149,20 +155,20 @@ export class TruePeakLimiter {
       const im1 = i > 0 ? i - 1 : 0
       const ip1 = i < N - 1 ? i + 1 : i
       const ip2 = i < N - 2 ? i + 2 : ip1
-      const lPrev = L[im1]!
-      const lCur = L[i]!
-      const lNext = L[ip1]!
-      const lNext2 = L[ip2]!
-      const rPrev = R[im1]!
-      const rCur = R[i]!
-      const rNext = R[ip1]!
-      const rNext2 = R[ip2]!
+      const lPrev = L[im1]
+      const lCur = L[i]
+      const lNext = L[ip1]
+      const lNext2 = L[ip2]
+      const rPrev = R[im1]
+      const rCur = R[i]
+      const rNext = R[ip1]
+      const rNext2 = R[ip2]
 
       let maxPeak = 0
       for (let phase = 0; phase < 4; phase++) {
-        const c = CATMULL_ROM_PHASES[phase]!
-        const lVal = c[0]! * lPrev + c[1]! * lCur + c[2]! * lNext + c[3]! * lNext2
-        const rVal = c[0]! * rPrev + c[1]! * rCur + c[2]! * rNext + c[3]! * rNext2
+        const c = CATMULL_ROM_PHASES[phase]
+        const lVal = c[0] * lPrev + c[1] * lCur + c[2] * lNext + c[3] * lNext2
+        const rVal = c[0] * rPrev + c[1] * rCur + c[2] * rNext + c[3] * rNext2
         const al = Math.abs(lVal)
         const ar = Math.abs(rVal)
         if (al > maxPeak) maxPeak = al
@@ -183,12 +189,12 @@ export class TruePeakLimiter {
       const dq: number[] = []
       for (let i = N - 1; i >= 0; i--) {
         // Pop indices that fell out of the window [i, i+D-1]
-        while (dq.length > 0 && dq[dq.length - 1]! > i + D - 1) dq.pop()
+        while (dq.length > 0 && dq[dq.length - 1] > i + D - 1) dq.pop()
         // Maintain decreasing values from front: pop back while smaller
-        while (dq.length > 0 && peaks[dq[dq.length - 1]!]! <= peaks[i]!) dq.pop()
+        while (dq.length > 0 && peaks[dq[dq.length - 1]] <= peaks[i]) dq.pop()
         dq.push(i)
         // Front of the deque (largest remaining) is the window max
-        windowMax[i] = peaks[dq[0]!]!
+        windowMax[i] = peaks[dq[0]]
       }
     }
 
@@ -197,8 +203,8 @@ export class TruePeakLimiter {
     let maxGr = this.maxGainReductionDb
     for (let i = 0; i < N; i++) {
       let target = 1
-      if (windowMax[i]! > threshold) {
-        target = threshold / windowMax[i]!
+      if (windowMax[i] > threshold) {
+        target = threshold / windowMax[i]
       }
       const coef = target < envelope ? attackCoef : releaseCoef
       envelope += (target - envelope) * coef
@@ -208,8 +214,8 @@ export class TruePeakLimiter {
       }
       // Apply the smoothed envelope to the CURRENT sample (no delay line —
       // the lookahead already came from seeing the future in Pass 2).
-      L[i] = L[i]! * envelope
-      R[i] = R[i]! * envelope
+      L[i] = L[i] * envelope
+      R[i] = R[i] * envelope
     }
 
     // ── Pass 4: brickwall clip at the ADVERTISED ceiling ──
@@ -220,8 +226,8 @@ export class TruePeakLimiter {
     // guaranteed ≤ ceiling; see the inter-sample honesty note above for the
     // (documented) ITU-FIR true-peak caveat.
     for (let i = 0; i < N; i++) {
-      let sL = L[i]!
-      let sR = R[i]!
+      let sL = L[i]
+      let sR = R[i]
       if (sL > ceiling) sL = ceiling
       else if (sL < -ceiling) sL = -ceiling
       if (sR > ceiling) sR = ceiling

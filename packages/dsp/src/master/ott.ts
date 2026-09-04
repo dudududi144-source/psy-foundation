@@ -1,6 +1,23 @@
 /**
  * OTT — Over The Top upward+downward multiband expander.
  *
+ * Moved from `apps/web/src/lib/psy4/ott.ts` into `@psy-foundation/dsp`
+ * (DECISIONS_V3 D1) so the web app, the worklet and any future consumer share
+ * ONE implementation.
+ *
+ * D2 (DECISIONS_V3): `sampleRate` is REQUIRED in `OTTOptions` — the old
+ * `DEFAULT_SR = 44100` fallback made "forgot to pass SR" a silent mistuned
+ * processor instead of a compile error.
+ *
+ * D3 (DECISIONS_V3 — BUG FIX DURING THE MOVE): the previous implementation
+ * shared ONE `BandExpander` per band across L and R (old ott.ts:186-192), so
+ * the R sidechain corrupted the L envelope (and vice versa) — on any signal
+ * with different per-channel dynamics the two channels cross-modulated each
+ * other's expansion gain. The fix: 3 bands × 2 channels of INDEPENDENT
+ * envelope followers. This intentionally changes OTT output on asymmetric
+ * stereo material; `master-parity.test.ts` locks the fix in (the pre-fix
+ * behavior is preserved as the `ottLegacy` fixture).
+ *
  * The signature processor of modern psytrance/EDM. Splits the signal into
  * 3 bands (low/mid/high), then applies BOTH:
  *   - Downward expansion: reduces loud signals above threshold
@@ -11,7 +28,7 @@
  *
  * Inspired by Xfer OTT (free plugin used on virtually every EDM track).
  *
- * Topology:
+ * Topology (per channel, independent):
  *   input → LR4 split (200Hz, 2000Hz) → 3 bands
  *     low  → BandExpander → low_out
  *     mid  → BandExpander → mid_out
@@ -21,7 +38,6 @@
  * Determinism: no Math.random, no I/O. Pure function of input.
  */
 
-import { DEFAULT_SR } from './constants'
 import { LR4Crossover } from './multiband'
 
 export interface OTTOptions {
@@ -29,8 +45,8 @@ export interface OTTOptions {
   lowCrossoverHz?: number
   /** Mid/high crossover frequency (Hz). Default 2000. */
   midCrossoverHz?: number
-  /** Sample rate (Hz). Default 44100. */
-  sampleRate?: number
+  /** Sample rate (Hz). REQUIRED (DECISIONS_V3 D2) — no silent 44100 default. */
+  sampleRate: number
   /** Depth: 0 = bypass, 1 = full OTT effect. Default 1.0. */
   depth?: number
   /** Upward expansion gain (dB). Default 6 (moderate OTT). */
@@ -116,14 +132,21 @@ export class OTT {
   private midXoverL: LR4Crossover
   private lowXoverR: LR4Crossover
   private midXoverR: LR4Crossover
-  private lowExpander: BandExpander
-  private midExpander: BandExpander
-  private highExpander: BandExpander
+
+  // D3 FIX: independent expanders per band AND per channel (3 bands × L/R).
+  // The old code had 3 shared expanders; R's sidechain corrupted L's gain.
+  private lowExpanderL: BandExpander
+  private midExpanderL: BandExpander
+  private highExpanderL: BandExpander
+  private lowExpanderR: BandExpander
+  private midExpanderR: BandExpander
+  private highExpanderR: BandExpander
+
   private depth: number
   private enabled: boolean
 
-  constructor(opts: OTTOptions = {}) {
-    const sr = opts.sampleRate ?? DEFAULT_SR
+  constructor(opts: OTTOptions) {
+    const sr = opts.sampleRate
     const lowHz = opts.lowCrossoverHz ?? 200
     const midHz = opts.midCrossoverHz ?? 2000
     // Roast-fix: clamp depth to [0, 1] and gains to ±12 dB. Without clamping,
@@ -156,14 +179,19 @@ export class OTT {
       sampleRate: sr,
     }
 
-    // Slightly different settings per band for musicality
-    this.lowExpander = new BandExpander(expanderOpts)
-    this.midExpander = new BandExpander({ ...expanderOpts, upwardGainDb: upwardDb * 0.8 })
-    this.highExpander = new BandExpander({ ...expanderOpts, upwardGainDb: upwardDb * 1.2 })
+    // Slightly different settings per band for musicality. Each channel gets
+    // its own follower set (D3).
+    this.lowExpanderL = new BandExpander(expanderOpts)
+    this.midExpanderL = new BandExpander({ ...expanderOpts, upwardGainDb: upwardDb * 0.8 })
+    this.highExpanderL = new BandExpander({ ...expanderOpts, upwardGainDb: upwardDb * 1.2 })
+    this.lowExpanderR = new BandExpander(expanderOpts)
+    this.midExpanderR = new BandExpander({ ...expanderOpts, upwardGainDb: upwardDb * 0.8 })
+    this.highExpanderR = new BandExpander({ ...expanderOpts, upwardGainDb: upwardDb * 1.2 })
   }
 
-  /** Process stereo buffer IN-PLACE. Each channel processed independently
-   *  to preserve stereo image. Phase F fix: removed unconditional makeup gain. */
+  /** Process stereo buffer IN-PLACE. Each channel has fully independent
+   *  crossovers and expanders to preserve the stereo image (D3). Phase F fix:
+   *  removed unconditional makeup gain. */
   processBuffer(L: Float32Array, R: Float32Array): void {
     if (!this.enabled) return
     const N = Math.min(L.length, R.length)
@@ -171,8 +199,8 @@ export class OTT {
     // Upward expansion naturally compensates for downward compression.
 
     for (let i = 0; i < N; i++) {
-      const xL = L[i]!
-      const xR = R[i]!
+      const xL = L[i]
+      const xR = R[i]
 
       // Split into 3 bands (L channel)
       const [lowL, restL] = this.lowXoverL.process(xL)
@@ -182,14 +210,15 @@ export class OTT {
       const [lowR, restR] = this.lowXoverR.process(xR)
       const [midR, highR] = this.midXoverR.process(restR)
 
-      // Expand each band (L and R processed independently)
-      const lowOutL = this.lowExpander.process(lowL)
-      const midOutL = this.midExpander.process(midL)
-      const highOutL = this.highExpander.process(highL)
+      // Expand each band — per-channel followers (D3): L's gain is computed
+      // from L's envelope only, R's from R's only.
+      const lowOutL = this.lowExpanderL.process(lowL)
+      const midOutL = this.midExpanderL.process(midL)
+      const highOutL = this.highExpanderL.process(highL)
 
-      const lowOutR = this.lowExpander.process(lowR)
-      const midOutR = this.midExpander.process(midR)
-      const highOutR = this.highExpander.process(highR)
+      const lowOutR = this.lowExpanderR.process(lowR)
+      const midOutR = this.midExpanderR.process(midR)
+      const highOutR = this.highExpanderR.process(highR)
 
       // Recombine (no makeup — upward expansion compensates)
       L[i] = lowOutL + midOutL + highOutL
@@ -202,8 +231,11 @@ export class OTT {
     this.midXoverL.reset()
     this.lowXoverR.reset()
     this.midXoverR.reset()
-    this.lowExpander.reset()
-    this.midExpander.reset()
-    this.highExpander.reset()
+    this.lowExpanderL.reset()
+    this.midExpanderL.reset()
+    this.highExpanderL.reset()
+    this.lowExpanderR.reset()
+    this.midExpanderR.reset()
+    this.highExpanderR.reset()
   }
 }

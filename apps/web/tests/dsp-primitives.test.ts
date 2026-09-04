@@ -13,9 +13,6 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { BLSaw, ZDFSVF, fastTanh } from '../src/lib/psy4/forensic/dsp'
-import { TruePeakLimiter } from '../src/lib/psy4/limiter'
-import { measureLUFS } from '../src/lib/psy4/loudness'
-import { MultibandCompressor } from '../src/lib/psy4/multiband'
 
 const SR = 44100
 
@@ -128,139 +125,9 @@ describe('BLSaw — Band-Limited Sawtooth', () => {
   })
 })
 
-// ── Multiband / LR4 ─────────────────────────────────────────────────────
-describe('MultibandCompressor — 3-band LR4', () => {
-  test('processes stereo input without crash', () => {
-    const mb = new MultibandCompressor({
-      sampleRate: SR,
-      lowCrossoverHz: 200,
-      midCrossoverHz: 2000,
-    })
-
-    const n = 1024
-    const inputL = new Float32Array(n)
-    const inputR = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      inputL[i] = Math.sin((2 * Math.PI * 100 * i) / SR) * 0.5
-      inputR[i] = Math.sin((2 * Math.PI * 100 * i) / SR) * 0.5
-    }
-
-    // processBuffer modifies in-place
-    mb.processBuffer(inputL, inputR)
-
-    // Output should have non-zero energy (not silenced)
-    let energy = 0
-    for (let i = 0; i < n; i++) energy += (inputL[i] ?? 0) ** 2
-    expect(energy / n).toBeGreaterThan(0.0001)
-  })
-})
-
-// ── LUFS ────────────────────────────────────────────────────────────────
-describe('measureLUFS — ITU-R BS.1770-4', () => {
-  test('997Hz sine at -3dBFS measures around -6 LUFS', () => {
-    const freq = 997
-    const duration = 2.0
-    const n = Math.floor(duration * SR)
-
-    const left = new Float32Array(n)
-    const right = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      // -3 dBFS peak = 0.7079 amplitude
-      const s = Math.sin((2 * Math.PI * freq * i) / SR) * 0.7079
-      left[i] = s
-      right[i] = s
-    }
-
-    const result = measureLUFS(left, right, SR)
-    // Reference: -3.01 LUFS for stereo 997Hz sine at -3 dBFS
-    // Allow ±2.0 tolerance (K-weighting approximation + gating edge effects)
-    expect(result.integratedLUFS).toBeGreaterThan(-6.0)
-    expect(result.integratedLUFS).toBeLessThan(-1.0)
-  })
-
-  test('quiet signal measures lower LUFS than loud signal', () => {
-    const duration = 2.0
-    const n = Math.floor(duration * SR)
-
-    const loudL = new Float32Array(n)
-    const loudR = new Float32Array(n)
-    const quietL = new Float32Array(n)
-    const quietR = new Float32Array(n)
-
-    for (let i = 0; i < n; i++) {
-      const t = (2 * Math.PI * 440 * i) / SR
-      loudL[i] = Math.sin(t) * 0.5
-      loudR[i] = Math.sin(t) * 0.5
-      quietL[i] = Math.sin(t) * 0.05 // 20dB quieter
-      quietR[i] = Math.sin(t) * 0.05
-    }
-
-    const loudLufs = measureLUFS(loudL, loudR, SR)
-    const quietLufs = measureLUFS(quietL, quietR, SR)
-
-    // Quiet should be at least 15 LU lower
-    expect(quietLufs.integratedLUFS).toBeLessThan(loudLufs.integratedLUFS - 15)
-  })
-})
-
-// ── TruePeakLimiter ────────────────────────────────────────────────────
-describe('TruePeakLimiter — sample peak limiting', () => {
-  test('output sample peak does not exceed ceiling (with tolerance)', () => {
-    const limiter = new TruePeakLimiter({
-      ceilingDb: -0.5, // ~0.944 linear
-      releaseMs: 100,
-      sampleRate: SR,
-    })
-
-    const n = Math.floor(SR * 0.5)
-    const inputL = new Float32Array(n)
-    const inputR = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      // +6dB over ceiling (amplitude 1.9)
-      inputL[i] = Math.sin((2 * Math.PI * 1000 * i) / SR) * 1.9
-      inputR[i] = inputL[i]
-    }
-
-    // processBuffer modifies in-place
-    limiter.processBuffer(inputL, inputR)
-
-    let maxPeak = 0
-    for (let i = 0; i < inputL.length; i++) {
-      maxPeak = Math.max(maxPeak, Math.abs(inputL[i] ?? 0))
-    }
-
-    // Phase 0: known ISP bug (documented Phase 1 Day 3-4)
-    // Current limiter has tolerance ~0.15 for ISP measurement error
-    // Phase 1 will tighten to ≤ ceiling exactly
-    expect(maxPeak).toBeLessThanOrEqual(0.944 + 0.2)
-  })
-
-  test('limiter does not silence quiet input', () => {
-    const limiter = new TruePeakLimiter({
-      ceilingDb: -0.5,
-      releaseMs: 100,
-      sampleRate: SR,
-    })
-
-    const n = Math.floor(SR * 0.5)
-    const inputL = new Float32Array(n)
-    const inputR = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      // Quiet 1kHz at -20dB
-      inputL[i] = Math.sin((2 * Math.PI * 1000 * i) / SR) * 0.1
-      inputR[i] = inputL[i]
-    }
-
-    limiter.processBuffer(inputL, inputR)
-
-    let energy = 0
-    for (let i = 0; i < inputL.length; i++) energy += (inputL[i] ?? 0) ** 2
-    const rms = Math.sqrt(energy / inputL.length)
-
-    // RMS of -20dB sine is ~0.0707, expect ≥ 0.05
-    expect(rms).toBeGreaterThan(0.05)
-  })
-})
+// ── Multiband / LUFS / TruePeakLimiter suites moved to @psy-foundation/dsp
+// (DECISIONS_V3 D1 — the master chain lives in packages/dsp; its tests live
+// there too: packages/dsp/tests/master-*.test.ts).
 
 // ── fastTanh ────────────────────────────────────────────────────────────
 describe('fastTanh — saturation primitive', () => {

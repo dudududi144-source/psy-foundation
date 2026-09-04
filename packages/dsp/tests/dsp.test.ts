@@ -5,7 +5,6 @@ import {
   DcBlocker,
   Delay,
   FmOscillator,
-  LufsMeter,
   MoogLadder,
   OnePoleLP,
   PeakMeter,
@@ -371,11 +370,9 @@ describe('Metering', () => {
     expect(meter.current).toBeCloseTo(0.9, 1)
   })
 
-  test('LufsMeter measures silence as very quiet', () => {
-    const meter = new LufsMeter(SR)
-    for (let i = 0; i < SR; i++) meter.process(0)
-    expect(meter.process(0)).toBeLessThan(-60)
-  })
+  // DECISIONS_V3 D5: the fake LufsMeter was deleted. Its tests are replaced
+  // by ITU-conformance behavior tests for the real meter (measureLUFS) in
+  // tests/master-loudness.test.ts.
 })
 
 describe('VoicePool', () => {

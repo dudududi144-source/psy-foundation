@@ -15,6 +15,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
+import { measureLUFS } from '@psy-foundation/dsp'
 import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 import { getReferenceLatent } from '../src/app/api/upload-reference/route'
 import {
@@ -23,7 +24,6 @@ import {
   renderFoundationSection,
 } from '../src/lib/psy4/forensic-bridge'
 import { Rng } from '../src/lib/psy4/forensic/prng'
-import { measureLUFS } from '../src/lib/psy4/loudness'
 import { WaveguideString } from '../src/lib/psy4/physical/waveguide-string'
 import {
   LatentDecoder,
@@ -564,7 +564,7 @@ describe('Roast Fix 3: truePeakDb is 4x-oversampled (was sample peak)', () => {
 describe('Roast Fix 4: reference-analyzer uses true peak (not sample peak)', () => {
   test('analyzeReference.truePeakDb matches measureLUFS.truePeakDb', async () => {
     const { analyzeReference } = await import('@/lib/psy4/reference-analyzer')
-    const { measureLUFS } = await import('@/lib/psy4/loudness')
+    const { measureLUFS } = await import('@psy-foundation/dsp')
 
     // Generate a signal with significant ISPs (square wave)
     const L = new Float32Array(SR * 1)
@@ -784,7 +784,9 @@ describe('Roast Fix 6: render seed propagation (was hardcoded 42)', () => {
     const hash = createHash('md5').update(Buffer.from(wav)).digest('hex')
     // Baseline from roast-fix-3 (after K-weighting correction).
     // Phase 1.2 (2026-09-04): limiter rewrite → re-baselined (audit C3 fix).
-    expect(hash).toBe('a53cfc88fcf598c739a67de43d82e4c7')
+    // Phase 1.1 (2026-09-04): OTT per-channel expanders (DECISIONS_V3 D3) →
+    // re-baselined.
+    expect(hash).toBe('f2f81ed62a25743358417bed75ab67f7')
   })
 })
 
@@ -848,9 +850,9 @@ describe('Roast Fix 8: MoogLadder guards against invalid args (was NaN)', () => 
 
 describe('Roast Fix 9: OTT clamps extreme params (was 685 billion output)', () => {
   test('OTT with depth=10 produces bounded output (was 186x)', async () => {
-    const { OTT } = await import('@/lib/psy4/ott')
+    const { OTT } = await import('@psy-foundation/dsp')
     const sr = 44100
-    const ott = new OTT({ depth: 10 }) // clamped to 1
+    const ott = new OTT({ depth: 10, sampleRate: sr }) // depth clamped to 1
     const L = new Float32Array(sr)
     const R = new Float32Array(sr)
     for (let i = 0; i < sr; i++) {
@@ -865,9 +867,9 @@ describe('Roast Fix 9: OTT clamps extreme params (was 685 billion output)', () =
   })
 
   test('OTT with upwardGain=20dB produces bounded output (was 685 billion)', async () => {
-    const { OTT } = await import('@/lib/psy4/ott')
+    const { OTT } = await import('@psy-foundation/dsp')
     const sr = 44100
-    const ott = new OTT({ depth: 1, upwardGainDb: 20 }) // clamped to 12
+    const ott = new OTT({ depth: 1, upwardGainDb: 20, sampleRate: sr }) // clamped to 12
     const L = new Float32Array(sr)
     const R = new Float32Array(sr)
     for (let i = 0; i < sr; i++) {
@@ -882,9 +884,9 @@ describe('Roast Fix 9: OTT clamps extreme params (was 685 billion output)', () =
   })
 
   test('OTT with normal params still works (no regression)', async () => {
-    const { OTT } = await import('@/lib/psy4/ott')
+    const { OTT } = await import('@psy-foundation/dsp')
     const sr = 44100
-    const ott = new OTT({ depth: 0.3, upwardGainDb: 2, downwardGainDb: -2 })
+    const ott = new OTT({ depth: 0.3, upwardGainDb: 2, downwardGainDb: -2, sampleRate: sr })
     const L = new Float32Array(sr)
     const R = new Float32Array(sr)
     for (let i = 0; i < sr; i++) {
@@ -899,9 +901,9 @@ describe('Roast Fix 9: OTT clamps extreme params (was 685 billion output)', () =
   })
 
   test('OTT depth=0 is still a no-op', async () => {
-    const { OTT } = await import('@/lib/psy4/ott')
+    const { OTT } = await import('@psy-foundation/dsp')
     const sr = 44100
-    const ott = new OTT({ depth: 0 })
+    const ott = new OTT({ depth: 0, sampleRate: sr })
     const L = new Float32Array(sr)
     const R = new Float32Array(sr)
     for (let i = 0; i < sr; i++) {
@@ -916,135 +918,170 @@ describe('Roast Fix 9: OTT clamps extreme params (was 685 billion output)', () =
   })
 })
 
-// ─── Roast Fix 10: Worklet multiband + OTT port ──────────────────────────────
+// ─── Roast Fix 10 → Phase 1.1 (One DSP): master chain parity in worklet land ─
+//
+// Roast-fix-10 ported MultibandCompressor + OTT into the hand-written worklet
+// JS. Phase 1.1 (DECISIONS_V3 D6) deleted that vendored 4th copy: the worklet
+// is now GENERATED from apps/web/src/worklets/psy4-processor.ts, which imports
+// the master chain from @psy-foundation/dsp — the same classes the offline
+// render uses, so real-time/offline parity is structural. These tests keep
+// the roast-fix-10 behavior locks on the CANONICAL classes, and verify the
+// generated artifact really parses and registers under its contract name.
 
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { LR4Crossover, MultibandCompressor, OTT } from '@psy-foundation/dsp'
 
-// Load the worklet JS in a mock environment so we can test the ported classes
-async function loadWorkletClasses() {
-  const workletPath = join(process.cwd(), 'public', 'worklets', 'psy4-processor.js')
-  const src = readFileSync(workletPath, 'utf-8')
-  // Mock AudioWorkletProcessor + registerProcessor globals
-  const mock = `
-    let _registered = null
-    class AudioWorkletProcessor { constructor() {} get port() { return { onmessage: null, postMessage: () => {} } } }
-    function registerProcessor(name, cls) { _registered = cls }
-  `
-  const testCode = `${mock}${src}\nmodule.exports = { MultibandCompressor, OTT, LR4Crossover, BandCompressor, BandExpander };`
-  const tempPath = '/tmp/worklet-test-classes.js'
-  writeFileSync(tempPath, testCode)
-  return await import(tempPath)
+function sineBuffer(n: number, freq = 440, amp = 0.3): Float32Array {
+  const buf = new Float32Array(n)
+  for (let i = 0; i < n; i++) buf[i] = amp * Math.sin((2 * Math.PI * freq * i) / SR)
+  return buf
 }
 
-describe('Roast Fix 10: Worklet multiband + OTT ported from offline render', () => {
-  test('LR4Crossover produces LP + HP that sum to ~unity (magnitude)', async () => {
-    const mod = await loadWorkletClasses()
-    const xover = new mod.LR4Crossover(200, 44100)
-    // LR4 is phase-matched at the crossover — the magnitude of LP+HP sums
-    // to unity, but the instantaneous sum can exceed the input due to phase
-    // offset. We check that the RMS of LP+HP ≈ RMS of input instead.
+function generatedWorkletPath(): string {
+  const candidates = [
+    join(process.cwd(), 'public', 'worklets', 'psy4-processor.js'),
+    join(process.cwd(), 'apps', 'web', 'public', 'worklets', 'psy4-processor.js'),
+  ]
+  for (const p of candidates) if (existsSync(p)) return p
+  throw new Error('generated worklet not found — run: bun run build:worklet')
+}
+
+describe('Roast Fix 10 → One DSP: canonical master chain (worklet AND offline)', () => {
+  test('LR4Crossover produces LP + HP that sum to ~unity (magnitude)', () => {
+    const xover = new LR4Crossover(200, SR)
     let sumSq = 0
     let inputSq = 0
-    for (let i = 0; i < 44100; i++) {
-      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
+    const n = SR
+    for (let i = 0; i < n; i++) {
+      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / SR)
       const [lp, hp] = xover.process(x)
       const sum = lp + hp
       sumSq += sum * sum
       inputSq += x * x
     }
-    const rmsSum = Math.sqrt(sumSq / 44100)
-    const rmsInput = Math.sqrt(inputSq / 44100)
-    // RMS of sum should be close to RMS of input (within 10%)
+    const rmsSum = Math.sqrt(sumSq / n)
+    const rmsInput = Math.sqrt(inputSq / n)
+    // RMS of sum should be close to RMS of input (within 15%)
     expect(Math.abs(rmsSum - rmsInput) / rmsInput).toBeLessThan(0.15)
   })
 
-  test('MultibandCompressor produces finite output (no NaN)', async () => {
-    const mod = await loadWorkletClasses()
-    const mb = new mod.MultibandCompressor({ sampleRate: 44100 })
-    let nanCount = 0
-    for (let i = 0; i < 1000; i++) {
-      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
-      const [l, r] = mb.processSample(x, x)
-      if (!Number.isFinite(l) || !Number.isFinite(r)) nanCount++
+  test('MultibandCompressor produces finite output (no NaN)', () => {
+    const mb = new MultibandCompressor({ sampleRate: SR })
+    const L = sineBuffer(1000)
+    const R = sineBuffer(1000)
+    mb.processBuffer(L, R)
+    for (let i = 0; i < L.length; i++) {
+      expect(Number.isFinite(L[i]!)).toBe(true)
+      expect(Number.isFinite(R[i]!)).toBe(true)
     }
-    expect(nanCount).toBe(0)
   })
 
-  test('MultibandCompressor L/R symmetric for same input', async () => {
-    const mod = await loadWorkletClasses()
-    const mb = new mod.MultibandCompressor({ sampleRate: 44100 })
+  test('MultibandCompressor L/R symmetric for same input', () => {
+    const mb = new MultibandCompressor({ sampleRate: SR })
+    const L = sineBuffer(SR)
+    const R = sineBuffer(SR)
+    mb.processBuffer(L, R)
     let maxDiff = 0
-    for (let i = 0; i < 44100; i++) {
-      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
-      const [l, r] = mb.processSample(x, x)
-      maxDiff = Math.max(maxDiff, Math.abs(l - r))
-    }
-    // L and R should be identical for same input (separate filter state per channel)
+    for (let i = 0; i < L.length; i++) maxDiff = Math.max(maxDiff, Math.abs(L[i]! - R[i]!))
+    // L and R should be identical for same input (separate state per channel)
     expect(maxDiff).toBeLessThan(0.001)
   })
 
-  test('OTT depth=0 is a no-op (returns input unchanged)', async () => {
-    const mod = await loadWorkletClasses()
-    const ott = new mod.OTT({ sampleRate: 44100, depth: 0 })
-    const [l, r] = ott.processSample(0.5, 0.5)
-    expect(l).toBeCloseTo(0.5, 4)
-    expect(r).toBeCloseTo(0.5, 4)
+  test('OTT depth=0 is a no-op (returns input unchanged)', () => {
+    const ott = new OTT({ sampleRate: SR, depth: 0 })
+    const L = new Float32Array([0.5, 0.25, -0.3])
+    const R = new Float32Array([0.5, 0.25, -0.3])
+    ott.processBuffer(L, R)
+    expect(L[0]).toBeCloseTo(0.5, 4)
+    expect(R[0]).toBeCloseTo(0.5, 4)
+    expect(L[2]).toBeCloseTo(-0.3, 4)
   })
 
-  test('OTT produces finite output (no NaN)', async () => {
-    const mod = await loadWorkletClasses()
-    const ott = new mod.OTT({ sampleRate: 44100, depth: 0.3 })
-    let nanCount = 0
-    for (let i = 0; i < 1000; i++) {
-      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
-      const [l, r] = ott.processSample(x, x)
-      if (!Number.isFinite(l) || !Number.isFinite(r)) nanCount++
+  test('OTT produces finite output (no NaN)', () => {
+    const ott = new OTT({ sampleRate: SR, depth: 0.3 })
+    const L = sineBuffer(1000)
+    const R = sineBuffer(1000)
+    ott.processBuffer(L, R)
+    for (let i = 0; i < L.length; i++) {
+      expect(Number.isFinite(L[i]!)).toBe(true)
+      expect(Number.isFinite(R[i]!)).toBe(true)
     }
-    expect(nanCount).toBe(0)
   })
 
-  test('OTT L/R symmetric for same input', async () => {
-    const mod = await loadWorkletClasses()
-    const ott = new mod.OTT({ sampleRate: 44100, depth: 0.3 })
+  test('OTT L/R symmetric for same input (per-channel expanders, D3)', () => {
+    const ott = new OTT({ sampleRate: SR, depth: 0.3 })
+    const L = sineBuffer(SR)
+    const R = sineBuffer(SR)
+    ott.processBuffer(L, R)
     let maxDiff = 0
-    for (let i = 0; i < 44100; i++) {
-      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
-      const [l, r] = ott.processSample(x, x)
-      maxDiff = Math.max(maxDiff, Math.abs(l - r))
-    }
+    for (let i = 0; i < L.length; i++) maxDiff = Math.max(maxDiff, Math.abs(L[i]! - R[i]!))
     expect(maxDiff).toBeLessThan(0.001)
   })
 
-  test('OTT extreme params bounded (inherits roast-fix-9 clamp)', async () => {
-    const mod = await loadWorkletClasses()
-    const ott = new mod.OTT({ sampleRate: 44100, depth: 10, upwardGainDb: 20 })
+  test('OTT extreme params bounded (inherits roast-fix-9 clamp)', () => {
+    const ott = new OTT({ sampleRate: SR, depth: 10, upwardGainDb: 20 })
+    const L = sineBuffer(SR)
+    const R = sineBuffer(SR)
+    ott.processBuffer(L, R)
     let maxOut = 0
-    for (let i = 0; i < 44100; i++) {
-      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
-      const [l, r] = ott.processSample(x, x)
-      maxOut = Math.max(maxOut, Math.abs(l), Math.abs(r))
-    }
-    // Should be bounded (was 685 billion before clamp in offline, same clamp in worklet)
+    for (let i = 0; i < L.length; i++) maxOut = Math.max(maxOut, Math.abs(L[i]!), Math.abs(R[i]!))
+    // Bounded (was 685 billion before the clamp)
     expect(maxOut).toBeLessThan(100)
     expect(Number.isFinite(maxOut)).toBe(true)
   })
 
-  test('MultibandCompressor + OTT chained: finite output', async () => {
-    const mod = await loadWorkletClasses()
-    const mb = new mod.MultibandCompressor({ sampleRate: 44100 })
-    const ott = new mod.OTT({ sampleRate: 44100, depth: 0.3 })
+  test('MultibandCompressor + OTT chained: finite bounded output', () => {
+    const mb = new MultibandCompressor({ sampleRate: SR })
+    const ott = new OTT({ sampleRate: SR, depth: 0.3 })
+    const L = sineBuffer(SR)
+    const R = sineBuffer(SR)
+    mb.processBuffer(L, R)
+    ott.processBuffer(L, R)
     let nanCount = 0
     let maxOut = 0
-    for (let i = 0; i < 44100; i++) {
-      const x = 0.3 * Math.sin((2 * Math.PI * 440 * i) / 44100)
-      const [ml, mr] = mb.processSample(x, x)
-      const [ol, or2] = ott.processSample(ml, mr)
-      if (!Number.isFinite(ol) || !Number.isFinite(or2)) nanCount++
-      maxOut = Math.max(maxOut, Math.abs(ol), Math.abs(or2))
+    for (let i = 0; i < L.length; i++) {
+      if (!Number.isFinite(L[i]!) || !Number.isFinite(R[i]!)) nanCount++
+      maxOut = Math.max(maxOut, Math.abs(L[i]!), Math.abs(R[i]!))
     }
     expect(nanCount).toBe(0)
-    expect(maxOut).toBeLessThan(10) // bounded
-    expect(maxOut).toBeGreaterThan(0) // produces signal
+    expect(maxOut).toBeLessThan(10)
+    expect(maxOut).toBeGreaterThan(0)
+  })
+})
+
+describe('One DSP: generated worklet artifact contract (D6)', () => {
+  test('artifact parses, executes and registers under the contract name', () => {
+    const src = readFileSync(generatedWorkletPath(), 'utf-8')
+    expect(src.startsWith('/* GENERATED by scripts/build-worklet.mjs')).toBe(true)
+    // Syntax-valid script (compiles without executing):
+    expect(() => new Function(src)).not.toThrow()
+    // Executes in a mocked AudioWorkletGlobalScope and registers 'psy4-processor':
+    const g = globalThis as unknown as Record<string, unknown>
+    const registered: string[] = []
+    const saved: Array<[string, unknown]> = [
+      ['AudioWorkletProcessor', g.AudioWorkletProcessor],
+      ['registerProcessor', g.registerProcessor],
+      ['sampleRate', g.sampleRate],
+      ['currentFrame', g.currentFrame],
+    ]
+    class MockProcessor {
+      port = { onmessage: null, postMessage: () => {} }
+    }
+    g.AudioWorkletProcessor = MockProcessor
+    g.registerProcessor = (name: string) => {
+      registered.push(name)
+    }
+    g.sampleRate = 44100
+    g.currentFrame = 0
+    try {
+      ;(new Function(src) as () => void)()
+    } finally {
+      for (const [k, v] of saved) {
+        if (v === undefined) delete g[k]
+        else g[k] = v
+      }
+    }
+    expect(registered).toContain('psy4-processor')
   })
 })

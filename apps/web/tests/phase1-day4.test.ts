@@ -8,8 +8,6 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_SR, SR_48K, SR_96K } from '../src/lib/psy4/constants'
 import { BLSaw, ZDFSVF } from '../src/lib/psy4/forensic/dsp'
-import { TruePeakLimiter } from '../src/lib/psy4/limiter'
-import { MultibandCompressor } from '../src/lib/psy4/multiband'
 
 describe('Phase 1 Day 4 — sample-rate parameterization', () => {
   test('DEFAULT_SR is 44100 (audio industry standard)', () => {
@@ -82,52 +80,9 @@ describe('Phase 1 Day 4 — sample-rate parameterization', () => {
     }
   })
 
-  test('MultibandCompressor works at 48kHz', () => {
-    const sr = 48000
-    const mb = new MultibandCompressor({
-      sampleRate: sr,
-      lowCrossoverHz: 200,
-      midCrossoverHz: 2000,
-    })
-
-    const n = 1024
-    const L = new Float32Array(n)
-    const R = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      L[i] = Math.sin((2 * Math.PI * 100 * i) / sr) * 0.5
-      R[i] = L[i]
-    }
-
-    mb.processBuffer(L, R)
-
-    let energy = 0
-    for (let i = 0; i < n; i++) energy += (L[i] ?? 0) ** 2
-    expect(energy / n).toBeGreaterThan(0.0001)
-  })
-
-  test('TruePeakLimiter works at 48kHz', () => {
-    const sr = 48000
-    const limiter = new TruePeakLimiter({
-      ceilingDb: -0.5,
-      sampleRate: sr,
-    })
-
-    const n = sr * 0.1
-    const L = new Float32Array(n)
-    const R = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      L[i] = Math.sin((2 * Math.PI * 1000 * i) / sr) * 0.5
-      R[i] = L[i]
-    }
-
-    limiter.processBuffer(L, R)
-
-    let maxPeak = 0
-    for (let i = 0; i < n; i++) {
-      maxPeak = Math.max(maxPeak, Math.abs(L[i] ?? 0))
-    }
-    expect(maxPeak).toBeLessThanOrEqual(1.0)
-  })
+  // The 'MultibandCompressor/TruePeakLimiter at 48kHz' tests moved to
+  // @psy-foundation/dsp (DECISIONS_V3 D1): packages/dsp/tests/limiter-rewrite.test.ts
+  // and packages/dsp/tests/master-multiband.test.ts.
 
   test('no hard-coded 44100 in psy4 source files (except constants.ts)', () => {
     // This is a meta-test: verifies the parameterization is complete.

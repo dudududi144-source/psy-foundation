@@ -134,11 +134,13 @@ export type { AutomationPoint, AutomationLane, InterpolationType } from './autom
 export type { ChannelFXConfig } from './channel-fx'
 export { CHANNEL_PRESETS } from './channel-presets'
 export type { VoiceType } from './channel-presets'
-export { MultibandCompressor } from './multiband'
+// Master chain — DECISIONS_V3 D1: ONE source of truth in @psy-foundation/dsp.
+// These are IMPORTS (re-exports of the single implementation), not a second copy.
+export { MultibandCompressor } from '@psy-foundation/dsp'
 export { StereoWidener } from './ms-processor'
-export { measureLUFS, lufsToGainOffset } from './loudness'
-export type { LUFSResult } from './loudness'
-export { TruePeakLimiter } from './limiter'
+export { measureLUFS, lufsToGainOffset } from '@psy-foundation/dsp'
+export type { LUFSResult } from '@psy-foundation/dsp'
+export { TruePeakLimiter } from '@psy-foundation/dsp'
 export { ModulationMatrix } from './modulation-matrix'
 export type { ModRoute, ModSource, ModDestination } from './modulation-matrix'
 

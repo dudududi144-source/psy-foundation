@@ -9,7 +9,8 @@
  * Pure functions: no audio playback, no I/O, no side effects.
  */
 
-import { type LUFSResult, measureLUFS } from './loudness'
+// DECISIONS_V3 D1: measureLUFS/LUFSResult live in @psy-foundation/dsp.
+import { type LUFSResult, measureLUFS } from '@psy-foundation/dsp'
 
 export interface ReferenceProfile {
   bpm: number

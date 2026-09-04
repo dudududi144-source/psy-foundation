@@ -1,10 +1,14 @@
 /**
- * Stage 5 (part 1) — ITU-R BS.1770-4 LUFS Loudness Meter
+ * Master chain — ITU-R BS.1770-4 LUFS Loudness Meter.
  *
- * Pure offline LUFS measurement for the PSY4 master bus. Called once at the
- * end of the render to verify loudness targets (typically -14 LUFS for
- * streaming, -8 to -6 LUFS for club masters) and feed the limiter's
- * final-gain trim.
+ * Moved from `apps/web/src/lib/psy4/loudness.ts` into `@psy-foundation/dsp`
+ * (DECISIONS_V3 D1) so the web app, the worklet and any future consumer share
+ * ONE implementation — and the fake `LufsMeter` approximation that previously
+ * lived in this package is replaced by the REAL ITU meter (DECISIONS_V3 D5).
+ *
+ * Pure offline LUFS measurement for the master bus. Called once at the end of
+ * the render to verify loudness targets (typically -14 LUFS for streaming,
+ * -8 to -6 LUFS for club masters) and feed the limiter's final-gain trim.
  *
  * Implements:
  *   1. K-weighting: stage 1 high-shelf "pre-filter" (+4 dB above ~1.7 kHz)
@@ -186,8 +190,8 @@ function computeBlocks(
     let sumSq = 0
     for (let i = 0; i < blockSize; i++) {
       const idx = start + i
-      const l = wL[idx]!
-      const r = wR[idx]!
+      const l = wL[idx]
+      const r = wR[idx]
       sumSq += l * l + r * r
     }
     const z = sumSq / blockSize
@@ -199,13 +203,13 @@ function computeBlocks(
 /** Percentile of a sorted-ascending array (linear interpolation). */
 function percentile(sortedAsc: number[], p: number): number {
   if (sortedAsc.length === 0) return SILENCE_LUFS
-  if (sortedAsc.length === 1) return sortedAsc[0]!
+  if (sortedAsc.length === 1) return sortedAsc[0]
   const idx = (p / 100) * (sortedAsc.length - 1)
   const lo = Math.floor(idx)
   const hi = Math.ceil(idx)
-  if (lo === hi) return sortedAsc[lo]!
+  if (lo === hi) return sortedAsc[lo]
   const frac = idx - lo
-  return sortedAsc[lo]! * (1 - frac) + sortedAsc[hi]! * frac
+  return sortedAsc[lo] * (1 - frac) + sortedAsc[hi] * frac
 }
 
 // ─── Main entry point ───────────────────────────────────────────────────────
@@ -253,8 +257,8 @@ export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number
   const wR = new Float32Array(N)
   let maxAbs = 0
   for (let i = 0; i < N; i++) {
-    const l = L[i]!
-    const r = R[i]!
+    const l = L[i]
+    const r = R[i]
     wL[i] = filterL.process(l)
     wR[i] = filterR.process(r)
     const al = Math.abs(l)
@@ -271,14 +275,14 @@ export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number
     const im1 = i > 0 ? i - 1 : 0
     const ip1 = i < N - 1 ? i + 1 : i
     const ip2 = i < N - 2 ? i + 2 : ip1
-    const lP = L[im1]!
-    const lC = L[i]!
-    const lN = L[ip1]!
-    const lN2 = L[ip2]!
-    const rP = R[im1]!
-    const rC = R[i]!
-    const rN = R[ip1]!
-    const rN2 = R[ip2]!
+    const lP = L[im1]
+    const lC = L[i]
+    const lN = L[ip1]
+    const lN2 = L[ip2]
+    const rP = R[im1]
+    const rC = R[i]
+    const rN = R[ip1]
+    const rN2 = R[ip2]
     // Phase 1: t=0.25
     let v = -0.0703125 * lP + 0.8671875 * lC + 0.2265625 * lN - 0.0234375 * lN2
     if (v > truePeakMax) truePeakMax = v

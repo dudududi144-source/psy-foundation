@@ -281,11 +281,16 @@ export default function Home() {
           </div>
           {audioUrl && (
             <div className="mt-4">
+              {/* biome-ignore lint/a11y/useMediaCaption: procedurally generated
+                  instrumental audio — there is no speech to caption and a
+                  fabricated track would violate the honesty charter (see
+                  docs/ENGINEER_CHARTER.md). Described for AT via aria-label. */}
               <audio
                 crossOrigin="anonymous"
                 ref={audioRef}
                 controls
                 src={audioUrl}
+                aria-label="Generated psytrance render preview (instrumental)"
                 className="w-full"
               />
               <p className="mt-2 text-xs text-zinc-500">

@@ -15,7 +15,7 @@ describe('Phase F — PresetManager commercial features', () => {
   test('PresetManager initializes with factory presets', () => {
     // Mock localStorage for Node.js environment
     const mockStorage: Record<string, string> = {}
-    ;(globalThis as any).localStorage = {
+    ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
       setItem: (key: string, value: string) => {
         mockStorage[key] = value
@@ -28,7 +28,7 @@ describe('Phase F — PresetManager commercial features', () => {
 
   test('PresetManager can create, save, and retrieve user preset', () => {
     const mockStorage: Record<string, string> = {}
-    ;(globalThis as any).localStorage = {
+    ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
       setItem: (key: string, value: string) => {
         mockStorage[key] = value
@@ -57,7 +57,7 @@ describe('Phase F — PresetManager commercial features', () => {
 
   test('PresetManager categories work', () => {
     const mockStorage: Record<string, string> = {}
-    ;(globalThis as any).localStorage = {
+    ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
       setItem: (key: string, value: string) => {
         mockStorage[key] = value
@@ -74,7 +74,7 @@ describe('Phase F — PresetManager commercial features', () => {
 
   test('PresetManager search works', () => {
     const mockStorage: Record<string, string> = {}
-    ;(globalThis as any).localStorage = {
+    ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
       setItem: (key: string, value: string) => {
         mockStorage[key] = value
@@ -95,7 +95,7 @@ describe('Phase F — PresetManager commercial features', () => {
 
   test('Factory presets cannot be deleted', () => {
     const mockStorage: Record<string, string> = {}
-    ;(globalThis as any).localStorage = {
+    ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
       setItem: (key: string, value: string) => {
         mockStorage[key] = value
@@ -110,7 +110,7 @@ describe('Phase F — PresetManager commercial features', () => {
 
   test('User presets can be deleted', () => {
     const mockStorage: Record<string, string> = {}
-    ;(globalThis as any).localStorage = {
+    ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
       setItem: (key: string, value: string) => {
         mockStorage[key] = value
@@ -125,7 +125,7 @@ describe('Phase F — PresetManager commercial features', () => {
 
   test('isFactory correctly identifies factory presets', () => {
     const mockStorage: Record<string, string> = {}
-    ;(globalThis as any).localStorage = {
+    ;(globalThis as unknown as { localStorage: unknown }).localStorage = {
       getItem: (key: string) => mockStorage[key] ?? null,
       setItem: (key: string, value: string) => {
         mockStorage[key] = value

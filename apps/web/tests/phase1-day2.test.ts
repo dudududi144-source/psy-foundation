@@ -3,91 +3,11 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { BLTriangle, OversampledSaturation } from '../src/lib/psy4/forensic/dsp'
-import { TruePeakLimiter } from '../src/lib/psy4/limiter'
 
 const SR = 44100
 
-describe('TruePeakLimiter — Phase 1 Day 2 ISP fix', () => {
-  test('output true-peak does not exceed 0 dBFS', () => {
-    const limiter = new TruePeakLimiter({
-      ceilingDb: -0.2,
-      thresholdDb: -0.3,
-      sampleRate: SR,
-    })
-
-    // Generate loud signal with steep transients
-    const n = SR * 0.5
-    const L = new Float32Array(n)
-    const R = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      // 1kHz at high amplitude + harmonics for steep edges
-      const s =
-        Math.sin((2 * Math.PI * 1000 * i) / SR) * 1.5 +
-        Math.sin((2 * Math.PI * 3000 * i) / SR) * 0.5
-      L[i] = s
-      R[i] = s
-    }
-
-    limiter.processBuffer(L, R)
-
-    // Check sample peak
-    let maxSample = 0
-    for (let i = 0; i < n; i++) {
-      maxSample = Math.max(maxSample, Math.abs(L[i] ?? 0))
-    }
-
-    // Phase 1.2 rewrite: the brickwall clip now runs at the ADVERTISED
-    // ceiling (-0.2 dB = 0.977 linear), not at ceiling × 0.65 as before
-    // (the audit's C3 finding). Sample peak must respect the actual ceiling
-    // with a tiny float epsilon — and NOT be squashed to ~0.64 like the old
-    // behavior.
-    const ceilingLinear = 10 ** (-0.2 / 20)
-    expect(maxSample).toBeLessThanOrEqual(ceilingLinear + 1e-6)
-    expect(maxSample).toBeGreaterThan(0.9) // headroom is actually used now
-  })
-
-  test('limiter does not silence quiet input', () => {
-    const limiter = new TruePeakLimiter({
-      ceilingDb: -0.5,
-      sampleRate: SR,
-    })
-
-    const n = SR * 0.5
-    const L = new Float32Array(n)
-    const R = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      L[i] = Math.sin((2 * Math.PI * 440 * i) / SR) * 0.1
-      R[i] = L[i]
-    }
-
-    limiter.processBuffer(L, R)
-
-    let energy = 0
-    for (let i = 0; i < n; i++) energy += (L[i] ?? 0) ** 2
-    const rms = Math.sqrt(energy / n)
-    expect(rms).toBeGreaterThan(0.05)
-  })
-
-  test('limiter reduces gain on loud input (gainReductionDb < 0)', () => {
-    const limiter = new TruePeakLimiter({
-      ceilingDb: -1.0,
-      thresholdDb: -1.5,
-      sampleRate: SR,
-    })
-
-    const n = SR * 0.5
-    const L = new Float32Array(n)
-    const R = new Float32Array(n)
-    for (let i = 0; i < n; i++) {
-      L[i] = Math.sin((2 * Math.PI * 1000 * i) / SR) * 2.0
-      R[i] = L[i]
-    }
-
-    limiter.processBuffer(L, R)
-    const gr = limiter.getMaxGainReductionDb()
-    expect(gr).toBeLessThan(-3) // at least 3 dB of gain reduction
-  })
-})
+// The TruePeakLimiter suite moved to @psy-foundation/dsp (DECISIONS_V3 D1):
+// packages/dsp/tests/limiter-rewrite.test.ts
 
 describe('OversampledSaturation — Phase 1 Day 2 FIR fix', () => {
   test('output is bounded [-1, 1] for drive=1', () => {

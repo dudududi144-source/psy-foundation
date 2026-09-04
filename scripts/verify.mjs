@@ -132,7 +132,7 @@ async function main() {
     }
   }
   if (!up) {
-    console.error('Server failed to start. Log tail:\n' + serverLog.slice(-2000))
+    console.error(`Server failed to start. Log tail:\n${serverLog.slice(-2000)}`)
     server.kill()
     process.exit(1)
   }

@@ -1,5 +1,12 @@
 /**
- * Stage 6 — 3-band multiband compressor with Linkwitz-Riley 4th-order crossovers.
+ * Master chain — 3-band multiband compressor with Linkwitz-Riley 4th-order
+ * crossovers. Moved from `apps/web/src/lib/psy4/multiband.ts` into
+ * `@psy-foundation/dsp` (DECISIONS_V3 D1) so the web app, the worklet and any
+ * future consumer share ONE implementation.
+ *
+ * D2 (DECISIONS_V3): `sampleRate` is REQUIRED in `MultibandCompressorOptions`
+ * — the old `DEFAULT_SR = 44100` fallback made "forgot to pass SR" a silent
+ * mistuned master chain instead of a compile error.
  *
  * Splits a stereo signal into low / mid / high bands using LR4 crossovers
  * (24 dB/oct, phase-matched at the crossover so the band magnitudes sum to
@@ -34,8 +41,6 @@ const BUTTERWORTH_Q = Math.SQRT1_2
 //
 // Cookbook coefficients from the RBJ audio EQ cookbook. We only need LP and HP
 // here, but the same DF2T structure generalizes to any biquad.
-
-import { DEFAULT_SR } from './constants'
 
 export type BiquadType = 'lp' | 'hp'
 
@@ -210,9 +215,10 @@ export interface BandDynamicsSettings {
 }
 
 export interface MultibandCompressorOptions {
+  /** Sample rate (Hz). REQUIRED (DECISIONS_V3 D2) — no silent 44100 default. */
+  sampleRate: number
   lowCrossoverHz?: number // default 200
   midCrossoverHz?: number // default 2000
-  sampleRate?: number // default 44100
   lowSettings?: Partial<BandDynamicsSettings>
   midSettings?: Partial<BandDynamicsSettings>
   highSettings?: Partial<BandDynamicsSettings>
@@ -264,8 +270,8 @@ export class MultibandCompressor {
 
   private readonly sampleRate: number
 
-  constructor(opts: MultibandCompressorOptions = {}) {
-    const sampleRate = opts.sampleRate ?? DEFAULT_SR
+  constructor(opts: MultibandCompressorOptions) {
+    const sampleRate = opts.sampleRate
     const lowXoverHz = opts.lowCrossoverHz ?? 200
     const midXoverHz = opts.midCrossoverHz ?? 2000
     this.sampleRate = sampleRate
@@ -312,8 +318,8 @@ export class MultibandCompressor {
     let minGrHigh = 1
 
     for (let i = 0; i < n; i++) {
-      const xL = L[i]!
-      const xR = R[i]!
+      const xL = L[i]
+      const xR = R[i]
 
       // Band-split per channel.
       const [lowL, restL] = this.lowXoverL.process(xL)

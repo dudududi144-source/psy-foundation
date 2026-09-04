@@ -13,6 +13,7 @@
     "typecheck": "bun run --filter '*' typecheck",
     "dev": "cd apps/web && bun run dev",
     "benchmarks": "bun benchmarks/transport-accuracy.ts && bun benchmarks/analysis-accuracy.ts",
+    "build:worklet": "bun scripts/build-worklet.mjs",
     "build": "bun run --filter '*' build",
     "clean": "rm -rf packages/*/dist apps/*/dist apps/web/.next"
   },

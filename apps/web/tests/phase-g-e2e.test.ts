@@ -58,7 +58,9 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     // Roast-fix baseline (2026-08): K-weighting b1 formula corrected → new hash.
     // Phase 1.2 (2026-09-04): limiter rewrite (real lookahead, ceiling-true
     // brickwall) → re-baselined. See AUDIT_FORENSIC finding C3.
-    expect(hash).toBe('a53cfc88fcf598c739a67de43d82e4c7')
+    // Phase 1.1 (2026-09-04): OTT per-channel expanders (DECISIONS_V3 D3 —
+    // R sidechain no longer corrupts L gain) → re-baselined.
+    expect(hash).toBe('f2f81ed62a25743358417bed75ab67f7')
   }, 30000)
 
   test('G2: Render output is stereo (L ≠ R)', async () => {
@@ -117,7 +119,7 @@ describe('Phase G — E2E Acceptance Criteria', () => {
       rng: { next: () => 0.5 },
       isLast: false,
     }
-    const notes = rollingBass16th(ctx as any)
+    const notes = rollingBass16th(ctx as unknown as Parameters<typeof rollingBass16th>[0])
     expect(notes.length).toBe(16)
   })
 
@@ -168,7 +170,8 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     // 'ceiling * 0.65' — the audit flagged it as test theater that locked a
     // bug (4 dB of squashed headroom) in place. Replacement: an actual
     // brickwall behavior test on the compiled limiter.
-    const { TruePeakLimiter } = await import('../src/lib/psy4/limiter')
+    // DECISIONS_V3 D1: the limiter lives in @psy-foundation/dsp now.
+    const { TruePeakLimiter } = await import('@psy-foundation/dsp')
     const ceilingDb = -1
     const ceiling = 10 ** (ceilingDb / 20)
     const limiter = new TruePeakLimiter({

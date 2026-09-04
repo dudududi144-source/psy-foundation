@@ -73,7 +73,7 @@ describe('Phase C — rollingBass16th wired', () => {
       rng: { next: () => 0.5 },
       isLast: false,
     }
-    const notes = rollingBass16th(ctx as any)
+    const notes = rollingBass16th(ctx as unknown as Parameters<typeof rollingBass16th>[0])
     expect(notes.length).toBe(16) // 16 notes per bar
   })
 
@@ -87,7 +87,7 @@ describe('Phase C — rollingBass16th wired', () => {
       rng: { next: () => 0.5 },
       isLast: false,
     }
-    const notes = rollingBass16th(ctx as any, true) // alternating
+    const notes = rollingBass16th(ctx as unknown as Parameters<typeof rollingBass16th>[0], true) // alternating
     expect(notes.length).toBe(16)
     // Step 0 = ROOT, step 1 = fifth (alternating)
     expect(notes[0]!.function).toBe('ROOT')

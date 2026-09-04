@@ -35,7 +35,9 @@ process.chdir(APPS_WEB_DIR)
 // Phase 1.2 baseline (2026-09-04): TruePeakLimiter rewritten (real lookahead,
 // clip at the advertised ceiling instead of ceiling×0.65) — audio changed by
 // design; see docs/AUDIT_FORENSIC_2026-09-04.md finding C3.
-const BASELINE_MD5 = 'a53cfc88fcf598c739a67de43d82e4c7'
+// Phase 1.1 baseline (2026-09-04): OTT per-channel expanders (DECISIONS_V3 D3
+// — R sidechain no longer corrupts L gain) → re-baselined from a53cfc88…
+const BASELINE_MD5 = 'f2f81ed62a25743358417bed75ab67f7'
 const BASELINE_DURATION_SEC = 13.24
 
 // BEST_CONFIG from /api/render-forensic/route.ts

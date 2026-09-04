@@ -1,6 +1,9 @@
 import { serializeRawScore } from '@psy-foundation/music'
 import type { ComposedSection } from '@psy-foundation/music'
 
+// DECISIONS_V3 D1: master chain lives in @psy-foundation/dsp (one source).
+import { LR4Crossover, MultibandCompressor, OTT, TruePeakLimiter } from '@psy-foundation/dsp'
+import { lufsToGainOffset, measureLUFS } from '@psy-foundation/dsp'
 import type { AutomationEngine } from './automation'
 import { ChannelFX } from './channel-fx'
 import { CHANNEL_PRESETS } from './channel-presets'
@@ -9,12 +12,8 @@ import { BusProcessor, MasterChain } from './forensic/mixing'
 import { Rng } from './forensic/prng'
 import { PSYTRANCE_PROGRESSIONS, buildProgression } from './harmony'
 import { driftTime, jitterVelocity, mulberry32 } from './humanizer'
-import { TruePeakLimiter } from './limiter'
-import { lufsToGainOffset, measureLUFS } from './loudness'
 import { ModulationMatrix } from './modulation-matrix'
 import { StereoWidener } from './ms-processor'
-import { LR4Crossover, MultibandCompressor } from './multiband'
-import { OTT } from './ott'
 import { WaveguideString } from './physical/waveguide-string'
 import {
   PsyAcid,
