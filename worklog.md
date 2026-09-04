@@ -4027,3 +4027,22 @@ Stage Summary:
 - Deliverables committed locally. State: audit complete, plan ratified-ready, charter active from 2026-09-04.
 - Recommended immediate next step: Phase 0 (kills all false claims: 2 dead endpoints, param clamps, tsc 0, verify.mjs, README regen).
 - Push to remote pending owner credentials (uploaded token was redacted by gateway); local commits ready.
+
+---
+Task ID: 6 (Phase 3 "Foundation for the family" — PLAN_V3_MASTER, all of 3.1-3.7)
+Agent: Z.ai Code (lead engineer; salvaged partial work from three crashed parallel agents 6-a/6-b/6-d, integrated, completed, gated)
+
+Work Log:
+- Merged governance docs (audit/plan/charter) from zai/forensic-audit-v3 into main (63ea4d9) — "one source of truth" law applied to the docs themselves.
+- 3.3 (3bcc5a5): DeviceHost per-device error isolation (structured DeviceErrorEvent ring, opt-in onError, routing continues past faults, capabilities faults omit device from list/findByRole); O(1) VoicePool (free-set + oldest-outstanding FIFO steal, O(1) release; design credit psy-sampler shim); framework-agnostic device conformance suite runDeviceConformance() C1-C8, reference device passes, negative proofs lock detection. Tests: host-isolation, voice-pool-o1 property (seeded RNG), conformance.
+- 3.6 (21f0c03): PSYBUS v2 envelope from psyboss's PSYBUS.md — 15-kind payload union, typed Result validation (no throw), byte-deterministic canonical JSON, bounds (64KiB/128-id/depth-64), DEPRECATIONS map with type-level honesty bindings; exports: "./v2" subpath + root v2 namespace; 28 tests incl. 500-envelope seeded property round-trip.
+- 3.1+3.2 (b55cd0e, TAG foundation-v2.0.0): FOUNDATION_VERSION single source in dsp; root+10 packages 2.0.0, apps private; CHANGELOG.md; worklet embeds PSY-FOUNDATION-VERSION (deterministic x2, md5 3eb07298…); release/psy-foundation.esm.js single-file ESM of all 10 packages (deterministic x2); verify claim 'release-version-integrity'; version-integrity behavior tests; scratch stranger-repo test pins the bundle: 5/5 PASS. Conformance moved under device-sdk/src + exported from index; protocol v2 root namespace.
+- 3.5 (ace5d5c): GAP-P1 closed (PROTOCOL_VERSION=2 + required protocolVersion on TransportState, asserted === PSYBUS_PROTOCOL_VERSION); GAP-D1 closed (PsyDevice.onScheduledEvent + LocalScheduler: release-at-beat / stale-beyond-grace / O(1) amortized, no device clocks); GAP-F1/F2/F3 closed (melody-pentatonic with exact MIDI pitches; rhythm-16th-grid with exact 0.125s grid; noise-white-2s with MEASURED spectral ground truth — flatness/centroid via analysis.spectrum); ALL contract-test skips removed (17/17); downstream corpus-count assertions honestly updated 14->17; CONTRACT_GAPS.md closure record appended.
+- 3.7: docs/FAMILY_ADOPTION_OFFER.md — per-repo adoption path, OFFER ONLY, zero family writes (charter).
+- Infra note: three parallel agent attempts (worktrees wt-6a/6b/6d) crashed on Task-tool infra timeouts ("context deadline exceeded"); their uncommitted work was salvaged, reviewed, completed (tests + wiring + docs), gated, and committed by the lead. Worktrees/branches cleaned. Stale next-server from wt-6a was starving renders (verify timeouts) — killed; verify 20/20 40s afterwards.
+
+Stage Summary:
+- Phase 3 COMPLETE: Gate 3 achieved — a stranger repo can pin release/psy-foundation.esm.js (or workspace dep) and pass runDeviceConformance() without touching this repo.
+- Foundation-v2.0.0 tagged+pushed. 927 pass / 0 fail / 0 SKIP (was 5 skip at 867 tests). tsc 0, biome 0, verify --quick 20/20.
+- Everything pushed to origin/main: 63ea4d9, 3bcc5a5, 21f0c03, b55cd0e + tag, ace5d5c.
+- Remaining roadmap: Phase 4 (product hardening), Phase 5 (VST decision).
