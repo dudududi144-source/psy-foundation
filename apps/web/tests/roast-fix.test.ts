@@ -782,8 +782,9 @@ describe('Roast Fix 6: render seed propagation (was hardcoded 42)', () => {
     })
     const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
     const hash = createHash('md5').update(Buffer.from(wav)).digest('hex')
-    // Baseline from roast-fix-3 (after K-weighting correction)
-    expect(hash).toBe('b01123b3e7c33a29f3f83671cc02dc4a')
+    // Baseline from roast-fix-3 (after K-weighting correction).
+    // Phase 1.2 (2026-09-04): limiter rewrite → re-baselined (audit C3 fix).
+    expect(hash).toBe('a53cfc88fcf598c739a67de43d82e4c7')
   })
 })
 

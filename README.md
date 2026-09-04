@@ -35,15 +35,24 @@ curl "http://localhost:3000/api/render-forensic?bars=8&progression=hypnotic" -o 
 
 ## Measured Output (reproduce with `node scripts/verify.mjs`)
 
-`GET /api/render-forensic?bars=8&seed=42` (measured 2026-09-04, ffmpeg 7.1.5):
+`GET /api/render-forensic?bars=8&seed=42` (measured 2026-09-04, ffmpeg 7.1.5,
+**after the Phase 1.2 limiter rewrite**):
 
 | Metric | Our meter | ffmpeg ebur128 | Source |
 |--------|-----------|----------------|--------|
 | Duration | 13.24s | 13.244s | ffprobe |
-| Integrated LUFS | **-9.12** | -8.9 | ffmpeg ebur128 |
-| True Peak | -4.01 (4x Catmull-Rom) | -1.1 (ITU FIR) | ffmpeg ebur128 (documented: Catmull-Rom underestimates ITU FIR) |
-| LRA | 3.77 LU | 3.8 LU | ffmpeg ebur128 |
+| Integrated LUFS | **-10.9** | -10.7 | ffmpeg ebur128 |
+| True Peak | -1.5 (4x Catmull-Rom) | -1.5 (ITU FIR) | ffmpeg ebur128 |
+| LRA | 3.9 LU | 3.9 LU | ffmpeg ebur128 |
 | Sample rate / channels | 44100 Hz / 2 | 44100 Hz / 2 | ffprobe |
+
+**Loudness honesty note (Phase 1.2):** the pre-audit README claimed -9 LUFS.
+That figure was partly square-clip distortion: the broken limiter (audit C3)
+squashed transients at ceiling×0.65. With a correct lookahead limiter and a
+-1.5 dBTP ceiling, the honest integrated loudness is **-10.7 LUFS (ffmpeg)** —
+inside the club-master gate [-11, -7] with TRUE peak safety. Reaching -9 LUFS
+at -1.5 dBTP without clipping requires a more sophisticated release curve
+(Plan backlog); we chose clean > fake-loud.
 
 Determinism: two renders of the same params are **md5-identical** (verified
 across server restarts). Different seeds/styles produce different audio.
@@ -91,7 +100,8 @@ Prototype only — do not ship. Fix-or-archive decision pending (Plan Phase 5).
 ### DSP features (offline renderer — the verified core)
 - ZDF SVF (Simper/Zavalishin topology), BLSaw/BLSquare with PolyBLEP
 - ITU-R BS.1770-4 LUFS measurement (K-weighting, gated) — ffmpeg-verified
-- TruePeakLimiter (4x oversampled) — lookahead rewrite scheduled (Plan 1.2)
+- TruePeakLimiter (4x oversampled, real 5ms lookahead, ceiling-true brickwall — rewritten in Phase 1.2)
+- 2-pass LUFS convergence (measure → gain → re-limit)
 - MultibandCompressor (3-band LR4 crossover), OTT expander
 - Full-mix sidechain, M/S StereoWidener, SchroederReverb
 - 8 progressions, 5 style presets, 16th rolling bass — all wired via API
@@ -112,7 +122,8 @@ Prototype only — do not ship. Fix-or-archive decision pending (Plan Phase 5).
 | 0-4 | Initial rebuild (foundation, DSP fixes, sidechain, OTT, VST, worklet) | v0.8.0 |
 | A-G | Fix lies → unify → compose → quality → VST → commercial → E2E | v1.0.0 |
 | Roast 1-11 | 11 self-audit fix rounds (lint 0, tests 809, honest FLAC/rejections) | v1.2.0 |
-| **Z.ai Phase 0** | **Truth: 2 dead endpoints fixed, DoS guards, exact-bars contract, tsc 0, verify.mjs, README regen** | this commit |
+| **Z.ai Phase 0** | **Truth: 2 dead endpoints fixed, DoS guards, exact-bars contract, tsc 0, verify.mjs, README regen** | `6f231ca` |
+| **Z.ai Phase 1 core** | **Limiter rewrite (real lookahead + ceiling-true brickwall), MoogLadder stability clamp, worklet sample-rate fix, packages determinism (seeded hats/click), 2-pass LUFS convergence** | this commit |
 
 ## Tech Stack
 

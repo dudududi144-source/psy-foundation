@@ -12,8 +12,8 @@
  *   —   /api/arrangement reported totalBars that contradicted targetBars.
  */
 import { describe, expect, test } from 'bun:test'
-import { ArrangementGenerator } from '@/lib/psy4/arrangement/ArrangementGenerator'
 import { parseWav } from '@/app/api/upload-reference/route'
+import { ArrangementGenerator } from '@/lib/psy4/arrangement/ArrangementGenerator'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 

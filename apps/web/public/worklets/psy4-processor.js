@@ -36,7 +36,12 @@
  * - DecayEnv (exponential decay)
  */
 
-const SR = 44100  // Will be overridden by actual sampleRate
+// Phase 1.5 (PLAN_V3_MASTER) fix: use the AudioWorkletGlobalScope
+// `sampleRate`, which always equals the AudioContext's rate. The old
+// `const SR = 44100 // Will be overridden` could never be overridden (it is
+// a const), so every filter, envelope and crossover was ~9% mistuned on
+// 48 kHz hardware — the most common device rate.
+const SR = typeof sampleRate === 'number' && sampleRate > 0 ? sampleRate : 44100
 
 // ── ZDF State-Variable Filter (same as src/lib/psy4/forensic/dsp.ts) ──
 class ZDFSVF {

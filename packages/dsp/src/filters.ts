@@ -153,6 +153,16 @@ export class BiquadFilter {
 /**
  * Moog-style 4-pole ladder low-pass filter with resonance.
  * Based on the Stilson/Smith implementation. Warm, classic subtractive synth sound.
+ *
+ * Phase 1.3 (PLAN_V3_MASTER) stability fix (audit finding: the per-stage
+ * loop `s += p·(tanh(in − k·s) − tanh(s))` linearizes to
+ * `s_{n+1} = (1 − p(1+k))·s_n + p·in`, which is only stable for
+ * `p ≤ 2/(1+k)`. Above that, tanh saturation turns divergence into limit-
+ * cycle oscillation — audible garbage above ~3.5 kHz @ 44.1 kHz, worse with
+ * resonance. p is now clamped to that bound (full cutoff range preserved at
+ * low resonance; at high resonance the resonance peak dominates anyway,
+ * matching classic ladder behavior), cutoff is clamped to Nyquist, and
+ * non-finite inputs are dropped instead of poisoning the state.
  */
 export class MoogLadder {
   private readonly sr: number
@@ -171,10 +181,14 @@ export class MoogLadder {
 
   setCutoff(hz: number): void {
     this.cutoff = hz
-    // Normalized cutoff (0..1 where 1 = Nyquist).
-    const fc = (2 * hz) / this.sr
+    // Normalized cutoff (0..1 where 1 = Nyquist), clamped to the physical range.
+    const hzClamped = Math.max(10, Math.min(hz, this.sr / 2))
+    const fc = (2 * hzClamped) / this.sr
     // Compensation factor for resonance gain loss.
-    this.p = (2 * Math.PI * fc) / (1 + this.resonance * 0.5)
+    const pRaw = (2 * Math.PI * fc) / (1 + this.resonance * 0.5)
+    // Stability bound: per-stage loop |1 − p(1+k)| ≤ 1  ⇔  p ≤ 2/(1+k).
+    const pMax = 2 / (1 + this.k)
+    this.p = Math.max(0, Math.min(pRaw, pMax))
   }
 
   setResonance(res: number): void {
@@ -184,6 +198,10 @@ export class MoogLadder {
   }
 
   process(x: number): number {
+    // Guard: non-finite input (NaN/Inf from upstream) is dropped so filter
+    // state never gets poisoned — the output would otherwise be NaN forever.
+    if (!Number.isFinite(x)) return this.delay[3] ?? 0
+
     // Saturation in the feedback path (tanh) for stability + warmth.
     const fb = this.k * (this.delay[3] ?? 0)
     const sat = x - Math.tanh(fb)

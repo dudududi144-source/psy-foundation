@@ -31,8 +31,11 @@ process.chdir(APPS_WEB_DIR)
 // Phase D baseline (kick 50Hz, bass 0.12s, lead 9000Hz, bus 1.2, full LUFS correction, ISP 0.65)
 // Roast-fix baseline (2026-08): K-weighting b1 formula corrected per RBJ cookbook.
 // Old: b631454f96dcb4b6d48d8ee8fdd5fddf (with biased K-weighting, ~2 LU low vs ffmpeg).
-// New: b01123b3e7c33a29f3f83671cc02dc4a (with correct K-weighting, ~0.22 LU vs ffmpeg).
-const BASELINE_MD5 = 'b01123b3e7c33a29f3f83671cc02dc4a'
+// b01123b3e7c33a29f3f83671cc02dc4a (with correct K-weighting, ~0.22 LU vs ffmpeg).
+// Phase 1.2 baseline (2026-09-04): TruePeakLimiter rewritten (real lookahead,
+// clip at the advertised ceiling instead of ceiling×0.65) — audio changed by
+// design; see docs/AUDIT_FORENSIC_2026-09-04.md finding C3.
+const BASELINE_MD5 = 'a53cfc88fcf598c739a67de43d82e4c7'
 const BASELINE_DURATION_SEC = 13.24
 
 // BEST_CONFIG from /api/render-forensic/route.ts

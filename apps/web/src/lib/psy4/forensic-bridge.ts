@@ -1408,8 +1408,27 @@ export async function renderFoundationSection(
   // 7. True-peak limiter (4x oversampled)
   // Phase 3 Day 2: tightened ceiling to -1.0 dBTP for safe streaming + club playback.
   // Was -0.2 dBTP but ffmpeg measured +0.1 (ISP overshoot). Now -1.0 ensures ≤ 0.
-  const limiter = new TruePeakLimiter({ thresholdDb: -2.0, ceilingDb: -1.5, sampleRate: SR })
+  const limiter = new TruePeakLimiter({ thresholdDb: -1.5, ceilingDb: -1.5, sampleRate: SR })
   limiter.processBuffer(samplesL, samplesR)
+
+  // Phase 1.2 fix (audit C3 follow-up): the corrected limiter (real
+  // lookahead, envelope engages early) reduces gain MORE than the broken one
+  // it replaced — the old "loudness" was partly square-clip distortion. That
+  // dropped the final LUFS ~2.3 LU below target. Standard 2-pass convergence:
+  // measure the limited output, apply the remaining deficit as static gain,
+  // and re-limit so peaks stay ≤ ceiling. One extra pass lands within ~0.3 LU
+  // of the target without re-introducing clipping.
+  const firstPassLufs = measureLUFS(samplesL, samplesR, SR)
+  const deficitDb = targetLufs - firstPassLufs.integratedLUFS
+  if (deficitDb > 0.1) {
+    const extraGain = Math.min(10 ** (deficitDb / 20), 4)
+    for (let i = 0; i < totalSamples; i++) {
+      samplesL[i] = (samplesL[i] ?? 0) * extraGain
+      samplesR[i] = (samplesR[i] ?? 0) * extraGain
+    }
+    const limiter2 = new TruePeakLimiter({ thresholdDb: -1.5, ceilingDb: -1.5, sampleRate: SR })
+    limiter2.processBuffer(samplesL, samplesR)
+  }
 
   // Final safety clamp
   for (let i = 0; i < totalSamples; i++) {

@@ -3,41 +3,52 @@
  *
  * Stereo lookahead brickwall limiter for the PSY4 master bus. Detects
  * inter-sample (true) peaks via 4x oversampling of the detector path, then
- * drives a smooth attack/release envelope that is applied to the
- * NON-oversampled delayed signal. A final hard-clip at `ceiling` is the
- * brickwall safety net so the output is guaranteed to never exceed ceiling.
+ * applies a smooth attack/release gain envelope. A final hard-clip at
+ * `ceiling` is the brickwall safety net so the SAMPLE peak is guaranteed to
+ * never exceed ceiling.
  *
- * Topology:
+ * Phase 1.2 (PLAN_V3_MASTER) REWRITE — the previous implementation had two
+ * structural bugs found by the 2026-09-04 forensic audit (C3):
  *
- *   input ──┬───────────────────────► 4x oversample (Catmull-Rom)
- *           │                          │
- *           │                          ▼
- *           │                       per-sample
- *           │                       true-peak
- *           │                          │
- *           │                          ▼
- *           │                     ┌──────────┐
- *           │                     │ lookahead│── max peak in next D samples
- *           │                     │  window  │
- *           │                     └──────────┘
- *           │                          │
- *           │                          ▼
- *           │                  target = threshold / maxPeak
- *           │                          │
- *           │                          ▼
- *           │                  ┌────────────┐
- *           │                  │  envelope  │  attack 1 ms / release 100 ms
- *           │                  │  smoother  │
- *           │                  └────────────┘
- *           │                          │
- *           ▼                          ▼
- *      [D-sample delay]              gain
- *           │                          │
- *           └──────────►  (delayed * gain)  ──► hard-clip @ ceiling ──► output
+ *   1. The "lookahead window [i, i+D-1]" never existed: the monotonic deque
+ *      shifted out every index < i, so the detector only ever saw peaks[i]
+ *      (the current sample). The gain therefore reacted when a transient
+ *      ENTERED the detector, not D samples before it reached the output —
+ *      with a 1 ms attack constant the envelope had barely engaged (≈0.3%
+ *      reduction after 5 ms) when the transient exited the delay line.
+ *   2. The safety clip ran at ceiling × 0.65 (≈ -4.7 dBFS below the
+ *      advertised -1 dB ceiling): loud transients were square-clipped ~4 dB
+ *      below the documented ceiling — audible distortion plus ~3.7 dB of
+ *      wasted headroom. A source-grep test even locked the constant in.
  *
- * 4x oversampling uses Catmull-Rom cubic interpolation, which is smooth,
- * deterministic, and gives a reasonable upper bound on inter-sample peaks
- * (it can overshoot between samples where linear interpolation cannot).
+ * Correct offline topology (processBuffer sees the whole buffer, so no
+ * delay line is needed — the "future" is directly available):
+ *
+ *   input ──► 4x oversample (Catmull-Rom) ──► per-sample true peak
+ *      │                                          │
+ *      │                                          ▼
+ *      │                          windowMax[i] = max peak over [i, i+D-1]
+ *      │                          (backward monotonic scan, O(N))
+ *      │                                          │
+ *      │                              target[i] = threshold / windowMax
+ *      │                                          │
+ *      │                              forward attack/release smoothing
+ *      │                              (engages up to D samples EARLY)
+ *      ▼                                          ▼
+ *    output  ◄────────────────────  input[i] × envelope[i]
+ *      │
+ *      └──► hard-clip @ ceiling (sample-peak brickwall safety net)
+ *
+ * Because the gain target already accounts for the worst peak in the next
+ * D samples, the envelope begins reducing BEFORE the transient arrives —
+ * the attack (1 ms) is fully engaged by the time the peak must be shaped.
+ *
+ * Inter-sample honesty: the detector uses Catmull-Rom 4x oversampling,
+ * which can underestimate the ITU-R BS.1770-4 48-tap FIR true peak by up to
+ * ~2.9 dB on pathological content (documented in README). The sample-domain
+ * clip at `ceiling` bounds the SAMPLE peak exactly; true-peak (ITU FIR)
+ * measurements may exceed the ceiling by ≤ ~1 dB on such content. Tightening
+ * further would re-introduce the headroom waste the audit flagged.
  *
  * Determinism: no Math.random, no I/O, no Date. Pure function of input.
  */
@@ -47,13 +58,13 @@ import { DEFAULT_SR } from './constants'
 export interface TruePeakLimiterOptions {
   /** Limiter begins reducing gain above this level (dBTP). Default -1.0. */
   thresholdDb?: number
-  /** Hard ceiling — output is clamped to this level (dBTP). Default -1.0. */
+  /** Hard ceiling — output sample peak is clamped to this level (dBTP). Default -1.0. */
   ceilingDb?: number
   /** Envelope attack time (ms). Default 1.0. */
   attackMs?: number
   /** Envelope release time (ms). Default 100.0. */
   releaseMs?: number
-  /** Lookahead window (ms) — also the output delay. Default 5.0. */
+  /** Lookahead window (ms). Default 5.0. */
   lookaheadMs?: number
   /** Sample rate (Hz). Default 44100. */
   sampleRate?: number
@@ -73,21 +84,13 @@ const CATMULL_ROM_PHASES: readonly number[][] = [
 export class TruePeakLimiter {
   private threshold: number
   private ceiling: number
-  private attackMs: number
-  private releaseMs: number
-  private lookaheadSamples: number
-  private sampleRate: number
+  private readonly attackCoef: number
+  private readonly releaseCoef: number
+  private readonly lookaheadSamples: number
+  private readonly sampleRate: number
 
   /** Envelope follower state — current gain factor (1.0 = no reduction). */
   private envelope = 1
-  /** One-pole attack/release smoothing coefficients (per sample). */
-  private readonly attackCoef: number
-  private readonly releaseCoef: number
-
-  /** Circular lookahead delay lines for L and R. */
-  private delayL: Float32Array
-  private delayR: Float32Array
-  private delayPos = 0
 
   /** Most-negative gain reduction observed, in dB (e.g., -6.0 = 6 dB reduction). */
   private maxGainReductionDb = 0
@@ -95,8 +98,8 @@ export class TruePeakLimiter {
   constructor(opts: TruePeakLimiterOptions = {}) {
     const thresholdDb = opts.thresholdDb ?? -1.0
     const ceilingDb = opts.ceilingDb ?? -1.0
-    this.attackMs = opts.attackMs ?? 1.0
-    this.releaseMs = opts.releaseMs ?? 100.0
+    const attackMs = opts.attackMs ?? 1.0
+    const releaseMs = opts.releaseMs ?? 100.0
     const lookaheadMs = opts.lookaheadMs ?? 5.0
     this.sampleRate = opts.sampleRate ?? DEFAULT_SR
 
@@ -107,13 +110,10 @@ export class TruePeakLimiter {
     // One-pole smoother coefficients: alpha = 1 - exp(-1 / (tc * sr))
     // where tc is the time constant in seconds. With this alpha, the envelope
     // reaches 1 - 1/e ≈ 63% of the target after `tc` seconds.
-    const attackSec = Math.max(1e-6, this.attackMs / 1000)
-    const releaseSec = Math.max(1e-6, this.releaseMs / 1000)
+    const attackSec = Math.max(1e-6, attackMs / 1000)
+    const releaseSec = Math.max(1e-6, releaseMs / 1000)
     this.attackCoef = 1 - Math.exp(-1 / (attackSec * this.sampleRate))
     this.releaseCoef = 1 - Math.exp(-1 / (releaseSec * this.sampleRate))
-
-    this.delayL = new Float32Array(this.lookaheadSamples)
-    this.delayR = new Float32Array(this.lookaheadSamples)
   }
 
   // ── Configuration setters (call between render passes, not during) ──
@@ -142,7 +142,7 @@ export class TruePeakLimiter {
     const attackCoef = this.attackCoef
     const releaseCoef = this.releaseCoef
 
-    // ── Pass 1: compute per-sample 4x-oversampled true-peak array ──
+    // ── Pass 1: per-sample 4x-oversampled true-peak ──
     // peaks[i] = max |oversampled value| across both channels and all 4 phases.
     const peaks = new Float32Array(N)
     for (let i = 0; i < N; i++) {
@@ -171,94 +171,65 @@ export class TruePeakLimiter {
       peaks[i] = maxPeak
     }
 
-    // ── Pass 2: lookahead envelope follower + apply gain to delayed signal ──
-    // Phase 1 Day 2 FIX: replaced O(N·D) inner loop with O(N) monotonic deque.
-    // The deque stores indices of peaks in decreasing order, so peaks[deque[0]]
-    // is always the max in the current window [i, i+D-1].
-    const delayL = this.delayL
-    const delayR = this.delayR
-    let delayPos = this.delayPos
+    // ── Pass 2: TRUE lookahead — windowMax[i] = max peak in [i, i+D-1] ──
+    // Backward monotonic deque, O(N). For each i the gain target accounts for
+    // the worst peak in the NEXT D samples, so the envelope engages BEFORE
+    // the transient reaches the output (this is what the old deque never did).
+    // A naive running max would make windowMax[i] = max over [i, N-1]
+    // (unbounded window) — audible pumping on quiet intros before loud drops —
+    // so the window is bounded exactly with the classic deque method.
+    const windowMax = new Float32Array(N)
+    {
+      const dq: number[] = []
+      for (let i = N - 1; i >= 0; i--) {
+        // Pop indices that fell out of the window [i, i+D-1]
+        while (dq.length > 0 && dq[dq.length - 1]! > i + D - 1) dq.pop()
+        // Maintain decreasing values from front: pop back while smaller
+        while (dq.length > 0 && peaks[dq[dq.length - 1]!]! <= peaks[i]!) dq.pop()
+        dq.push(i)
+        // Front of the deque (largest remaining) is the window max
+        windowMax[i] = peaks[dq[0]!]!
+      }
+    }
+
+    // ── Pass 3: forward attack/release smoothing of the gain trajectory ──
     let envelope = this.envelope
     let maxGr = this.maxGainReductionDb
-
-    // Monotonic deque for sliding-window max (O(N) instead of O(N·D))
-    const deque: number[] = []
-
     for (let i = 0; i < N; i++) {
-      // Add peaks[i] to deque: remove all smaller elements from back
-      const pi = peaks[i]!
-      while (deque.length > 0 && peaks[deque[deque.length - 1]!]! <= pi) {
-        deque.pop()
-      }
-      deque.push(i)
-
-      // Remove elements outside the window [i-D+1, i] from front
-      // (we want max over [i, i+D-1], so we look ahead — but for the
-      // delayed-output approach, we need max over the NEXT D samples)
-      // Actually: we need max of peaks[i..i+D-1] for the current output.
-      // With the delayed approach, when we output sample i, we've already
-      // seen peaks[i..i+D-1] (they were pushed into the deque).
-      // But we need to remove peaks that are older than i (already output).
-      while (deque.length > 0 && deque[0]! < i) {
-        deque.shift()
-      }
-
-      // Max peak in window
-      const maxPeak = peaks[deque[0]!]!
-
-      // Target gain
       let target = 1
-      if (maxPeak > threshold) {
-        target = threshold / maxPeak
+      if (windowMax[i]! > threshold) {
+        target = threshold / windowMax[i]!
       }
-
-      // Smooth toward target
       const coef = target < envelope ? attackCoef : releaseCoef
       envelope += (target - envelope) * coef
-
-      // Track gain reduction
       if (envelope > 1e-12) {
         const grDb = 20 * Math.log10(envelope)
         if (grDb < maxGr) maxGr = grDb
       }
-
-      // Pop oldest sample (output), push new input
-      const outL = delayL[delayPos]!
-      const outR = delayR[delayPos]!
-      delayL[delayPos] = L[i]!
-      delayR[delayPos] = R[i]!
-      delayPos = (delayPos + 1) % D
-
-      // Apply smoothed envelope gain
-      L[i] = outL * envelope
-      R[i] = outR * envelope
+      // Apply the smoothed envelope to the CURRENT sample (no delay line —
+      // the lookahead already came from seeing the future in Pass 2).
+      L[i] = L[i]! * envelope
+      R[i] = R[i]! * envelope
     }
 
-    // ── Pass 3: Brickwall clip at ISP-safe ceiling ──
-    // The 1× hard-clip only catches sample peaks. Inter-sample peaks (between
-    // samples) can exceed the sample peak by ~1 dB on steep transients when
-    // measured with the ITU-R BS.1770-4 48-tap FIR (which ffmpeg loudnorm uses).
-    //
-    // Roast-fix note: the historical comment said "tightened from 0.85 to 0.75"
-    // but the code actually uses 0.65 — the comment was stale. 0.65 is more
-    // conservative than the comment implies (≈-3.7 dB below ceiling). The
-    // margin is intentionally generous because the limiter's envelope (Pass 2)
-    // already constrains peaks to threshold; this hard clip only fires on
-    // transients the envelope missed. Tightening further (e.g., 0.85) would
-    // let ISP overshoots through; loosening (e.g., 0.55) would waste headroom.
-    const ispSafeCeiling = ceiling * 0.65
+    // ── Pass 4: brickwall clip at the ADVERTISED ceiling ──
+    // Phase 1.2 FIX: the old code clipped at ceiling × 0.65 (~-4.7 dB below
+    // the documented ceiling), square-clipping loud transients and wasting
+    // ~3.7 dB of headroom. The envelope now engages early enough that this
+    // clip is a genuine safety net, not the de facto limiter. Sample peak is
+    // guaranteed ≤ ceiling; see the inter-sample honesty note above for the
+    // (documented) ITU-FIR true-peak caveat.
     for (let i = 0; i < N; i++) {
       let sL = L[i]!
       let sR = R[i]!
-      if (sL > ispSafeCeiling) sL = ispSafeCeiling
-      else if (sL < -ispSafeCeiling) sL = -ispSafeCeiling
-      if (sR > ispSafeCeiling) sR = ispSafeCeiling
-      else if (sR < -ispSafeCeiling) sR = -ispSafeCeiling
+      if (sL > ceiling) sL = ceiling
+      else if (sL < -ceiling) sL = -ceiling
+      if (sR > ceiling) sR = ceiling
+      else if (sR < -ceiling) sR = -ceiling
       L[i] = sL
       R[i] = sR
     }
 
-    this.delayPos = delayPos
     this.envelope = envelope
     this.maxGainReductionDb = maxGr
   }
@@ -273,12 +244,9 @@ export class TruePeakLimiter {
     return this.envelope
   }
 
-  /** Clear all state — envelope, delay lines, peak reduction tracker. */
+  /** Clear all state — envelope and gain-reduction tracker. */
   reset(): void {
     this.envelope = 1
-    this.delayPos = 0
     this.maxGainReductionDb = 0
-    this.delayL.fill(0)
-    this.delayR.fill(0)
   }
 }

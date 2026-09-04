@@ -23,8 +23,11 @@ import {
   type RenderConfig,
   renderSection,
 } from '../src/audio/audio-renderer.ts'
+import { LeadVoice, getRecipeForFamily } from '../src/audio/lead-voice.ts'
 import { CompositionEngine } from '../src/composition-engine.ts'
 import { createIdentityA, createIdentityB } from '../src/learned-identity.ts'
+
+const SR = 44100
 
 const ctx = {
   tonic: 4,
@@ -324,47 +327,52 @@ describe('F22: Kick + Bass as one unit', () => {
 })
 
 describe('F22: Sound families produce different audio', () => {
-  test('PSY_ACID vs ATMOSPHERIC produce different spectral content', () => {
-    const engine = new CompositionEngine({ seed: 42, context: ctx, identity: createIdentityA() })
-    const section = engine.composeSection({ bars: 4 })
-
-    const acidConfig: RenderConfig = { ...DEFAULT_RENDER_CONFIG, leadFamily: 'PSY_ACID' }
-    const atmosConfig: RenderConfig = { ...DEFAULT_RENDER_CONFIG, leadFamily: 'ATMOSPHERIC' }
-
-    const acidResult = renderSection(section, acidConfig)
-    const atmosResult = renderSection(section, atmosConfig)
-
-    const acidCritique = critiqueAudio(
-      acidResult.pcm,
-      acidResult.sampleRate,
-      acidConfig.bpm,
-      section.groove.stepsPerBar
-    )
-    const atmosCritique = critiqueAudio(
-      atmosResult.pcm,
-      atmosResult.sampleRate,
-      atmosConfig.bpm,
-      section.groove.stepsPerBar
-    )
-
-    // The brightness or timbre metrics should differ.
-    expect(acidCritique.timbre.brightness).not.toBe(atmosCritique.timbre.brightness)
+  // Phase 1.7 NOTE: these two tests previously compared renderSection output
+  // across leadFamily configs — but the composed section (seed 42, full-on,
+  // 4 bars) contains ZERO leadNotes, so the comparisons passed vacuously on
+  // Math.random() hat/click noise. The Phase 1.7 determinism fix removed
+  // that noise, exposing the vacuity (diff = 0). The honest test of "sound
+  // families produce different audio" drives the LeadVoice per family
+  // directly. (Composition-level issue: leadNotes = 0 at density 0.7 is
+  // logged in the plan backlog for Phase 2.)
+  test('PSY_ACID vs ATMOSPHERIC produce different audio', () => {
+    const voices = (['PSY_ACID', 'ATMOSPHERIC'] as const).map((family) => {
+      const v = new LeadVoice(SR, getRecipeForFamily(family))
+      v.noteOn(60, 1)
+      return v
+    })
+    const buffers = voices.map((v) => {
+      const out = new Float32Array(SR)
+      for (let i = 0; i < SR; i++) out[i] = v.process()
+      return out
+    })
+    // Both produce audible output, and the audio differs meaningfully.
+    for (const buf of buffers) {
+      let maxAbs = 0
+      for (let i = 0; i < buf.length; i++) maxAbs = Math.max(maxAbs, Math.abs(buf[i] ?? 0))
+      expect(maxAbs).toBeGreaterThan(0.01)
+    }
+    let diff = 0
+    for (let i = 0; i < SR; i++) {
+      diff += Math.abs((buffers[0]![i] ?? 0) - (buffers[1]![i] ?? 0))
+    }
+    expect(diff).toBeGreaterThan(5)
   })
 
-  test('FM_PSY produces different spectral content than RUBBER_GOA', () => {
-    const engine = new CompositionEngine({ seed: 42, context: ctx, identity: createIdentityA() })
-    const section = engine.composeSection({ bars: 4 })
-
-    const fmConfig: RenderConfig = { ...DEFAULT_RENDER_CONFIG, leadFamily: 'FM_PSY' }
-    const rubberConfig: RenderConfig = { ...DEFAULT_RENDER_CONFIG, leadFamily: 'RUBBER_GOA' }
-
-    const fmResult = renderSection(section, fmConfig)
-    const rubberResult = renderSection(section, rubberConfig)
-
-    // The PCM buffers differ.
+  test('FM_PSY produces different audio than RUBBER_GOA', () => {
+    const voices = (['FM_PSY', 'RUBBER_GOA'] as const).map((family) => {
+      const v = new LeadVoice(SR, getRecipeForFamily(family))
+      v.noteOn(60, 1)
+      return v
+    })
+    const buffers = voices.map((v) => {
+      const out = new Float32Array(SR)
+      for (let i = 0; i < SR; i++) out[i] = v.process()
+      return out
+    })
     let diff = 0
-    for (let i = 0; i < fmResult.pcm.length; i++) {
-      diff += Math.abs((fmResult.pcm[i] ?? 0) - (rubberResult.pcm[i] ?? 0))
+    for (let i = 0; i < SR; i++) {
+      diff += Math.abs((buffers[0]![i] ?? 0) - (buffers[1]![i] ?? 0))
     }
     expect(diff).toBeGreaterThan(5)
   })

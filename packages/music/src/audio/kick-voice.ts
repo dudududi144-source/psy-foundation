@@ -1,5 +1,6 @@
 import { MoogLadder } from '@psy-foundation/dsp'
 import { tanhSaturation } from '@psy-foundation/dsp'
+import { Rng } from '../rng.ts'
 
 export interface KickRecipe {
   /** Starting pitch in Hz (the "click" pitch before the drop). */
@@ -59,12 +60,20 @@ export class KickVoice {
   private currentFreq: number
   private readonly clickFilter: MoogLadder
   private _velocity = 1
+  // Phase 1.7 fix: the click noise used Math.random() — non-deterministic
+  // renders. The click rng is re-seeded per note from (voice seed, note
+  // counter) so every note gets a different (but reproducible) click.
+  private readonly seed: number
+  private noteCount = 0
+  private clickRng: Rng
 
-  constructor(sampleRate: number, recipe: KickRecipe = DEFAULT_KICK_RECIPE) {
+  constructor(sampleRate: number, recipe: KickRecipe = DEFAULT_KICK_RECIPE, seed = 1) {
     this.sr = sampleRate
     this.recipe = recipe
     this.currentFreq = recipe.pitchEnd
     this.clickFilter = new MoogLadder(sampleRate, 3000, 0.5)
+    this.seed = seed >>> 0
+    this.clickRng = new Rng((this.seed * 7919 + 1) >>> 0)
   }
 
   setRecipe(recipe: KickRecipe): void {
@@ -82,6 +91,10 @@ export class KickVoice {
     this.bodyEnv = 1
     this.subEnv = 1
     this.clickEnv = 1
+    // Phase 1.7: re-seed the click rng per note — deterministic across runs,
+    // distinct between notes.
+    this.noteCount++
+    this.clickRng = new Rng((this.seed * 7919 + this.noteCount * 104729) >>> 0)
   }
 
   noteOff(): void {
@@ -144,7 +157,8 @@ export class KickVoice {
     const sub = Math.sin(2 * Math.PI * this.subPhase)
 
     // ── Click: filtered noise burst ──
-    const noise = Math.random() * 2 - 1
+    // Phase 1.7 fix: deterministic per-note noise (was Math.random()).
+    const noise = this.clickRng.next() * 2 - 1
     const click = this.clickFilter.process(noise) * r.clickBrightness
 
     // ── Mix ──

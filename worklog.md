@@ -3943,3 +3943,30 @@ Stage Summary:
 - Phase 0 GATE: GREEN (all Five Gates pass). Zero known-false claims remain in README.
 - Commit: phase-0-truth on zai/forensic-audit-v3 → pushed to origin.
 - Next: Phase 1 core (limiter lookahead rewrite 1.2, MoogLadder stability 1.3, worklet SR 1.5, packages determinism 1.7).
+
+---
+Task ID: 4 (Phase 1 core — PLAN_V3_MASTER)
+Agent: Z.ai Code (Lead Foundation Engineer)
+Task: Rewrite TruePeakLimiter (audit C3), fix MoogLadder instability, fix worklet sample-rate lie, make packages renders deterministic, LUFS convergence.
+
+Work Log:
+- limiter.ts REWRITTEN (1.2): real lookahead via backward monotonic deque — windowMax[i] = max(peaks[i..i+D-1]); forward attack/release smoothing engages up to 5ms BEFORE transients; gain applied to current sample (delay line removed — offline pass sees the future); brickwall clip at the ADVERTISED ceiling (was ceiling×0.65 = -4.7dB squasher). Documented the Catmull-Rom vs ITU-FIR ISP caveat honestly.
+- forensic-bridge.ts: threshold=ceiling=-1.5dB (limiter = peak safety, LUFS gain = loudness control) + 2-pass LUFS convergence (measure → deficit gain → re-limit). The corrected limiter reduced GR-fake loudness: final -10.7 LUFS (ffmpeg) vs fake -8.9 before; chose clean > fake-loud (documented in README).
+- packages/dsp filters.ts MoogLadder (1.3): stability clamp p ≤ 2/(1+k) (was limit-cycling above ~3.5kHz; linearized derivation in comment), cutoff clamped to [10, sr/2], non-finite input guard (NaN no longer poisons state).
+- worklet psy4-processor.js (1.5): SR = AudioWorkletGlobalScope sampleRate (was const 44100 "will be overridden" — impossible on a const); 48kHz devices now tuned correctly.
+- packages/music (1.7): renderSection hats now seeded from section.seed (was Math.random — renderSection was NOT deterministic); KickVoice click rng re-seeded per note (seed, noteCount). Determinism law restored in packages.
+- Tests: +6 phase1-determinism.test.ts (MoogLadder sweep 8 cutoffs × 5 res bounded+finite, NaN guard, attenuation behavior; renderSection bit-identical, seed-differs, bounded); +5 phase1-limiter-rewrite.test.ts (brickwall worst-case, headroom used, lookahead engages early, sub-threshold unity, bit determinism); G9 source-grep test REPLACED with brickwall behavior test; phase1-day2 stale 0.85 bound replaced with ceiling-true bound; F22 family tests were passing VACUOUSLY on Math.random noise (leadNotes=0 in composed section!) — rewritten to drive LeadVoice per family directly; composition leadNotes=0 issue logged for Phase 2.
+- Re-baselined md5 snapshots ×3 with reasons (b01123b3 → 0f5a763b → 92ab095a → a53cfc88): limiter rewrite + LUFS convergence change audio by design.
+- README: measured table updated to post-rewrite values (-10.9/-10.7 LUFS, TP -1.5/-1.5, LRA 3.9) + loudness honesty note (clean > fake-loud decision).
+
+Verification (Five Gates, all measured):
+- bun test: 820 pass, 5 skip, 0 fail (+21 tests vs Phase 0)
+- tsc --noEmit: 0 errors (all 17 workspace typechecks exit 0)
+- biome: 0 errors
+- node scripts/verify.mjs: 19 pass, 0 fail (45.6s)
+- ffmpeg: I=-10.7 LUFS (gate [-11,-7]), Peak=-1.5 dBTP (gate ≤ 0), LRA 3.9, duration 13.244s, md5 determinism across restarts
+
+Stage Summary:
+- Phase 1 core GATE: GREEN. The repo's worst DSP bugs (C3 limiter, unstable filter, SR lie, render nondeterminism) are fixed and behavior-tested.
+- Discovered for backlog: composition engine produces ZERO leadNotes at seed 42/full-on/4 bars (F22 was passing on render noise) — Phase 2 investigation.
+- Commits pushed to origin/main.

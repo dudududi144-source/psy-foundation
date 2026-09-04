@@ -13,6 +13,7 @@
  */
 
 import type { ComposedSection } from '../composition-engine.ts'
+import { Rng } from '../rng.ts'
 import { type BassRecipe, BassVoice } from './bass-voice.ts'
 import { type KickRecipe, KickVoice } from './kick-voice.ts'
 import { LeadVoice } from './lead-voice.ts'
@@ -112,6 +113,11 @@ export function renderSection(
   const leadRecipe = getRecipeForFamily(config.leadFamily)
   const lead = new LeadVoice(sampleRate, leadRecipe)
 
+  // Phase 1.7 fix: deterministic hat noise — derived from the section seed,
+  // so identical sections render bit-identically (Math.random is banned in
+  // render paths; see ENGINEER_CHARTER law 4).
+  const hatRng = new Rng((section.seed * 223 + 17) >>> 0)
+
   for (const bar of section.bars) {
     const barStartSample = bar.barIndex * samplesPerBar
 
@@ -160,10 +166,14 @@ export function renderSection(
     }
 
     // ── Hat events (simple noise burst) ──
+    // Phase 1.7 fix: hats used Math.random() — the render was NOT
+    // reproducible even for identical sections. Derive a deterministic rng
+    // from the section seed instead (same section → bit-identical render).
+    // The rng is created per render (hoisted below) and consumed bar by bar.
     for (const step of bar.hatNotes) {
       const onsetSample = barStartSample + step * samplesPerStep
       if (onsetSample < totalSamples) {
-        renderHat(pcm, onsetSample, samplesPerStep, config.hatGain)
+        renderHat(pcm, onsetSample, samplesPerStep, config.hatGain, hatRng)
       }
     }
   }
@@ -261,13 +271,14 @@ function renderHat(
   pcm: Float32Array,
   onsetSample: number,
   samplesPerStep: number,
-  gain: number
+  gain: number,
+  rng: Rng
 ): void {
   const hatLength = Math.floor(samplesPerStep * 0.3) // short hat
   let hpState = 0
   const hpAlpha = 0.95 // high-pass coefficient
   for (let i = 0; i < hatLength && onsetSample + i < pcm.length; i++) {
-    const noise = Math.random() * 2 - 1
+    const noise = rng.next() * 2 - 1
     // Simple one-pole high-pass for crispness.
     hpState = hpAlpha * (hpState + noise)
     const env = Math.exp(-i / (hatLength * 0.3))

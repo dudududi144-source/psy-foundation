@@ -56,7 +56,9 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     const wav = encodeWav(result.samplesL, result.samplesR, result.sampleRate)
     const hash = createHash('md5').update(Buffer.from(wav)).digest('hex')
     // Roast-fix baseline (2026-08): K-weighting b1 formula corrected → new hash.
-    expect(hash).toBe('b01123b3e7c33a29f3f83671cc02dc4a')
+    // Phase 1.2 (2026-09-04): limiter rewrite (real lookahead, ceiling-true
+    // brickwall) → re-baselined. See AUDIT_FORENSIC finding C3.
+    expect(hash).toBe('a53cfc88fcf598c739a67de43d82e4c7')
   }, 30000)
 
   test('G2: Render output is stereo (L ≠ R)', async () => {
@@ -161,12 +163,41 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     expect(jsContent).not.toContain('haasBuffer')
   })
 
-  test('G9: ISP-safe ceiling is 0.65 (ffmpeg dBTP ≤ 0)', async () => {
-    const fs = await import('node:fs')
-    const path = await import('node:path')
-    const limiterFile = path.resolve(import.meta.dir, '..', 'src', 'lib', 'psy4', 'limiter.ts')
-    const limiterContent = fs.readFileSync(limiterFile, 'utf8')
-    expect(limiterContent).toContain('ceiling * 0.65')
+  test('G9: limiter brickwall — full-scale transient never exceeds ceiling (behavior)', async () => {
+    // Phase 1.2 rewrite: the old G9 grepped the limiter SOURCE for
+    // 'ceiling * 0.65' — the audit flagged it as test theater that locked a
+    // bug (4 dB of squashed headroom) in place. Replacement: an actual
+    // brickwall behavior test on the compiled limiter.
+    const { TruePeakLimiter } = await import('../src/lib/psy4/limiter')
+    const ceilingDb = -1
+    const ceiling = 10 ** (ceilingDb / 20)
+    const limiter = new TruePeakLimiter({
+      ceilingDb,
+      thresholdDb: ceilingDb,
+      sampleRate: 44100,
+    })
+    const n = 44100 // 1s
+    const L = new Float32Array(n)
+    const R = new Float32Array(n)
+    // Full-scale alternating square (worst-case sample-domain content) plus a
+    // 4-sample full-scale burst mid-buffer (worst-case transient).
+    for (let i = 0; i < n; i++) {
+      L[i] = i % 2 === 0 ? 2.5 : -2.5
+      R[i] = i % 7 === 0 ? 3.0 : -1.5
+    }
+    for (let i = 20000; i < 20004; i++) {
+      L[i] = 4.0
+      R[i] = -4.0
+    }
+    limiter.processBuffer(L, R)
+    let maxL = 0
+    let maxR = 0
+    for (let i = 0; i < n; i++) {
+      maxL = Math.max(maxL, Math.abs(L[i] ?? 0))
+      maxR = Math.max(maxR, Math.abs(R[i] ?? 0))
+    }
+    expect(maxL).toBeLessThanOrEqual(ceiling + 1e-6)
+    expect(maxR).toBeLessThanOrEqual(ceiling + 1e-6)
   })
 
   test('G10: LUFS correction is 100% (not 50% hack)', async () => {

@@ -36,9 +36,14 @@ describe('TruePeakLimiter — Phase 1 Day 2 ISP fix', () => {
       maxSample = Math.max(maxSample, Math.abs(L[i] ?? 0))
     }
 
-    // With ISP-safe ceiling (0.85 × 0.977 = 0.830 = -1.62 dB)
-    // the sample peak should be ≤ 0.83
-    expect(maxSample).toBeLessThan(0.85)
+    // Phase 1.2 rewrite: the brickwall clip now runs at the ADVERTISED
+    // ceiling (-0.2 dB = 0.977 linear), not at ceiling × 0.65 as before
+    // (the audit's C3 finding). Sample peak must respect the actual ceiling
+    // with a tiny float epsilon — and NOT be squashed to ~0.64 like the old
+    // behavior.
+    const ceilingLinear = 10 ** (-0.2 / 20)
+    expect(maxSample).toBeLessThanOrEqual(ceilingLinear + 1e-6)
+    expect(maxSample).toBeGreaterThan(0.9) // headroom is actually used now
   })
 
   test('limiter does not silence quiet input', () => {
