@@ -180,13 +180,13 @@ export class ArrangementGenerator {
       totalBars += outro.bars
     }
 
-    // Trim last section if total exceeds target by more than 2 bars
-    if (totalBars > targetBars + 2 && sections.length > 0) {
-      const excess = totalBars - targetBars
-      const last = sections[sections.length - 1]!
-      last.bars = Math.max(2, last.bars - excess)
-      totalBars -= excess
-    }
+    // Phase 0 (truth) FIX: Σ section.bars must equal targetBars EXACTLY.
+    // The old trim only ran when overshoot > 2 and could still leave a
+    // mismatch (and never handled undershoot). Walk from the end trimming
+    // bars; drop any section reduced to zero. Deterministic: operates on the
+    // already-generated list, consumes no rng.
+    this.normalizeToTarget(sections, targetBars)
+    totalBars = sections.reduce((acc, s) => acc + s.bars, 0)
 
     const structureStr = sections.map((s) => `${s.type[0]}${s.bars}`).join('-')
     const structureHash = this.hashString(structureStr)
@@ -194,12 +194,51 @@ export class ArrangementGenerator {
     return { sections, totalBars, structureHash }
   }
 
+  /**
+   * Trim or extend sections so Σ bars === targetBars exactly.
+   *
+   * Phase 0 (truth) FIX v2: preserves the psytrance contract that the plan
+   * ENDS WITH AN OUTRO — other sections are trimmed to ≥1 bar (and dropped
+   * only if the target is degenerately small) before the outro itself is
+   * touched. Deterministic: operates on the already-generated list, consumes
+   * no rng.
+   */
+  private normalizeToTarget(sections: ArrangementSection[], targetBars: number): void {
+    if (sections.length === 0) return
+    let total = sections.reduce((acc, s) => acc + s.bars, 0)
+
+    // Overshoot pass 1: shrink sections (starting from the end) down to 1 bar
+    // each, protecting nothing — every section keeps at least 1 bar.
+    let idx = sections.length - 1
+    while (total > targetBars && idx >= 0) {
+      const s = sections[idx]!
+      if (s.bars > 1) {
+        const reduce = Math.min(total - targetBars, s.bars - 1)
+        s.bars -= reduce
+        total -= reduce
+      }
+      idx--
+    }
+
+    // Overshoot pass 2: still over target (all sections at 1 bar) → drop
+    // sections from the end, but never the FIRST section. Keep an outro as
+    // long as ≥1 non-outro section remains.
+    while (total > targetBars && sections.length > 1) {
+      const victim = sections.length - 1
+      const isOutro = sections[victim]!.type === 'outro'
+      const nonOutroCount = sections.filter((s) => s.type !== 'outro').length
+      if (isOutro && nonOutroCount === 0) break // cannot drop the last one
+      total -= sections[victim]!.bars
+      sections.splice(victim, 1)
+    }
+
+    // Undershoot: extend the last remaining section.
+    if (total < targetBars && sections.length > 0) {
+      sections[sections.length - 1]!.bars += targetBars - total
+    }
+  }
+
   private hashString(s: string): string {
-    // Roast-fix: removed 'hash = hash & hash' which is a no-op (identity).
-    // The intent was to keep the hash as a 32-bit signed integer, but in JS
-    // all bitwise operations already operate on 32-bit integers, so the
-    // explicit mask is unnecessary. The hash is converted to unsigned via
-    // Math.abs() below.
     let hash = 0
     for (let i = 0; i < s.length; i++) {
       const char = s.charCodeAt(i)
@@ -210,16 +249,17 @@ export class ArrangementGenerator {
 
   generateShort(targetBars = 8): ArrangementPlan {
     const shortDurations: Record<SectionType, number> = {
-      intro: Math.max(2, Math.floor(targetBars * 0.15)),
-      build: Math.max(2, Math.floor(targetBars * 0.2)),
-      drop: Math.max(2, Math.floor(targetBars * 0.45)),
+      // Min 1 bar per section: with a floor of 2, tiny targets (≤6 bars)
+      // could never sum to the target.
+      intro: Math.max(1, Math.floor(targetBars * 0.15)),
+      build: Math.max(1, Math.floor(targetBars * 0.2)),
+      drop: Math.max(1, Math.floor(targetBars * 0.45)),
       break: 0,
       climax: 0,
-      outro: Math.max(2, Math.floor(targetBars * 0.2)),
+      outro: Math.max(1, Math.floor(targetBars * 0.2)),
     }
 
     const sections: ArrangementSection[] = []
-    let totalBars = 0
     const types: SectionType[] = ['intro', 'build', 'drop', 'outro']
     for (const type of types) {
       const bars = shortDurations[type]
@@ -234,8 +274,12 @@ export class ArrangementGenerator {
         voices: [...SECTION_VOICES[type]],
         variation: this.rng(),
       })
-      totalBars += bars
     }
+
+    // Phase 0 (truth) FIX: Σ bars must equal targetBars exactly — the
+    // proportional floors overshoot/undershoot for most targets.
+    this.normalizeToTarget(sections, targetBars)
+    const totalBars = sections.reduce((acc, s) => acc + s.bars, 0)
 
     const structureStr = sections.map((s) => `${s.type[0]}${s.bars}`).join('-')
     return { sections, totalBars, structureHash: this.hashString(structureStr) }

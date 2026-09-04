@@ -1,3 +1,4 @@
+import { validateBarsSeed, validateVariations } from '@/lib/api-params'
 import { ArrangementGenerator } from '@/lib/psy4/arrangement/ArrangementGenerator'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -16,18 +17,39 @@ export const dynamic = 'force-dynamic'
  * GET /api/arrangement?seed=42&bars=8&mode=short
  *   Returns a short arrangement for testing (8 bars)
  *
- * Every seed produces a different arrangement — no two outputs sound the same.
- * Structure hash uniquely identifies each arrangement for reproducibility.
+ * Phase 0 (truth) contract: Σ section.bars === targetBars EXACTLY (the
+ * generator used to overshoot and report `totalBars` that contradicted
+ * `targetBars`). Bounded inputs: bars ≤ 200 for this endpoint (plans are
+ * cheap but the loop was unbounded), variations ≤ 24.
  */
 export async function GET(req: NextRequest) {
-  const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
-  const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '88', 10)
-  const variations = Number.parseInt(req.nextUrl.searchParams.get('variations') ?? '1', 10)
+  // Arrangement planning is cheap per bar but still bounded — allow up to 200.
+  const MAX_ARRANGEMENT_BARS = 200
+  const params = validateBarsSeed(req, 88)
+  if (!params.ok) return params.response
+  const { seed, bars } = params
+  if (bars > MAX_ARRANGEMENT_BARS) {
+    return NextResponse.json(
+      { error: 'Invalid query parameters', details: [`bars must be ≤ ${MAX_ARRANGEMENT_BARS}`] },
+      { status: 400 }
+    )
+  }
+  const variations = validateVariations(req)
+  if (!variations.ok) return variations.response
   const mode = req.nextUrl.searchParams.get('mode') ?? 'full'
+  if (mode !== 'full' && mode !== 'short') {
+    return NextResponse.json(
+      {
+        error: 'Invalid query parameters',
+        details: [`mode must be "full" or "short" (got "${mode}")`],
+      },
+      { status: 400 }
+    )
+  }
 
   try {
-    if (variations > 1) {
-      const plans = ArrangementGenerator.generateVariations(variations, seed, bars)
+    if (variations.variations > 1) {
+      const plans = ArrangementGenerator.generateVariations(variations.variations, seed, bars)
       return NextResponse.json({
         mode: 'variations',
         count: plans.length,

@@ -1,4 +1,5 @@
 import { getReferenceLatent } from '@/app/api/upload-reference/route'
+import { renderOnce, validateBarsSeed } from '@/lib/api-params'
 import {
   DEFAULT_RENDER_CONFIG,
   encodeWav,
@@ -69,8 +70,9 @@ function processChannel(
 }
 
 export async function GET(req: NextRequest) {
-  const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
-  const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
+  const params = validateBarsSeed(req, 8)
+  if (!params.ok) return params.response
+  const { bars, seed } = params
   const useSamples = req.nextUrl.searchParams.get('samples') !== 'false'
   const referenceHash = req.nextUrl.searchParams.get('reference')
   const blendRaw = Number.parseFloat(req.nextUrl.searchParams.get('blend') ?? '0.3')
@@ -97,21 +99,23 @@ export async function GET(req: NextRequest) {
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
 
-  let result: Awaited<ReturnType<typeof renderFoundationSection>> | undefined
-  try {
-    result = await renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
-  } catch {
-    result = await renderFoundationSection(section, {
-      useSamples: false,
-      bpm: 145,
-      config: BEST_CONFIG,
-    })
+  // Phase 0 (truth): single render attempt, honest 500 on failure.
+  const rendered = await renderOnce(() =>
+    renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
+  )
+  if (!rendered.ok) {
+    console.error('Render failed:', rendered.error.message)
+    return NextResponse.json({ error: `Render failed: ${rendered.error.message}` }, { status: 500 })
   }
+  const result = rendered.result
 
   // Resolve reference latent (if any) and apply style transfer.
   let samplesL = result.samplesL
   let samplesR = result.samplesR
-  let statusHeader = 'none — no reference requested'
+  // Phase 0 (truth): HTTP header values must be byte strings (latin-1). The
+  // em-dash here crashed NextResponse header construction → guaranteed 500 on
+  // the default request. ASCII only.
+  let statusHeader = 'none (no reference requested)'
 
   if (referenceHash) {
     const refLatent = getReferenceLatent(referenceHash)

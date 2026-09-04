@@ -723,7 +723,7 @@ describe('Roast Fix 6: render seed propagation (was hardcoded 42)', () => {
     for (const seed of [42, 100, 200, 300]) {
       const engine = new CompositionEngine({
         seed,
-        context: { ...ctx, seed },
+        context: ctx,
         identity: createIdentityA(),
       })
       const section = engine.composeSection({ bars: 8 })
@@ -771,7 +771,7 @@ describe('Roast Fix 6: render seed propagation (was hardcoded 42)', () => {
 
     const engine = new CompositionEngine({
       seed: 42,
-      context: { ...ctx, seed: 42 },
+      context: ctx,
       identity: createIdentityA(),
     })
     const section = engine.composeSection({ bars: 8 })

@@ -1,3 +1,4 @@
+import { renderOnce, validateBarsSeed } from '@/lib/api-params'
 import { critiqueAudio } from '@/lib/psy4/audio-critic'
 import { DEFAULT_RENDER_CONFIG, renderFoundationSection } from '@/lib/psy4/forensic-bridge'
 import { PSYTRANCE_PROGRESSIONS, buildProgression, midiToNoteName } from '@/lib/psy4/harmony'
@@ -18,8 +19,9 @@ const BEST_CONFIG = {
 }
 
 export async function GET(req: NextRequest) {
-  const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
-  const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
+  const params = validateBarsSeed(req, 8)
+  if (!params.ok) return params.response
+  const { bars, seed } = params
   const useSamples = req.nextUrl.searchParams.get('samples') !== 'false'
 
   const ctx = {
@@ -43,17 +45,16 @@ export async function GET(req: NextRequest) {
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
 
-  let result: Awaited<ReturnType<typeof renderFoundationSection>> | undefined
-  try {
-    result = await renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
-  } catch (e) {
-    console.error('Render failed, retrying without samples:', (e as Error).message)
-    result = await renderFoundationSection(section, {
-      useSamples: false,
-      bpm: 145,
-      config: BEST_CONFIG,
-    })
+  // Phase 0 (truth): single render attempt, honest 500 on failure (the old
+  // catch-retry silently re-rendered everything without samples).
+  const rendered = await renderOnce(() =>
+    renderFoundationSection(section, { useSamples, bpm: 145, config: BEST_CONFIG })
+  )
+  if (!rendered.ok) {
+    console.error('Render failed:', rendered.error.message)
+    return NextResponse.json({ error: `Render failed: ${rendered.error.message}` }, { status: 500 })
   }
+  const result = rendered.result
 
   // Downmix to mono for AudioCritic
   const mono = new Float32Array(result.samplesL.length)

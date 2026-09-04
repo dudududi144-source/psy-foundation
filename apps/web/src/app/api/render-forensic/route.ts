@@ -1,3 +1,4 @@
+import { renderOnce, validateBarsSeed } from '@/lib/api-params'
 import {
   DEFAULT_RENDER_CONFIG,
   type RenderResult,
@@ -26,8 +27,9 @@ const VALID_STEMS: Set<string> = new Set(['drum', 'bass', 'music'])
 const VALID_FORMATS: Set<string> = new Set(['wav', 'aiff', 'flac'])
 
 export async function GET(req: NextRequest) {
-  const bars = Number.parseInt(req.nextUrl.searchParams.get('bars') ?? '8', 10)
-  const seed = Number.parseInt(req.nextUrl.searchParams.get('seed') ?? '42', 10)
+  const params = validateBarsSeed(req, 8)
+  if (!params.ok) return params.response
+  const { bars, seed } = params
   const useSamples = req.nextUrl.searchParams.get('samples') !== 'false'
   const stemParam = req.nextUrl.searchParams.get('stem')
   const stem: StemName | null =
@@ -103,23 +105,22 @@ export async function GET(req: NextRequest) {
 
   // When a stem is requested, we render with stems=true so the bus outputs are
   // captured. Otherwise (full mix) we skip the stem allocation entirely.
-  let result: RenderResult
-  try {
-    result = await renderFoundationSection(section, {
+  // Phase 0 (truth): single render attempt. The old catch-retry silently
+  // re-rendered the whole song without samples, doubling CPU cost and hiding
+  // the root cause. Failures now return an honest 500.
+  const rendered = await renderOnce(() =>
+    renderFoundationSection(section, {
       useSamples,
       bpm: ctx.bpm,
       config: renderConfig,
       stems: stem !== null,
     })
-  } catch (e) {
-    console.error('Render failed, retrying without samples:', (e as Error).message)
-    result = await renderFoundationSection(section, {
-      useSamples: false,
-      bpm: ctx.bpm,
-      config: renderConfig,
-      stems: stem !== null,
-    })
+  )
+  if (!rendered.ok) {
+    console.error('Render failed:', rendered.error.message)
+    return NextResponse.json({ error: `Render failed: ${rendered.error.message}` }, { status: 500 })
   }
+  const result: RenderResult = rendered.result
 
   // Stem export path: encode only the requested bus as a stereo WAV.
   if (stem !== null && result.stems) {

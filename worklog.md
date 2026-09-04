@@ -3913,3 +3913,33 @@ Stage Summary:
 - No new bugs found. All subsystems verified OK.
 - Final state: 757 pass, 14 skip, 0 fail. Lint: 0 errors, 11 warnings.
 - READY TO PUSH.
+
+---
+Task ID: 3 (Phase 0 "Truth" — PLAN_V3_MASTER)
+Agent: Z.ai Code (Lead Foundation Engineer)
+Task: Execute Phase 0 — kill every false claim: fix 2 dead endpoints, DoS guards, double-render, tsc 0, arrangement exact-bars, verify.mjs, README regen.
+
+Work Log:
+- upload-reference/route.ts: REWROTE parseWav — bitsPerSample now read at fmt-body+14 (was +6 = high half of sampleRate → Float32Array(Infinity) → 500 on every valid upload). Added audioFormat (1/3) + bit-depth (8/16/24/32) + channel (1-8) + sampleRate (8000-384000) validation; dataLength clamped to actual buffer (memory-bomb guard); honest WAV-only errors (removed false MP3/OGG claim); referenceStore bounded at 32 with oldest-eviction. parseWav exported for direct testing.
+- style-transfer/route.ts: default X-Style-Transfer header changed 'none — …' → ASCII 'none (no reference requested)' (em-dash crashed NextResponse header construction → guaranteed 500 on default request).
+- NEW lib/api-params.ts: validateBarsSeed (bars ∈ [1,88], seed ∈ [0,2^31) → 400 with details), validateVariations (≤24), renderOnce helper. Wired into render-forensic, audio-critique, style-transfer, optimize (iterations [1,32], target [0,1]), arrangement (bars ≤200, mode whitelist).
+- Removed catch-retry double-render in render-forensic/audio-critique/style-transfer → single render + honest 500 (root cause no longer hidden, CPU no longer doubled on failure).
+- ArrangementGenerator: normalizeToTarget() — Σ section.bars === targetBars EXACTLY (was ±20); outro-preserving trim (shrink others to ≥1 bar, drop only degenerate); generateShort floors 2→1 + same contract. Route now reports coherent targetBars/totalBars.
+- tsc: added @types/bun to apps/web devDependencies; removed `seed` spread into MusicalContext in roast-fix.test.ts (2× TS2353; engine reads seed from constructor only — behavior-neutral). apps/web tsc --noEmit: EXIT 0 (was 23 errors).
+- Deleted: apps/web/benchmarks/output/render_bars8_seed42.wav (2.3MB stale artifact, md5 ≠ baseline), app/api/route.ts hello-world.
+- apps/web dev script now honors PORT (next dev -p ${PORT:-3000}) — enables isolated verify runs.
+- NEW apps/web/tests/phase0-truth.test.ts: 10 behavior tests — parseWav (16/24/32f/8-bit, memory-bomb clamp, honest rejections), exact-bars contract (generate 1/4/8/16/32/88/120 × seeds, generateShort, variations, determinism).
+- NEW scripts/verify.mjs: executable truth — boots server on isolated port, 19 claims: page render, WAV render, md5 determinism, DoS guards (bars=9999999/0 → 400), FLAC 501, darkpsy style, ffprobe duration/format, ffmpeg ebur128 LUFS/TP (parses LAST meter = summary), arrangement exact-bars ×3, audio-critique 38 metrics, upload-reference 200+hash, style-transfer with-reference 200+applied header, style-transfer default 200, non-WAV 400, optimize report. AbortSignal timeouts + 9min watchdog. --quick skips optimize.
+- README.md regenerated from verify output: 809/5/0 tests, 19/19 claims, honest worklet/VST notes, bounded-params API table, governance links. Removed stale 768-test claim and unqualified parity/VST statements.
+
+Verification (all measured this session):
+- bun test: 809 pass, 5 skip, 0 fail (was 799/5/0; +10 new) in ~105s
+- tsc --noEmit (apps/web): 0 errors (was 23)
+- biome: 0 errors, 11 warnings (unchanged)
+- node scripts/verify.mjs: 19 pass, 0 fail in 48.4s — LUFS I=-8.9/TP=-1.1/LRA=3.8 via ffmpeg, md5 determinism confirmed, 2 previously-dead endpoints now end-to-end (upload hash ref-…, style-transfer "applied (blend=0.5)")
+- ffmpeg spot-check consistent with pre-change baseline → Phase 0 changes did not alter the audio core.
+
+Stage Summary:
+- Phase 0 GATE: GREEN (all Five Gates pass). Zero known-false claims remain in README.
+- Commit: phase-0-truth on zai/forensic-audit-v3 → pushed to origin.
+- Next: Phase 1 core (limiter lookahead rewrite 1.2, MoogLadder stability 1.3, worklet SR 1.5, packages determinism 1.7).

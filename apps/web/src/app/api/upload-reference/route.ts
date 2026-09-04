@@ -6,78 +6,140 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 /**
- * Reference Upload API — accepts an audio file and learns its spectral style.
+ * Reference Upload API — accepts a WAV file and learns its spectral style.
  *
  * POST /api/upload-reference
- * Body: multipart form data with 'audio' field (WAV/MP3 file)
+ * Body: multipart form data with 'audio' field (WAV file — 8/16/24/32-bit PCM
+ * or 32-bit IEEE float, mono or multichannel, downmixed to mono)
  *
  * Returns:
  *   { success: true, latent: { bands, centroid, flatness }, hash: "..." }
  *
  * The latent can then be used by /api/style-transfer?reference=<hash>&blend=0.5
  *
- * NOTE: For simplicity, this endpoint returns the latent vector as JSON.
- * A production version would store the reference in a database (Supabase)
- * and return a reference ID for use in subsequent style-transfer calls.
+ * Phase 0 (truth) hardening:
+ *   - parseWav reads bitsPerSample at the correct fmt-body offset (+14, was
+ *     reading the high half of sampleRate → 0 → Float32Array(Infinity) → 500
+ *     on EVERY valid upload).
+ *   - dataLength is clamped to the actual buffer (a crafted header claiming
+ *     GBs of data can no longer force a huge allocation).
+ *   - audioFormat / bitsPerSample / numChannels / sampleRate are validated
+ *     with honest 400 errors (only WAV is supported — the old error text
+ *     falsely advertised MP3/OGG).
+ *   - referenceStore is bounded (oldest entry evicted) instead of growing
+ *     forever.
  */
 
-// In-memory storage for reference latents (production: use Supabase)
+// In-memory storage for reference latents (production: use a database)
+const REFERENCE_STORE_MAX = 32
 const referenceStore = new Map<string, { latent: LatentVector; name: string; uploadedAt: number }>()
 
-// Simple WAV parser (mono, 16-bit PCM)
-function parseWav(buffer: ArrayBuffer): { samples: Float32Array; sampleRate: number } | null {
-  const view = new DataView(buffer)
-  // Check RIFF header
-  if (view.getUint32(0, false) !== 0x52494646) return null // "RIFF"
-  if (view.getUint32(8, false) !== 0x57415645) return null // "WAVE"
+const RIFF = 0x52494646 // "RIFF"
+const WAVE = 0x57415645 // "WAVE"
+const FMT = 0x666d7420 // "fmt "
+const DATA = 0x64617461 // "data"
 
-  // Find data chunk
+export interface ParsedWav {
+  samples: Float32Array
+  sampleRate: number
+  channels: number
+  bitsPerSample: number
+  audioFormat: number
+}
+
+/**
+ * Parse a WAV file into mono Float32 samples. Returns a parse error string
+ * instead of throwing on malformed input. Allocation is bounded by the
+ * actual buffer length, never by header-claimed sizes.
+ */
+export function parseWav(buffer: ArrayBuffer): { result?: ParsedWav; error?: string } {
+  const view = new DataView(buffer)
+  if (buffer.byteLength < 44) return { error: 'File too small to be a WAV' }
+  if (view.getUint32(0, false) !== RIFF) return { error: 'Missing RIFF header' }
+  if (view.getUint32(8, false) !== WAVE) return { error: 'Missing WAVE identifier' }
+
   let offset = 12
   let dataOffset = 0
   let dataLength = 0
   let sampleRate = 44100
   let bitsPerSample = 16
   let numChannels = 1
+  let audioFormat = 1
+  let sawFmt = false
 
-  while (offset < buffer.byteLength - 8) {
+  while (offset + 8 <= buffer.byteLength) {
     const chunkId = view.getUint32(offset, false)
     const chunkSize = view.getUint32(offset + 4, true)
-    if (chunkId === 0x666d7420) {
-      // "fmt "
-      sampleRate = view.getUint32(offset + 12, true)
+
+    if (chunkId === FMT) {
+      if (chunkSize < 16 || offset + 8 + chunkSize > buffer.byteLength) {
+        return { error: 'Malformed fmt chunk' }
+      }
+      audioFormat = view.getUint16(offset + 8, true)
       numChannels = view.getUint16(offset + 10, true)
-      bitsPerSample = view.getUint16(offset + 14, true)
-    } else if (chunkId === 0x64617461) {
-      // "data"
+      sampleRate = view.getUint32(offset + 12, true)
+      // fmt body: +0 audioFormat, +2 numChannels, +4 sampleRate, +8 byteRate,
+      // +12 blockAlign, +14 bitsPerSample  →  file offset: body + 8.
+      bitsPerSample = view.getUint16(offset + 22, true)
+      sawFmt = true
+    } else if (chunkId === DATA) {
       dataOffset = offset + 8
-      dataLength = chunkSize
+      // Clamp to the real buffer: the header may claim more than it holds.
+      dataLength = Math.min(chunkSize, buffer.byteLength - dataOffset)
       break
     }
-    offset += 8 + chunkSize
+    // Chunk sizes are word-aligned.
+    offset += 8 + chunkSize + (chunkSize % 2)
   }
 
-  if (dataOffset === 0 || dataLength === 0) return null
+  if (!sawFmt) return { error: 'Missing fmt chunk' }
+  if (dataOffset === 0 || dataLength === 0) return { error: 'Missing or empty data chunk' }
+  if (audioFormat !== 1 && audioFormat !== 3) {
+    return { error: `Unsupported WAV audioFormat=${audioFormat} (only PCM=1 / float=3)` }
+  }
+  if (audioFormat === 1 && ![8, 16, 24, 32].includes(bitsPerSample)) {
+    return { error: `Unsupported PCM bit depth: ${bitsPerSample}` }
+  }
+  if (audioFormat === 3 && bitsPerSample !== 32) {
+    return { error: `Unsupported float bit depth: ${bitsPerSample} (only 32-bit float)` }
+  }
+  if (numChannels < 1 || numChannels > 8) return { error: `Invalid channel count: ${numChannels}` }
+  if (sampleRate < 8000 || sampleRate > 384000) {
+    return { error: `Invalid sample rate: ${sampleRate}` }
+  }
 
-  // Parse samples (16-bit PCM, downmix to mono)
-  const numSamples = Math.floor(dataLength / (bitsPerSample / 8) / numChannels)
+  const bytesPerSample = bitsPerSample / 8
+  const bytesPerFrame = bytesPerSample * numChannels
+  if (dataLength < bytesPerFrame) return { error: 'Data chunk smaller than one frame' }
+
+  const numSamples = Math.floor(dataLength / bytesPerFrame)
   const samples = new Float32Array(numSamples)
 
   for (let i = 0; i < numSamples; i++) {
     let sum = 0
     for (let ch = 0; ch < numChannels; ch++) {
-      const byteOffset = dataOffset + (i * numChannels + ch) * (bitsPerSample / 8)
-      if (bitsPerSample === 16) {
-        const sample = view.getInt16(byteOffset, true)
-        sum += sample / 32768
-      } else if (bitsPerSample === 32) {
-        const sample = view.getFloat32(byteOffset, true)
-        sum += sample
+      const p = dataOffset + (i * numChannels + ch) * bytesPerSample
+      if (audioFormat === 3) {
+        sum += view.getFloat32(p, true)
+      } else if (bitsPerSample === 8) {
+        sum += (view.getUint8(p) - 128) / 128
+      } else if (bitsPerSample === 16) {
+        sum += view.getInt16(p, true) / 32768
+      } else if (bitsPerSample === 24) {
+        const b0 = view.getUint8(p)
+        const b1 = view.getUint8(p + 1)
+        const b2 = view.getUint8(p + 2)
+        let v = (b2 << 16) | (b1 << 8) | b0
+        if (v & 0x800000) v |= ~0xffffff // sign-extend 24-bit
+        sum += v / 8388608
+      } else {
+        sum += view.getInt32(p, true) / 2147483648
       }
     }
     samples[i] = sum / numChannels
   }
 
-  return { samples, sampleRate }
+  return { result: { samples, sampleRate, channels: numChannels, bitsPerSample, audioFormat } }
 }
 
 export async function POST(req: NextRequest) {
@@ -89,13 +151,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No audio file provided' }, { status: 400 })
     }
 
-    // Check file type
-    const validTypes = ['audio/wav', 'audio/x-wav', 'audio/mpeg', 'audio/mp3', 'audio/ogg']
-    if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.wav')) {
+    // Only WAV is actually parsed here. Do not advertise what we cannot parse.
+    const looksLikeWav =
+      file.type === 'audio/wav' ||
+      file.type === 'audio/x-wav' ||
+      file.name.toLowerCase().endsWith('.wav')
+    if (!looksLikeWav) {
       return NextResponse.json(
-        {
-          error: `Invalid file type: ${file.type}. Supported: WAV, MP3, OGG`,
-        },
+        { error: `Unsupported file type: ${file.type || 'unknown'}. Only WAV is supported.` },
         { status: 400 }
       )
     }
@@ -106,26 +169,23 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = await file.arrayBuffer()
-
-    // Parse audio (WAV only for now — MP3 would need a decoder)
     const parsed = parseWav(buffer)
-    if (!parsed) {
+    if (parsed.error || !parsed.result) {
       return NextResponse.json(
-        {
-          error: 'Failed to parse audio file. Only WAV format is supported.',
-        },
+        { error: `Failed to parse WAV: ${parsed.error ?? 'unknown error'}` },
         { status: 400 }
       )
     }
 
+    const { samples, sampleRate } = parsed.result
+
     // Limit to first 30 seconds for analysis (memory constraint)
-    const maxSamples = 30 * parsed.sampleRate
-    const analysisSamples =
-      parsed.samples.length > maxSamples ? parsed.samples.subarray(0, maxSamples) : parsed.samples
+    const maxSamples = 30 * sampleRate
+    const analysisSamples = samples.length > maxSamples ? samples.subarray(0, maxSamples) : samples
 
     // Learn the reference style
     const styleTransfer = new NeuralStyleTransfer()
-    styleTransfer.loadReference(analysisSamples, parsed.sampleRate)
+    styleTransfer.loadReference(analysisSamples, sampleRate)
 
     const latent = styleTransfer.getReferenceLatent()
     if (!latent) {
@@ -135,12 +195,19 @@ export async function POST(req: NextRequest) {
     // Generate a unique hash for this reference
     const hash = `ref-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
-    // Store the latent (production: use Supabase)
-    referenceStore.set(hash, {
-      latent,
-      name: file.name,
-      uploadedAt: Date.now(),
-    })
+    // Bound the store: evict the oldest entry when full.
+    if (referenceStore.size >= REFERENCE_STORE_MAX) {
+      let oldestKey: string | null = null
+      let oldestTime = Number.POSITIVE_INFINITY
+      for (const [k, v] of referenceStore) {
+        if (v.uploadedAt < oldestTime) {
+          oldestTime = v.uploadedAt
+          oldestKey = k
+        }
+      }
+      if (oldestKey) referenceStore.delete(oldestKey)
+    }
+    referenceStore.set(hash, { latent, name: file.name, uploadedAt: Date.now() })
 
     // Calculate statistics for display
     const bandStats = {
@@ -154,8 +221,10 @@ export async function POST(req: NextRequest) {
       hash,
       name: file.name,
       size: file.size,
-      sampleRate: parsed.sampleRate,
-      durationAnalyzed: Math.min(30, analysisSamples.length / parsed.sampleRate),
+      sampleRate,
+      channels: parsed.result.channels,
+      bitsPerSample: parsed.result.bitsPerSample,
+      durationAnalyzed: Math.min(30, analysisSamples.length / sampleRate),
       latent: {
         centroid: Math.round(latent.centroid),
         flatness: Math.round(latent.flatness * 1000) / 1000,
