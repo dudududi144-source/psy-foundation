@@ -123,11 +123,21 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     expect(notes.length).toBe(16)
   })
 
-  test('G6: VST has 13 voice declarations', async () => {
-    // Check PluginProcessor.h for voice count
+  test('G6: VST (archived prototype) has 13 voice declarations', async () => {
+    // Phase 5: the VST moved to archive/vst-prototype — the prototype is
+    // archived honestly, not deleted; the structural claim still holds there.
     const fs = await import('node:fs')
     const path = await import('node:path')
-    const hFile = path.resolve(import.meta.dir, '..', '..', 'vst', 'Source', 'PluginProcessor.h')
+    const hFile = path.resolve(
+      import.meta.dir,
+      '..',
+      '..',
+      '..',
+      'archive',
+      'vst-prototype',
+      'Source',
+      'PluginProcessor.h'
+    )
     const hContent = fs.readFileSync(hFile, 'utf8')
     // 8 lead + 2 bass + 2 pad + 1 acid = 13
     expect(hContent).toContain('unique_ptr<LeadVoice>, 8>')
@@ -136,14 +146,16 @@ describe('Phase G — E2E Acceptance Criteria', () => {
     expect(hContent).toContain('unique_ptr<AcidVoice>')
   })
 
-  test('G7: VST processBlock is stereo (L ≠ R)', async () => {
+  test('G7: VST (archived prototype) processBlock is stereo (L ≠ R)', async () => {
     const fs = await import('node:fs')
     const path = await import('node:path')
     const cppFile = path.resolve(
       import.meta.dir,
       '..',
       '..',
-      'vst',
+      '..',
+      'archive',
+      'vst-prototype',
       'Source',
       'PluginProcessor.cpp'
     )

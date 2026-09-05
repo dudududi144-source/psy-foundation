@@ -113,10 +113,11 @@ dsp, music, transport, protocol, analysis, learning, material, scheduler, device
 - Multi-export WAV/AIFF (FLAC honestly rejected with 501)
 - Stems export (drum/bass/music)
 
-### VST plugin (`apps/vst/`) — prototype
-Compiles-plausible JUCE 7 project. **Honesty note (audit finding):** no MIDI
-note-off in processBlock, 8/11 parameters unwired, UI-thread data race.
-Prototype only — do not ship. Fix-or-archive decision pending (Plan Phase 5).
+### VST plugin — ARCHIVED (Phase 5, decision B)
+The JUCE prototype was moved to `archive/vst-prototype/` with an honest
+post-mortem: no MIDI note-off, 8/11 parameters unwired, UI-thread data race,
+and a third hand-maintained DSP copy. Fixing it = rewriting the wrapper; the
+web app already ships the engine. See `archive/vst-prototype/README.md`.
 
 ### DSP features (offline renderer — the verified core)
 - ZDF SVF (Simper/Zavalishin topology), BLSaw/BLSquare with PolyBLEP
@@ -147,7 +148,8 @@ Prototype only — do not ship. Fix-or-archive decision pending (Plan Phase 5).
 | **Z.ai Phase 1** | **One DSP: master chain in @psy-foundation/dsp, worklet built from it, limiter rewrite, MoogLadder stability, worklet SR fix** | `75dad8a` |
 | **Z.ai Phase 2** | **Honest metrics: critics de-gamed, hidden constants deleted, behavior locks** | `9a00067` |
 | **Z.ai Phase 3** | **Foundation for the family: v2.0.0, release ESM bundle, PSYBUS v2, device conformance, transport GAP closure** | `a579001`, tag `foundation-v2.0.0` |
-| **Z.ai Phase 4** | **Product: worker pool + render cache + coalescing, rate limiting + API-key mode, verify 23 claims** | this commit |
+| **Z.ai Phase 4** | **Product: worker pool + render cache + coalescing, rate limiting + API-key mode, realtime tool-grade UI, session persistence** | `bc7abc2`, `c830c14` |
+| **Z.ai Phase 5** | **VST honestly archived to `archive/vst-prototype/` (decision B) — PLAN_V3 all phases complete** | this commit |
 
 ## Tech Stack
 
@@ -155,7 +157,7 @@ Prototype only — do not ship. Fix-or-archive decision pending (Plan Phase 5).
 - **Language:** TypeScript 5.6+
 - **Web:** Next.js 16 (App Router)
 - **Audio:** Web Audio API, AudioWorklet, ZDF SVF
-- **VST:** JUCE 7, CMake, C++17 (prototype)
+- **VST:** archived prototype (`archive/vst-prototype/`) — honest post-mortem inside
 - **Tests:** `bun test` (942) + `scripts/verify.mjs` (23 live claims)
 - **Linter:** Biome 1.9.4
 - **License:** UNLICENSED (private; family adoption under separate agreement — see `docs/FAMILY_ADOPTION_OFFER.md`)

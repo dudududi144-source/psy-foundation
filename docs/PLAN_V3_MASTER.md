@@ -107,6 +107,10 @@
 - **A. Fix properly** (note-off in processBlock, wire all params, presets, editor layout, thread-safe messaging, MSVC guards): ~1-2 sessions. Worth it only if desktop plugin is a real goal.
 - **B. Archive honestly** (move to `archive/vst-prototype`, README says "prototype, not shippable"): 1 commit, honesty restored. **Default recommendation: B**, revisit after Phase 4.
 
+> **DECISION (2026-09-04, executed): B — archived honestly.** The prototype
+> moved to `archive/vst-prototype/` with a post-mortem README (findings,
+> revival conditions). See repo worklog Task 9 and the main README.
+
 ---
 
 ## Sequencing & parallelism

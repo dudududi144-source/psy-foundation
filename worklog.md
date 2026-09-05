@@ -4084,3 +4084,19 @@ Stage Summary:
 - PLAN_V3 4.4 + 4.5 + 4.6 COMPLETE. The realtime path is honestly labeled, tool-grade (transport with release-correct keys, mixer, MIDI in/out, preset apply, error boundary, toasts, leak-free unmount) and the session persists as versioned JSON + localStorage.
 - Phase 4 remaining: ONLY 4.2 (streaming chunked WAV, first-byte < 500ms). Deliberately deferred with rationale: true streaming requires restructuring renderFoundationSection into incremental per-bar PCM emission, which reorders the master chain's block processing and would invalidate every locked md5 determinism baseline (f2f81ed6…) + LUFS/TP claims in one stroke. It needs its own dedicated session with fresh baselines and listening checks — not a tail-end change. Latency today is already attacked from three sides (worker pool, LRU cache, coalescing).
 - Not browser-exercisable headlessly: Web Audio (AudioContext/worklet) requires a real user gesture + audio device; keyboard/transport/mixer were verified by typecheck, protocol tests on the built artifact, and the page compile/render claim in verify (GET / renders). Honest limitation, logged.
+
+---
+Task ID: 9 (Phase 5: VST fix-or-archive — decision B executed)
+Agent: Z.ai Code (lead engineer)
+
+Work Log:
+- Executed the PLAN_V3 Phase 5 decision gate with the audit's default recommendation: B — archive honestly. Fixed it would mean rewriting the wrapper against the canonical DSP (note-off, 8/11 unwired params, UI-thread race) ≈ full rewrite with no unique user value; the web app already ships the engine.
+- git mv apps/vst → archive/vst-prototype (history preserved). Rewrote the archive README as an honest post-mortem: the four reproducible audit findings (no MIDI note-off in processBlock, 8/11 params unwired, UI-thread data race, third hand-maintained DSP copy) + explicit revival conditions (consume @psy-foundation/dsp as single DSP truth, per-note release first, wire-or-delete every parameter, respect the JUCE threading contract).
+- Main README: VST section replaced with the archive record; tech-stack line updated; journey table gains the Phase 5 row and Phase 4 commit hashes (bc7abc2, c830c14).
+- docs/PLAN_V3_MASTER.md: decision recorded inline under Phase 5 (date, choice, pointers).
+- G6/G7 (phase-g-e2e) greped the old apps/vst path → updated to archive/vst-prototype with a comment (structural claims still hold on the archived source; honest relocation, not deletion). Path-depth bug in my first fix caught by the tests themselves (apps/… vs repo-root archive/) and corrected.
+- Five Gates: bun test 942/0/0skip, typecheck 0, biome 0, verify --quick 23/23.
+
+Stage Summary:
+- PLAN_V3_MASTER is now FULLY EXECUTED: Phase 0 (truth), 1 (One DSP), 2 (honest metrics), 3 (family release channel, foundation-v2.0.0), 4 (product hardening — 4.2 streaming WAV deferred with documented rationale: md5/LUFS baseline invalidation risk needs a dedicated session), 5 (VST archived honestly).
+- Repo state: main @ this commit, 942 tests / 0 fail / 0 skip, verify 23/23, tsc 0, biome 0. Scorecard trajectory per audit: 3.5/10 → all 10 critical findings C1-C10 addressed or honestly documented.
