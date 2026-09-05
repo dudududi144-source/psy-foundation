@@ -1,4 +1,4 @@
-# FAMILY MATRIX — roles, wire, and the collaboration audit (2026-09-05, Task 20)
+# FAMILY MATRIX — roles, wire, and the collaboration audit (2026-09-05, Tasks 20–22)
 
 > **Mandate.** "בחן את השיתוף… איך אנחנו עובדים, מה אפשר לייעל… לשפר את
 > היכולות ואיכות המשפחה" — examine how the family collaborates, find what
@@ -75,16 +75,46 @@ get the same ladder the moment the owner activates them.
 
 ## 5. Next candidates (owner-gated, in priority order)
 
-1. **CI on the family wire.** A GitHub Actions workflow running
-   `family-sync-check.mjs` + each suite on push would turn every drift/suite
-   regression into a red X within minutes. Needs owner approval to add
-   workflows to consumer repos.
-2. **Foundation render-notes density guidance.** Anthem e2e measured
-   density-bound loudness (sparse −12.4 vs dense −10.7): publish a
-   worked example in the render-notes docs so future consumers arrange
-   dense enough to pass gates on the first try.
+1. ~~**CI on the family wire.**~~ **DONE (Task 21).** Foundation runs the
+   full gate ladder on every push/PR (`.github/workflows/ci.yml`: frozen
+   install → biome → tsc → 964 tests → family-sync-check with sibling
+   repos → verify 34/34); first live run taught the ffmpeg lesson (runners
+   ship no ffprobe) and now enforces `FAMILY IN SYNC` on GitHub itself.
+   psysampler's CI, red-on-main for its entire recent history, was
+   root-caused (a never-met per-file coverage threshold) and is green
+   again (`1a9c351`).
+2. ~~**Foundation render-notes density guidance.**~~ **DONE (Task 21).**
+   `docs/CONSUMER_SUPPORT.md` §5b: the measured economics table
+   (hats +0.5 LU/+15.5 KB; lead +1.8 LU/−7 KB; form −0.30 LU/+31.8 KB;
+   gain-escalation pumps then loses) + five practical rules.
 3. **Draft-path stereo WARN.** Anthem draft spreads are clamped ≤ 0.5 →
    stereo-stats WARN. Optional small fix inside anthem (raise draft spread
    floor); cosmetic, preview-only.
 4. **psyreason** (pushed after this session started): next candidate for
    the same READ→…→TAG adoption, pending owner authorization.
+5. **Coverage floors for consumer repos.** Bun's `coverageThreshold` is
+   PER-FILE (proven 2026-09-05: psysampler overall 79.4% funcs / 81.6%
+   lines still exits 1 at 0.75 because ui.js sits at 25%) — an overall
+   floor needs a measuring script. psysampler got one
+   (`scripts/coverage-floor.mjs`, `bun run coverage:floor`, wired into
+   `verify`); anthem/psy5 can copy the pattern when wanted.
+
+## 6. Post-Task-20 updates (the living log of this document)
+
+- **Task 21 — honest gates.** psysampler's CI was red on main for its
+  entire recent history while local runs printed green: bun printed
+  392 pass / 0 fail and STILL exited 1 (per-file coverage threshold,
+  never met). The lesson is codified: gate reads must include the
+  PROCESS EXIT CODE, not just the assertion line. Threshold removed,
+  honest overall floor added, `bun.lock` gitignored.
+- **Task 21 — foundation CI.** See §5 item 1. Badge added to README.
+- **Task 22 — third environment wipe recovery + re-proof.** The sandbox
+  wiped `/home/z/psy-work` a third time; workspace rebuilt from GitHub
+  (remote SHAs matched the expected state exactly: 947700e / f2d71f0 /
+  1a9c351 / bbe81c2). Fresh-clone gates re-run: foundation 964/0,
+  anthem 362/0, psysampler 392/0. Both adoption pipelines re-proven
+  END-TO-END over live HTTP against foundation HEAD: psysampler 23/23
+  claims, anthem 53/53 claims (incl. HTTP determinism, the 2000-note
+  cap honest 400, and the halves workaround). The family wire survives
+  environment loss because GitHub is the source of truth, and the e2e
+  suites are the proof instrument.

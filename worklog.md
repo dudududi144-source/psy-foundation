@@ -4385,3 +4385,21 @@ Work Log:
 
 Stage Summary:
 - The audit's headline: the family's gates are now honest end-to-end. psysampler's CI red/green theater is over (the threshold lied; now a green run means green), and foundation — the repo every other member depends on — finally enforces its own quality + the one-codec law on every push, with sibling repos in the loop. Verified live: anthem Pages serves the family-contract-passing renderer. No new members onboarded; next candidates remain owner-gated (family CI badge wiring, psyreason, psy-sampler vs psysampler duplication decision).
+
+---
+Task ID: 22 (Recovery + re-proof round — owner mandate "continue and push, only the yes-folders")
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- Continue family work and push ONLY to the owner-approved repos (psy-foundation, psy-anthem, psysampler). psy5 stays untouched (read-only lineage).
+
+Work Log:
+- ENVIRONMENT RECOVERY (third wipe): the tool channel died mid-round, then the sandbox came back with /home/z/psy-work GONE. Rebuilt from GitHub: cloned all four repos with the token (scrubbed from every .git/config after), remote SHAs matched the expected pushed state exactly (foundation 947700e, anthem f2d71f0, psysampler 1a9c351, psy5 bbe81c2) — zero work lost.
+- FRESH-CLONE GATES: first foundation run showed 647 tests / 28 errors — cause: bun test without bun install on a fresh clone (missing workspace deps); after install: 964/0 + biome 0. anthem 362/0 + validate; psysampler 392/0.
+- E2E RE-PROOF (both adoption pipelines against live foundation HEAD on :3100 — :3000 belongs to the sandbox's own dev server): psysampler 23/23 claims (dense-4bar render, structural gates, density/melody loudness levers re-measured); anthem 53/53 claims incl. HTTP determinism (identical md5 on double POST), the 2000-note cap honest 400 with the halves workaround, and its own render passing all acceptance gates. docs/E2E_PIPELINE_REPORT.md regenerated with fresh evidence.
+- DISCOVERY (bun semantics): coverageThreshold is PER-FILE, not overall — psysampler overall 79.4% funcs / 81.6% lines still exits 1 at threshold 0.75 because ui.js sits at 25%. Proven empirically (0.10 → exit 0; 0.75 → exit 1; absent → exit 0). Consequence: an overall floor cannot be expressed with the built-in knob. Fix: scripts/coverage-floor.mjs measures the All-files summary itself and fails below 0.75 (below measured reality — a regression tripwire, not a flake bar); wired into `verify`; measured PASS 79.67% / 81.70%. bunfig.toml now documents why no threshold lives there.
+- DOCS: FAMILY_MATRIX §5 refreshed (items 1–2 marked DONE with evidence, new item 5: coverage-floor pattern for anthem/psy5 to copy) + new §6 living log (Task 21 honest-gates story, Task 22 recovery + re-proof); README journey Task 22 row; CI badges added to foundation/anthem/psysampler READMEs (foundation/anthem ci.yml, psysampler ci.yml — all currently green on GitHub).
+- BOUNDARY: psy5 untouched (per owner mandate); no new repos onboarded.
+
+Stage Summary:
+- The family's proof story is now environment-loss-proof: after a third wipe, everything was rebuilt from GitHub in minutes and BOTH adoption pipelines re-proven over live HTTP — the wire is not a one-session experiment, it is a reproducible property. psysampler gained the family's first honest OVERALL coverage gate (bun's per-file threshold semantics documented as a trap). Remaining open items stay owner-gated: anthem draft stereo WARN (cosmetic), psyreason onboarding, psy-sampler vs psysampler duplication decision.
