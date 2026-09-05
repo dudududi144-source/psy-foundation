@@ -471,6 +471,155 @@ async function main() {
       claim('arrangement short mode respects bars', res.status === 200 && sum === 8, `Σ=${sum}`)
     }
 
+    // ── render-notes: the WHAT→HOW wire (Task 17) ────────────────────────
+    // A tiny deterministic PSYBUS v2 note stream (a kick on each bar start +
+    // two lead notes) rendered faithfully. Proves: validation, bounds,
+    // non-silence, determinism, honest 400s.
+    {
+      console.log('  …render-notes (external note stream, ~10s)')
+      const noteStream = []
+      for (let bar = 0; bar < 4; bar++) {
+        noteStream.push({
+          rev: bar * 3 + 1,
+          seed: 42,
+          src: 'psy-anthem',
+          dst: 'broadcast',
+          ts: bar * (60 / 145) * 4,
+          payload: { kind: 'note', track: 'kick', note: 36, vel: 0.9, durBeats: 0.25, channel: 0 },
+        })
+        noteStream.push({
+          rev: bar * 3 + 2,
+          seed: 42,
+          src: 'psy-anthem',
+          dst: 'broadcast',
+          ts: (bar * 16 + 2) * (60 / 145 / 4),
+          payload: {
+            kind: 'note',
+            track: 'lead',
+            note: 64 + bar,
+            vel: 0.8,
+            durBeats: 0.5,
+            channel: 1,
+          },
+        })
+      }
+      const body1 = JSON.stringify({ seed: 42, bpm: 145, bars: 4, notes: noteStream })
+      const res1 = await fetchT(
+        `${BASE}/api/render-notes`,
+        { headers: { ...HDRS, 'Content-Type': 'application/json' }, method: 'POST', body: body1 },
+        120000
+      )
+      const buf1 = Buffer.from(await res1.arrayBuffer())
+      const isWav1 =
+        res1.headers.get('content-type') === 'audio/wav' &&
+        buf1.subarray(0, 4).toString() === 'RIFF'
+      claim(
+        'render-notes: PSYBUS note stream → WAV',
+        res1.status === 200 && isWav1,
+        `status=${res1.status}, bytes=${buf1.length}, accepted=${res1.headers.get('x-notes-accepted')}`
+      )
+      // Non-silence + format.
+      const wavNPath = join(tmp, 'notes.wav')
+      writeFileSync(wavNPath, buf1)
+      const probe1 = await ffprobe(wavNPath)
+      const fmtOk = probe1.codec_name === 'pcm_s16le' && probe1.sample_rate === '44100'
+      claim(
+        'render-notes: pcm_s16le/44.1k',
+        fmtOk,
+        `codec=${probe1.codec_name}, sr=${probe1.sample_rate}, dur=${probe1.duration}`
+      )
+
+      const res1b = await fetchT(
+        `${BASE}/api/render-notes`,
+        { headers: { ...HDRS, 'Content-Type': 'application/json' }, method: 'POST', body: body1 },
+        120000
+      )
+      const buf1b = Buffer.from(await res1b.arrayBuffer())
+      const md5n = (b) => createHash('md5').update(b).digest('hex')
+      claim(
+        'render-notes determinism: same stream → identical WAV',
+        md5n(buf1) === md5n(buf1b),
+        `md5=${md5n(buf1).slice(0, 12)}…`
+      )
+
+      // The sound contract applies to external streams too: the master chain
+      // + LUFS targeting ran (finite integrated loudness, TP below ceiling).
+      const loudN = await ffmpegLoudness(wavNPath)
+      claim(
+        'render-notes: mastered output (LUFS finite, TP < 0)',
+        loudN.lufs !== null &&
+          loudN.lufs > -30 &&
+          loudN.lufs < -5 &&
+          loudN.truePeak !== null &&
+          loudN.truePeak < 0,
+        `I=${loudN.lufs} LUFS, TP=${loudN.truePeak} dBTP, LRA=${loudN.lra}`
+      )
+
+      const badEnv = JSON.stringify({
+        seed: 42,
+        bpm: 145,
+        bars: 4,
+        notes: [
+          {
+            rev: 1,
+            seed: 42,
+            src: 'psy-anthem',
+            dst: 'broadcast',
+            ts: 0,
+            payload: { kind: 'note', track: 'lead', note: 200, vel: 0.8, durBeats: 1, channel: 0 },
+          },
+        ],
+      })
+      const resBad = await fetchT(
+        `${BASE}/api/render-notes`,
+        { headers: { ...HDRS, 'Content-Type': 'application/json' }, method: 'POST', body: badEnv },
+        30000
+      )
+      claim(
+        'render-notes: invalid note → honest 400',
+        resBad.status === 400,
+        `status=${resBad.status}`
+      )
+
+      const badTrack = JSON.stringify({
+        seed: 42,
+        bpm: 145,
+        bars: 4,
+        notes: [
+          {
+            rev: 1,
+            seed: 42,
+            src: 'psy-anthem',
+            dst: 'broadcast',
+            ts: 0,
+            payload: {
+              kind: 'note',
+              track: 'counterpoint.voice',
+              note: 64,
+              vel: 0.8,
+              durBeats: 1,
+              channel: 0,
+            },
+          },
+        ],
+      })
+      const resTrack = await fetchT(
+        `${BASE}/api/render-notes`,
+        {
+          headers: { ...HDRS, 'Content-Type': 'application/json' },
+          method: 'POST',
+          body: badTrack,
+        },
+        30000
+      )
+      const jt = await resTrack.json().catch(() => ({}))
+      claim(
+        'render-notes: unknown track → 400 with supported list',
+        resTrack.status === 400 && Array.isArray(jt.supportedTracks),
+        `status=${resTrack.status}, supported=${Array.isArray(jt.supportedTracks)}`
+      )
+    }
+
     // ── audio-critique ────────────────────────────────────────────────────
     {
       console.log('  …audio-critique (~20s)')

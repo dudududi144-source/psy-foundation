@@ -45,7 +45,8 @@ determinism check.
 
 | Tier | You get | Cost |
 |---|---|---|
-| **0. HTTP consumer** | canonical renders over `GET /api/render-forensic` (params: bars 1–88, seed, style, progression, bassMode, stem, AIFF/stems; FLAC = honest 501). Deterministic, bounded, rate-limited. | run `bun run dev` in this repo; touch no DSP |
+| **0a. HTTP consumer (foundation composes)** | canonical renders over `GET /api/render-forensic` (params: bars 1–88, seed, style, progression, bassMode, stem, AIFF/stems; FLAC = honest 501). Deterministic, bounded, rate-limited. | run `bun run dev` in this repo; touch no DSP |
+| **0b. HTTP consumer (YOU compose — the WHAT→HOW wire)** | `POST /api/render-notes` with PSYBUS v2 note envelopes → your notes rendered FAITHFULLY through foundation's voices → ChannelFX → bus glue → master chain. No internal composition, no re-humanization; your timing/velocity render as sent. Deterministic; `?mode=json` returns metrics + md5. Envelope validation by foundation's own codec; unknown tracks → 400 with the supported list. | map your composition voices onto the 16 foundation track names; post JSON |
 | **1. Release bundle** | `release/psy-foundation.esm.js` — single file, browser ESM, version in the header: `import { dsp, music, transport, protocol } from './psy-foundation.esm.js'` | delete your vendored/parallel copy |
 | **2. Conformance + PSYBUS v2** | `runDeviceConformance()` (C1–C8) proves your device contract in your own CI; typed/validated/versioned bus envelopes | add tests + protocol layer |
 | **3. Git pin** | track this repo (tag `foundation-v2.0.0` and later tags), re-sync per release | package wiring |
@@ -101,6 +102,14 @@ First 3 sounds broken:  <what, since when, what changed before it broke>
 - **"Who owns what?"** DSP/master chain: `packages/dsp`. Voices + render:
   `packages/music`. Clock: `packages/transport`. Wire: `packages/protocol`.
   Device contract: `packages/device-sdk`. See `docs/ARCHITECTURE.md`.
+- **"How do I get MY notes rendered by foundation?"** Tier 0b:
+  `POST /api/render-notes` (see the ladder). Time comes from each envelope's
+  `ts` (seconds) × bpm; `track` must be one of the 16 foundation voices;
+  sparse note streams master to a lower LUFS than full mixes (quiet is a
+  property of your arrangement, not a bug) — true peak safety is enforced
+  by an FIR meter either way. Worked example: psy-anthem's repo runs the
+  full pipeline (generate → map → POST → acceptance-check) in
+  `scripts/e2e-pipeline.ts`.
 
 ## 6. The honest boundary
 

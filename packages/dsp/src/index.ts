@@ -45,6 +45,7 @@ export {
 } from './utils.ts'
 export { Delay, PingPongDelay, SchroederReverb } from './effects.ts'
 export { RmsMeter, PeakMeter } from './metering.ts'
+export { measureTruePeakDb } from './true-peak.ts'
 export type { Voice } from './voicePool.ts'
 export { VoicePool } from './voicePool.ts'
 

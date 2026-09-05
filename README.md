@@ -1,14 +1,15 @@
 # PSY Foundation — Procedural Psytrance Synthesis Engine
 
 > **Status: PLAN_V3_MASTER all phases (0–5) complete + 4.2 streaming follow-up shipped.
-> Foundation v2.0.0 — One DSP, honest metrics, PSYBUS v2, device conformance.
-> Every claim below is reproduced by `node scripts/verify.mjs` (28 claims,
+> Foundation v2.0.0 — One DSP, honest metrics, PSYBUS v2, device conformance,
+> and the WHAT→HOW wire (`POST /api/render-notes`) for external composers.
+> Every claim below is reproduced by `node scripts/verify.mjs` (34 claims,
 > 0 fail).** A TypeScript DSP engine that renders psytrance audio via HTTP API,
 > with a 10-package musical foundation, a JUCE plugin prototype, and a
 > real-time AudioWorklet. Independent forensic audit: `docs/AUDIT_FORENSIC_2026-09-04.md`.
 
-[![tests](https://img.shields.io/badge/tests-957%20pass%2C%200%20fail-brightgreen)]()
-[![verify](https://img.shields.io/badge/verify-28%2F28%20claims%20green-success)]()
+[![tests](https://img.shields.io/badge/tests-964%20pass%2C%200%20fail-brightgreen)]()
+[![verify](https://img.shields.io/badge/verify-34%2F34%20claims%20green-success)]()
 [![version](https://img.shields.io/badge/foundation-v2.0.0-blue)]()
 [![license](https://img.shields.io/badge/license-UNLICENSED-red)]()
 
@@ -18,12 +19,19 @@
 
 ```bash
 bun install          # ~0.2s warm / ~10s cold
-bun test             # 957 pass, 0 fail, 0 skip
+bun test             # 964 pass, 0 fail, 0 skip
 bun run dev          # apps/web on http://localhost:3000 (PORT env respected)
-node scripts/verify.mjs   # executable truth: 28 endpoint/audio/infra claims, exit≠0 on any failure
+node scripts/verify.mjs   # executable truth: 34 endpoint/audio/infra claims, exit≠0 on any failure
 
 # render audio (deterministic — same seed → bit-identical WAV)
 curl "http://localhost:3000/api/render-forensic?bars=8&seed=42" -o out.wav
+
+# render an EXTERNAL note stream (PSYBUS v2) through the same sound —
+# the WHAT→HOW wire psy-anthem & family composers use:
+curl -X POST "http://localhost:3000/api/render-notes" \
+  -H 'Content-Type: application/json' \
+  -d '{"seed":42,"bpm":145,"bars":4,"notes":[{"rev":1,"seed":42,"src":"composer","dst":"broadcast","ts":0,"payload":{"kind":"note","track":"lead","note":64,"vel":0.8,"durBeats":0.5,"channel":0}}]}' \
+  -o out.wav
 
 # render with style
 curl "http://localhost:3000/api/render-forensic?bars=8&style=darkpsy" -o dark.wav
@@ -63,11 +71,12 @@ across server restarts). Different seeds/styles produce different audio.
 
 ---
 
-## API (all 6 endpoints verified by verify.mjs)
+## API (all 7 endpoints verified by verify.mjs)
 
 | Endpoint | Params | Returns | Notes |
 |----------|--------|---------|-------|
 | `/api/render-forensic` | bars [1-88], seed [0-2^31), format, style, progression, bassMode, stem, preset | WAV/AIFF/stems | FLAC = honest 501 |
+| `/api/render-notes` | POST `{seed, bpm [60-200], bars [1-88], notes: PSYBUS v2 envelopes}` | WAV + measurement headers | faithful consumer: external notes only, zero internal composition; `?mode=json` for metrics+md5 |
 | `/api/audio-critique` | bars, seed | JSON (38 metrics + score) | ~17s |
 | `/api/optimize` | bars, seed, iterations [1-32], target [0-1] | JSON (auto-fixer report) | ~8s per 2 iterations |
 | `/api/style-transfer` | bars, seed, reference (hash), blend [0-1] | WAV + `X-Style-Transfer` header | upload a reference first |
@@ -165,7 +174,8 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 | **Z.ai Task 13** | **Dead-export audit: 49 first-party dead exports removed, dormant DDSP branch deleted, neural/ONNX island archived — md5 baselines identical** | `f4382e9` |
 | **Z.ai Task 14** | **Stereo truth: record correction, `LeadRecipe.stereoWidth` deleted — runtime proof the reference render IS true stereo (width 0.884); baselines identical** | `52f7432` |
 | **Z.ai Task 15** | **Self-review fixes + family support: `acceptance-check.mjs` standalone consumer gate, `docs/CONSUMER_SUPPORT_PSY5.md` rescue guide, STATUS.md rewritten, audit-tool `--json` fix — canonical baseline re-proven live (`f2f81ed6`)** | `ee7383f` |
-| **Z.ai Task 16** | **Family-wide support kit (`docs/CONSUMER_SUPPORT.md`) for incoming agents (psy-anthem next); historical roadmaps bannered as superseded — no stale checkboxes read as open work** | this commit |
+| **Z.ai Task 16** | **Family-wide support kit (`docs/CONSUMER_SUPPORT.md`) for incoming agents (psy-anthem next); historical roadmaps bannered as superseded — no stale checkboxes read as open work** | `22afa14` |
+| **Z.ai Task 17** | **The WHAT→HOW wire: `POST /api/render-notes` renders external PSYBUS v2 note streams faithfully through the full sound chain (voices → ChannelFX → bus glue → master chain); FIR true-peak meter + faithful-mode safety pass (the verify gate caught a real +1.3 dBTP ISP overshoot — now −1.4); locked md5 baselines byte-identical** | this commit |
 
 ## Tech Stack
 

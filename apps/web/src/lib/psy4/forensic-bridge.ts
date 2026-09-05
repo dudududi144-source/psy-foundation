@@ -1,9 +1,16 @@
 import { serializeRawScore } from '@psy-foundation/music'
-import type { ComposedSection } from '@psy-foundation/music'
+import type {
+  ArrangementPlan,
+  ArrangementState,
+  ComposedPhrase,
+  ComposedSection,
+  GroovePlan,
+  RoleActivation,
+} from '@psy-foundation/music'
 
 // DECISIONS_V3 D1: master chain lives in @psy-foundation/dsp (one source).
 import { LR4Crossover, MultibandCompressor, OTT, TruePeakLimiter } from '@psy-foundation/dsp'
-import { lufsToGainOffset, measureLUFS } from '@psy-foundation/dsp'
+import { lufsToGainOffset, measureLUFS, measureTruePeakDb } from '@psy-foundation/dsp'
 import type { AutomationEngine } from './automation'
 import { ChannelFX } from './channel-fx'
 import { CHANNEL_PRESETS } from './channel-presets'
@@ -164,6 +171,50 @@ export function decodeWav(buffer: ArrayBuffer): { data: Float32Array; sampleRate
   return { data: output, sampleRate }
 }
 
+// ── External note consumer (the WHAT→HOW wire; Task 17) ─────────────
+
+/** The 16 foundation voice/track names an external note stream may target.
+ * These are exactly the event types the render loop's voice dispatch knows —
+ * an external stream maps its composition voices onto these. */
+export type ExternalTrack =
+  | 'kick'
+  | 'bass'
+  | 'lead'
+  | 'counter'
+  | 'subbass'
+  | 'hat'
+  | 'openhat'
+  | 'snare'
+  | 'clap'
+  | 'perc'
+  | 'shaker'
+  | 'pad'
+  | 'acid'
+  | 'riser'
+  | 'impact'
+  | 'texture'
+
+/** One note from an external WHAT-layer (e.g. psy-anthem via PSYBUS v2).
+ * Faithful consumer semantics: the note renders EXACTLY as sent —
+ * no humanization, no arrangement contour, no generated fills. The
+ * caller owns composition; foundation owns sound (voices → ChannelFX →
+ * bus glue → master chain), i.e. the same sound contract as
+ * render-forensic. */
+export interface ExternalNote {
+  track: ExternalTrack
+  /** MIDI 0-127. Ignored by pad/texture when `freqs` is given. */
+  midi?: number
+  /** Absolute 16th-step position in the section (0 = bar 1 step 1).
+   * Fractions are allowed — humanized off-grid timing renders as sent. */
+  step: number
+  /** Length in 16th-steps (fractions allowed). */
+  durationSteps: number
+  /** 0..1 (PSYBUS v2 vel convention). Clamped. */
+  velocity: number
+  /** Chord frequencies (Hz) for pad/texture — overrides midi when present. */
+  freqs?: number[]
+}
+
 // ── Render config (tunable parameters for auto-fixer) ──
 
 export interface RenderConfig {
@@ -280,10 +331,20 @@ export async function renderFoundationSection(
     config?: Partial<RenderConfig>
     stems?: boolean
     automation?: AutomationEngine
+    /** Faithful external-consumer mode: when present, ALL internal
+     * composition (kick/bass/hats/arrangement/fills/humanization/energy
+     * contour) is skipped and exactly these notes render through the
+     * voice pools + ChannelFX + bus glue + master chain. Default
+     * behavior (undefined) is byte-identical to pre-Task-17 renders. */
+    externalNotes?: ExternalNote[]
   } = {}
 ): Promise<RenderResult> {
   const cfg: RenderConfig = { ...DEFAULT_RENDER_CONFIG, ...options.config }
   const automation = options.automation ?? null
+  // Task 17 (WHAT→HOW wire): faithful external-consumer mode. One flag, one
+  // behavior — when externalNotes is present the caller owns composition and
+  // foundation owns sound only. Default path is untouched (byte-identical).
+  const faithful = options.externalNotes !== undefined
   const rawScore = serializeRawScore(section)
   const bpm = options.bpm ?? 145
   const targetLufs = cfg.targetLufs
@@ -493,10 +554,20 @@ export async function renderFoundationSection(
     freqs?: number[]
     vel: number
     dur: number
+    /** Task 17: external (faithful) note — exempt from humanization. */
+    ext?: boolean
+    /** Task 17: 'ext.noteoff' target — index into the lead pool. */
+    extSlot?: number
+    /** Task 17: 'ext.noteoff' target — the shared texture voice. */
+    extTexture?: boolean
   }
   const events: Ev[] = []
 
-  for (const bar of renderBars) {
+  // Task 17: in faithful mode the internal composition loop never runs —
+  // the empty iterable is the whole guard (zero re-indentation of the
+  // ~370-line body, zero risk to the locked baselines). External events
+  // are pushed right after this block.
+  for (const bar of faithful ? [] : renderBars) {
     const barStart = (barRemap.get(bar.barIndex) ?? 0) * samplesPerBar
     const accent = rawScore.groove.accent
     const barIdx = barRemap.get(bar.barIndex) ?? 0
@@ -918,6 +989,69 @@ export async function renderFoundationSection(
     }
   }
 
+  // ── External notes (Task 17 — faithful WHAT→HOW consumer) ──
+  // Rendered EXACTLY as sent: fractional step positions pass through (the
+  // caller's humanization is respected, not re-jittered), velocity is only
+  // clamped to [0,1], and the notes go through the same voices → ChannelFX
+  // → bus glue → master chain as every internal event.
+  //
+  // Note-off scheduling: internal renders never release the lead pool or the
+  // texture voice (they sustain until the next retrigger — masked by the
+  // dense internal arrangement). A faithful consumer's notes must end at
+  // their notated length, so for those voices we inject 'ext.noteoff'
+  // pseudo-events at onset+duration. The pool slot is simulated in dispatch
+  // order (sorted by position; lead takes leadIdx%4, counter takes
+  // (leadIdx+2)%4, both advance leadIdx — mirroring the dispatch expressions
+  // below exactly), so the release always lands on the voice that was
+  // triggered. Bass/subbass/pad already schedule their own note-offs; kick/
+  // hat/snare/shaker/clap/perc/impact/acid/riser self-terminate.
+  if (options.externalNotes) {
+    const extSorted = options.externalNotes
+      .map((n, i) => ({ n, i }))
+      .sort(
+        (a, b) =>
+          a.n.step - b.n.step ||
+          (a.n.track === b.n.track ? 0 : a.n.track < b.n.track ? -1 : 1) ||
+          (a.n.midi ?? 0) - (b.n.midi ?? 0) ||
+          a.i - b.i
+      )
+    let extLeadIdx = 0
+    for (const { n } of extSorted) {
+      const pos = n.step * samplesPerStep
+      const dur = Math.max(1, Math.round(n.durationSteps * samplesPerStep))
+      events.push({
+        pos,
+        type: n.track,
+        midi: n.midi,
+        freqs: n.freqs,
+        vel: Math.min(1, Math.max(0, n.velocity)),
+        dur,
+        ext: true,
+      })
+      if (n.track === 'lead' || n.track === 'counter') {
+        const slot = n.track === 'lead' ? extLeadIdx % 4 : (extLeadIdx + 2) % 4
+        extLeadIdx++
+        events.push({
+          pos: pos + dur,
+          type: 'ext.noteoff',
+          vel: 0,
+          dur: 0,
+          ext: true,
+          extSlot: slot,
+        })
+      } else if (n.track === 'texture') {
+        events.push({
+          pos: pos + dur,
+          type: 'ext.noteoff',
+          vel: 0,
+          dur: 0,
+          ext: true,
+          extTexture: true,
+        })
+      }
+    }
+  }
+
   events.sort((a, b) => a.pos - b.pos)
 
   // ── Apply humanization (from PSYSTAR humanizer) ──
@@ -927,6 +1061,9 @@ export async function renderFoundationSection(
   const humanRng = mulberry32(renderSeed)
   const humanAmount = 0.3 // subtle (0..1)
   for (const ev of events) {
+    // Task 17: faithful external notes are NOT re-humanized — the composer
+    // already owns timing/velocity (anthem humanizes its own output).
+    if (ev.ext) continue
     // Velocity jitter (not on kick — kick needs consistency)
     if (ev.type !== 'kick' && ev.vel > 0) {
       ev.vel = jitterVelocity(ev.vel, humanAmount, humanRng)
@@ -960,6 +1097,9 @@ export async function renderFoundationSection(
   // Pattern: bars 0-3 full, bar 4 dip (70%), bars 5-6 build (85%→100%), bar 7 peak (105%).
   // This creates a 8-bar tension/release cycle that improves the dynamic contour.
   function barEnergy(barIdx: number): number {
+    // Task 17: faithful mode — the caller owns arrangement, so foundation's
+    // 8-bar intro/build/break/climax contour must NOT gate its dynamics.
+    if (faithful) return 1.0
     const phase = barIdx % 8
     if (phase === 0) return 0.6 // intro — quieter (was 0.80)
     if (phase === 1) return 0.85 // groove building (was 0.88)
@@ -1088,6 +1228,12 @@ export async function renderFoundationSection(
           lfoDepth: 0.2,
         })
         leadIdx++
+      } else if (ev.type === 'ext.noteoff') {
+        // Task 17: faithful-consumer note-off (lead pool slot / texture).
+        // No-op for internal renders — the type is only ever produced by
+        // the external-notes block above.
+        if (ev.extSlot !== undefined) leads[ev.extSlot]!.noteOff()
+        if (ev.extTexture) textures[0]!.noteOff()
       }
       evIdx++
     }
@@ -1464,6 +1610,26 @@ export async function renderFoundationSection(
     limiter2.processBuffer(samplesL, samplesR)
   }
 
+  // Task 17 (faithful consumer mode only): FIR true-peak safety pass.
+  // The limiter's Catmull-Rom detector undershoots on sparse material pushed
+  // hard by the loudness targeting (measured: render measured −0.34 dBTP
+  // internally while ffmpeg's ITU FIR read +1.3 dBTP — real DAC clipping).
+  // Converge the FIR-measured true peak to −2.0 dBTP (the meter tracks
+  // ffmpeg within ~0.5 dB, so the target keeps ≥1.3 dB of honest margin).
+  // Default renders skip this entirely — their output is byte-identical.
+  if (faithful) {
+    for (let pass = 0; pass < 4; pass++) {
+      const tp = measureTruePeakDb(samplesL, samplesR)
+      if (tp <= -2.0) break
+      const reduceDb = Math.min(6, -2.0 - tp)
+      const g = 10 ** (reduceDb / 20)
+      for (let i = 0; i < totalSamples; i++) {
+        samplesL[i] = (samplesL[i] ?? 0) * g
+        samplesR[i] = (samplesR[i] ?? 0) * g
+      }
+    }
+  }
+
   // Final safety clamp
   for (let i = 0; i < totalSamples; i++) {
     let l = samplesL[i] ?? 0
@@ -1511,6 +1677,89 @@ export async function renderFoundationSection(
           }
         : undefined,
   }
+}
+
+// ── External consumer entry (Task 17 — the WHAT→HOW wire) ───────────────
+
+/**
+ * Minimal valid ComposedSection skeleton for external-note rendering.
+ *
+ * Every note array is empty and every role is OFF — in faithful mode the
+ * internal composition loop never runs, so the skeleton only has to satisfy
+ * serializeRawScore + computeRenderGeometry (stepsPerBar = 16) and the
+ * RenderResult "bars" count. It is NOT a musical object and must not be
+ * mistaken for one: the notes come entirely from `externalNotes`.
+ */
+export function buildExternalSection(bars: number, seed: number): ComposedSection {
+  const roles: RoleActivation = {
+    kick: false,
+    bass: false,
+    lead: false,
+    hats: false,
+    percussion: false,
+    fills: false,
+    texture: false,
+  }
+  const groove: GroovePlan = {
+    subdivision: 4,
+    kickSteps: [],
+    bassKickAlignment: 'INDEPENDENT',
+    accentSteps: [0, 4, 8, 12],
+    hatSteps: [],
+    hatStyle: 'NONE',
+    syncopationBudget: 0,
+    swing: 0,
+    fillBars: [],
+    density: 0,
+    stepsPerBar: 16,
+    pulse: 4,
+    accent: Array<number>(16).fill(0.5),
+    microtiming: Array<number>(16).fill(0),
+    bassAccentMap: Array<number>(16).fill(0),
+    ghostMap: Array<number>(16).fill(0),
+    kickMap: Array<number>(16).fill(0),
+  }
+  const compBars: ComposedSection['bars'] = Array.from({ length: bars }, (_, i) => ({
+    barIndex: i,
+    arrangementState: 'GROOVE' as ArrangementState,
+    groove,
+    kickNotes: [],
+    bassNotes: [],
+    leadNotes: [],
+    hatNotes: [],
+    harmonicContext: [],
+    roles,
+  }))
+  const phrases: ComposedPhrase[] = [
+    { bars: compBars, phraseArc: { opening: 0, peak: 0, resolution: 0 }, motifIds: [], seed },
+  ]
+  const arrangement: ArrangementPlan = { bars, slots: [], seed }
+  return { bars: compBars, phrases, arrangement, groove, seed }
+}
+
+/**
+ * Render an external note stream (e.g. psy-anthem's output mapped to PSYBUS
+ * v2 NotePayloads) through foundation's voices, ChannelFX, bus glue, and
+ * master chain — the SAME sound contract as render-forensic, minus all
+ * internal composition. Deterministic: same notes + seed → byte-identical.
+ */
+export async function renderExternalNotes(
+  notes: ExternalNote[],
+  options: {
+    bars: number
+    bpm?: number
+    seed?: number
+    config?: Partial<RenderConfig>
+    useSamples?: boolean
+  }
+): Promise<RenderResult> {
+  const section = buildExternalSection(options.bars, options.seed ?? 42)
+  return renderFoundationSection(section, {
+    useSamples: options.useSamples,
+    bpm: options.bpm ?? 145,
+    config: options.config,
+    externalNotes: notes,
+  })
 }
 
 // ── WAV encoder ──

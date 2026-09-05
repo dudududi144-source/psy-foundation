@@ -17,15 +17,15 @@ consumer acceptance gate. Independent forensic audit score: **3.5 → 7.5**
 with every internal finding closed on fresh evidence
 (`docs/AUDIT_FOLLOWUP_2026-09-05.md`).
 
-## The Five Gates (run this session, 2026-09-05)
+## The Five Gates (run this session, 2026-09-05 — Task 17)
 
 | Gate | Result |
 |---|---|
-| `bun test` | **957 pass, 0 fail, 0 skip** (63 files, ~1.31M expect() calls) |
+| `bun test` | **964 pass, 0 fail, 0 skip** (64 files, ~1.31M expect() calls) |
 | `bunx tsc --noEmit` | **0 errors** (17 packages, `noUncheckedIndexedAccess: true` repo-wide) |
-| `bunx biome check .` | **0 problems** (257 files; `archive/**` ignored by policy) |
-| `node scripts/verify.mjs` | **28/28 claims** (~138 s, real HTTP + real ffmpeg) |
-| `node scripts/audit-exports.mjs --include-apps` | **2 remaining = vendored shadcn, by policy** |
+| `bunx biome check .` | **0 problems** (~261 files; `archive/**` ignored by policy) |
+| `node scripts/verify.mjs` | **34/34 claims** (~143 s, real HTTP + real ffmpeg) |
+| `node scripts/audit-exports.mjs` | **0 dead exports in packages** |
 
 ## Canonical render (reproduced live this session)
 
@@ -40,10 +40,15 @@ header-first TTFB ≪ 500 ms (verify-locked).
 
 - **10 packages** — dsp, music, transport, protocol, analysis, learning,
   material, scheduler, device-sdk, fixtures
-- **apps/web** — 6 verified endpoints (render-forensic, audio-critique,
-  optimize, style-transfer, arrangement, upload-reference), rate limiting,
-  render cache + coalescing, worker-pool off-loop rendering, streaming WAV,
-  AudioWorklet generated from the canonical DSP (One-DSP)
+- **apps/web** — 7 verified endpoints (render-forensic, **render-notes**,
+  audio-critique, optimize, style-transfer, arrangement, upload-reference),
+  rate limiting, render cache + coalescing, worker-pool off-loop rendering,
+  streaming WAV, AudioWorklet generated from the canonical DSP (One-DSP)
+- **The WHAT→HOW wire (Task 17)** — `POST /api/render-notes`: external
+  PSYBUS v2 note streams render FAITHFULLY through voices → ChannelFX →
+  bus glue → master chain (no internal composition, no re-humanization,
+  no arrangement contour); FIR true-peak safety pass; deterministic.
+  First consumer: psy-anthem (its full pipeline proof lives in its repo)
 - **Release channel** — `release/psy-foundation.esm.js` (v2.0.0,
   single-file ESM), tag `foundation-v2.0.0`
 - **Family support** — `docs/CONSUMER_SUPPORT_PSY5.md` +

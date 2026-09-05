@@ -4267,3 +4267,24 @@ Work Log:
 Stage Summary:
 - The support surface is now repo-agnostic: psy-anthem (or any family agent) has one entry point (CONSUMER_SUPPORT.md), one tool (acceptance-check.mjs), one worked example (psy5), and a diagnosis template that forces evidence-first questions. Nothing outside psy-foundation was written; the charter boundary held.
 - Historical planning docs are now marked as history — the repo's "what's needed" signal is unambiguous: STATUS.md's remaining gaps (family adoption = external; license decision; blind listening tests).
+
+---
+Task ID: 17-a (The WHAT→HOW wire: POST /api/render-notes + FIR true-peak safety)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- User granted write access to psy-anthem ("כתוב לריפו שלו הכל... תחשוב בגדול שנוכל לראות את גבולות המערכת") and asked for an efficiency/limits experiment. Foundation-side prerequisite: the 4-tier ladder had NO path that renders an external composer's notes — Tier 0 only rendered foundation's own composition. Built the missing wire.
+
+Work Log:
+- Serving audit of psy-anthem (read-only): its foundation shim claims "VERBATIM... pinned" but the pin is <TBD> and the types are a third dialect (MusicalEvent {timestamp, channel:number, data:{pitch}}) matching NEITHER foundation v1 (union, at, string channel) NOR PSYBUS v2 ({kind:'note', track, note, vel 0..1, durBeats}). Its web/ folder vendors a 4th HOW-layer. The composition engine itself is excellent (352 tests pass) — the WIRE was the lie.
+- renderFoundationSection gained an optional `externalNotes` faithful mode: the internal composition loop never runs (empty-iterable guard — zero re-indentation, zero risk), external notes push through the SAME voices → ChannelFX → bus glue → master chain, are exempt from re-humanization, and barEnergy returns 1.0 (the caller owns arrangement). buildExternalSection() provides the minimal skeleton; renderExternalNotes() is the public entry.
+- NOTE-OFF TRUTH: internal renders never release the lead pool or texture voice (they sustain until retrigger — masked by the dense arrangement; noteOffTime is stored but never read). Faithful mode injects 'ext.noteoff' pseudo-events at onset+duration with pool slots simulated in dispatch order (lead → leadIdx%4, counter → (leadIdx+2)%4). Proven by a silence test: after the last note's release the render is < 1e-4 RMS.
+- NEW route POST /api/render-notes: validates EVERY envelope with foundation's own v2.validateEnvelope; only 'note' kind; unknown track names → 400 with the supported 16-track list; time = envelope ts × bpm → fractional 16th-steps (humanized timing renders as sent); out-of-window notes dropped + counted (X-Notes-Dropped); bounds bars 1-88 / notes ≤ 2000 / body ≤ 4 MB / same rate-limit bucket; WAV + measurement headers (LUFS/TP/sample-peak/width/md5) + ?mode=json twin; deterministic (same body+seed → same md5). apps/web gained @psy-foundation/protocol workspace dep.
+- NEW packages/dsp/src/true-peak.ts — measureTruePeakDb(): 4× oversampled windowed-sinc (Kaiser β9, 48 taps) true-peak meter, BS.1770-style; pure addition. Validated against ffmpeg ebur128: −1.2 canonical (mine −1.01), +1.3 pushed (mine +0.67..−2.0 after convergence) — ~0.5 dB agreement, conservative direction on full mixes.
+- THE VERIFY GATE CAUGHT A REAL BUG (why the gate exists): the first verify run FAILED 'render-notes: mastered output' — sparse stream + two-pass loudness gain (×4) pushed the TruePeakLimiter past its Catmull-Rom detector's blind spot: internal meter said −0.34 dBTP, ffmpeg's ITU FIR read +1.3 dBTP — real DAC clipping invisible to the internal meter. Fix: faithful-mode-only FIR safety pass converging measureTruePeakDb to −2.0 dBTP (≥1.3 dB honest margin); default renders skip it entirely.
+- verify.mjs +6 claims (34 total): stream→WAV, pcm_s16le/44.1k, determinism, mastered-output, honest-400 ×2.
+- Five Gates: bun test 964/0/0skip (7 new external-notes tests incl. silence-after-note-off, no-energy-contour via peak compare, determinism byte-identical, default-path-untouched), tsc 0 (17 pkgs), biome 0, audit-exports 0 dead in packages, verify FULL 34/34 with BYTE-IDENTICAL baselines: f2f81ed6 / 88ecc4b8 / I=−10.7 / TP=−1.2 / LRA=3.9 / critic 0.7141728947862114.
+- Docs: README (34/34, 7 endpoints, wire curl example, Task 17 journey row), STATUS.md (Task 17 gates + wire in What-ships), CONSUMER_SUPPORT.md (Tier 0a/0b split + "how do I get MY notes rendered" FAQ).
+
+Stage Summary:
+- The family's WHAT-layers no longer need to fake a wire: psy-anthem (and any composer) can now POST PSYBUS v2 notes and get foundation's mastered sound deterministically. The wire is proven by the repo's own gates, and the verify gate proved it proves things — it caught a true ISP clipping bug the internal meter structurally could not see. Anthem-side pipeline proof: Task 17-b in psy-anthem's repo.
