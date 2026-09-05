@@ -1618,6 +1618,17 @@ export async function renderFoundationSection(
   // ffmpeg within ~0.5 dB, so the target keeps ≥1.3 dB of honest margin).
   // Default renders skip this entirely — their output is byte-identical.
   if (faithful) {
+    // LOUDNESS TRUTH (measured, Task 17): consumer streams are sparser than
+    // the internal arrangement. The two-pass gain above is capped (×4) and
+    // the signal is already limited at the −1.5 ceiling — additional
+    // gain→limit cycles PUMP and LOSE gated loudness (measured: iterative
+    // convergence made a full melody+groove stream QUIETER, −12.4 → −14.6
+    // LUFS). Loudness = density × ceiling; the ceiling is fixed, so the
+    // lever is arrangement density, not more gain. Foundation therefore
+    // reports the honest number instead of chasing the target into
+    // distortion: the LUFS shortfall of a sparse stream is a property of
+    // the stream's arrangement (documented in CONSUMER_SUPPORT.md §5).
+    // Only the FIR true-peak safety is applied here:
     for (let pass = 0; pass < 4; pass++) {
       const tp = measureTruePeakDb(samplesL, samplesR)
       if (tp <= -2.0) break
