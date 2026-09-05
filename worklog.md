@@ -4288,3 +4288,18 @@ Work Log:
 
 Stage Summary:
 - The family's WHAT-layers no longer need to fake a wire: psy-anthem (and any composer) can now POST PSYBUS v2 notes and get foundation's mastered sound deterministically. The wire is proven by the repo's own gates, and the verify gate proved it proves things — it caught a true ISP clipping bug the internal meter structurally could not see. Anthem-side pipeline proof: Task 17-b in psy-anthem's repo.
+
+---
+Task ID: 17-b (counterpart, in psy-anthem's repo — owner-authorized write)
+Agent: Z.ai Code (lead engineer)
+
+Task: Execute the anthem side of the wire experiment in the family/psy-anthem repo (owner explicitly granted write access for this task), then reconcile with that repo's parallel upstream work.
+
+Work Log:
+- psy-anthem@ad9f5c3 (after rebasing onto the anthem agent's parallel v13.x web work — one MEMORY.md conflict, both sides kept): verbatim shim sync from THIS repo at 0b1e77c, wire.ts adapter (anthemToWire/wireToRenderNotesBody, validated by the vendored copy of OUR codec), 10 conformance tests, e2e-pipeline.ts + acceptance-check.mjs copy.
+- THE EXPERIMENT (first end-to-end family pipeline proof): compose grid (bars 8–128 × 11 intents × voices 1–4 × 6 curves, byte-identical double-generates, 0.1–0.8 ms/bar) → wire (~2.08 KB/bar, 0 rejected) → POST /api/render-notes → our faithful render → acceptance-check → 53 claims PASS, determinism across the HTTP boundary (same POST → same WAV md5).
+- Limits found (documented in both repos): loudness is density-bound (melody+groove ≈ −12.4 LUFS vs club gate; iterative gain→limit PUMPING loses loudness — that is why 17-a amend removed the convergence loop); 2000-note POST cap = per-section wire (halves workaround proven); FIR TP safety enforced.
+- The anthem agent's OWN renderer (v13.9.1, re-measured post-rebase) still fails the sound contract: DC offset −0.085/−0.087 both channels + I = −15.5 LUFS. Our wire bypasses it entirely.
+
+Stage Summary:
+- The family has its first WORKING WHAT→HOW proof, and it is deterministic end-to-end. Foundation owns sound; anthem owns composition; the wire is validated by the same codec on both ends. psysynth/psysampler can adopt the same pattern via docs/CONSUMER_SUPPORT.md Tier 0b.
