@@ -4220,3 +4220,32 @@ Work Log:
 
 Stage Summary:
 - §4 item 2 closed honestly: the "stereo lead path" was never missing — it was mislabeled. The repo's stereo width story is now single-source: channel-bus width (per-channel, wired) + master width (wired, automated, measured), with no duplicate voice-level declaration. The internal gap list is now exactly ONE item: family adoption (external). Scorecard claim stands at 7.5 with every internal finding closed on fresh evidence.
+
+---
+Task ID: 15 (Self-review of Tasks 13–14 + consumer support for the psy5 agent)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- User: "תמשיך ודחוף תבחן ותבקר את כל מה שעשית בנוסף שלחתי לך לקוח את הסוכן מpsy5 כי הוא חירבן את כל הסאונדים השאלה איך אנחנו יכולים לתמוך בו" — continue + push; test and critique everything done so far; and the psy5 agent ("a client") ruined its sounds — how can we support it. Charter: psy5 is read-only; support must ship inside psy-foundation.
+
+Work Log:
+- Push-state audit first: git fetch revealed origin/main was ALREADY at 52f7432 (local "ahead by 2" was a stale tracking ref) — Tasks 13–14 are on the remote; refreshed refs.
+- SELF-REVIEW of Task 13+14 (user's explicit ask):
+  - Re-ran every gate fresh: bun test 957/0/0skip (111.4s, includes the 3 locked-md5 tests f2f81ed6/88ecc4b8), bun run typecheck 17/17 packages exit 0, biome 0, audit-exports 2 (vendored shadcn, by policy), verify FULL 28/28 (139.9s).
+  - Re-derived the canonical render LIVE (server on :3118, ?bars=8&seed=42): md5 f2f81ed62a25743358417bed75ab67f7 reproduced byte-identical; ffmpeg ebur128 I=−10.7 LUFS, TP=−1.2 dBTP, LRA=3.9, sample peak −1.5 dBFS — Task 13/14 byte-equivalence claims independently re-proven.
+  - Reviewed the full f4382e9 + 52f7432 diffs hunk-by-hunk: deletions all zero-consumer, honest comments in place.
+  - FOUND DEFECT 1 (fixed): scripts/audit-exports.mjs --json used path.join(ROOT, out) — an ABSOLUTE --json path was silently concatenated under ROOT (ENOENT) and parent dirs were never created. Fixed: resolve() + mkdirSync(recursive). Verified with absolute + default paths.
+  - FOUND DEFECT 2 (fixed): README measured-output table claimed ffmpeg ebur128 TP = −1.5 dBTP; fresh measurement is −1.2 dBTP (and AUDIT_FOLLOWUP/worklog already said −1.2). Cell corrected (our meter −1.5 = Catmull-Rom ceiling, ffmpeg −1.2 = ITU FIR).
+  - FOUND DEFECT 3 (fixed): README journey table had NO Task 14 row and Task 13's row still read "this commit" (stale pointer). Fixed: f4382e9 pinned, Task 14 row added, Task 15 row added.
+  - FOUND DEFECT 4 (fixed): docs/STATUS.md was a Phase-0 Day-2 snapshot (2026-08-19: 646 tests, TP +0.2 dBTP as a known bug) that contradicted every current number AND whose "Known Issues" section lists long-fixed bugs — actively misleading. Rewritten as verified current state (the exact open item ENGINEERING_PLAN_FINAL.md:231 asked for; checkbox now struck).
+- psy5 SUPPORT (the user's client question). Evidence base: AUDIT_FORENSIC §C9/§4 (psy5 vendors an OLD foundation snapshot — 56-line music divergence, missing metering, PingPongDelay NaN bug still alive in psy5's copy) + M0-B worklog (multi-source-of-truth state: cutoff ×4 layers, vol/mute ×2 DOM writers, bpm ×2, swing ×3, scene ×3; lost mix glue: no sidechain/WaveShaper/master chain). Diagnosis: psy5's agent cannot fix sounds by editing its divergent vendored copy — drift compounds.
+  - NEW scripts/acceptance-check.mjs: standalone consumer WAV gate (node + ffmpeg only, zero repo deps, copyable single file). Gates = foundation's own verify gates: pcm_s16le/44.1k/stereo, LUFS ∈ [−11,−7], TP < 0 dBTP (warn ≥ −0.8), LRA > 0.5, sample peak ≤ −0.5 dBFS (the audit-C3 square-clip signature), DC < 0.001, dead-channel RMS, mono-duplicate WARN, prints file md5 for determinism checks; --json for machines; exit 0/1/2.
+  - VALIDATED both directions: PASS on the canonical render (all measured values matched the documented ones); FAIL on generated broken audio (hard-clipped sine → sample-peak+TP+LUFS, DC-offset tone → DC, dead-channel pan → RMS/LUFS, −46 dB quiet → LUFS). A tool that can only say PASS is theater.
+  - NEW docs/CONSUMER_SUPPORT_PSY5.md: the rescue guide written TO the psy5 agent — (1) why the sounds broke with the audited evidence, (2) the canonical sound contract with the numbers to hit, (3) the 4-tier support ladder (HTTP consumer → release/psy-foundation.esm.js v2.0.0 vendored bundle → conformance+PSYBUS → git pin), (4) a 6-step rescue protocol (baseline → kill NaN bug → single-source state → restore glue → determinism test → re-baseline), (5) charter honesty — foundation will not edit psy5.
+  - Cross-linked from docs/FAMILY_ADOPTION_OFFER.md (after Step 5) and docs/AUDIT_FOLLOWUP §4 item 1 + §5; README governance/Tests lines updated.
+- Five Gates after all changes: bun test 957/0/0skip, typecheck 17/17, biome 0 (258 files — +1 new script), audit-exports 2 (vendored policy), verify FULL 28/28.
+
+Stage Summary:
+- The user's review demand produced 4 real defects found and fixed (audit-tool --json path corruption, stale README TP figure, stale journey pointers, actively-misleading STATUS.md) — self-review is not ceremony; it caught things the Five Gates structurally cannot (docs drift).
+- The psy5 question got an executable answer, not advice: a single-file gate the psy5 agent can run on its own renders today (exit-code discipline), a rescue guide grounded in the repo's own audit evidence, and an adoption ladder that starts at zero risk (HTTP) and ends the vendored-copy disease. All inside psy-foundation; psy5 untouched, per charter.
+- Canonical baseline re-proven live this session: f2f81ed6 / I=−10.7 / TP=−1.2 / LRA=3.9.

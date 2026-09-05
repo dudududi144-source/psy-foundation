@@ -228,7 +228,7 @@ psy-foundation/
   - measured output: `-10.4 LUFS, -0.3 dBTP, 143 BPM` (מ-ffmpeg, לא מ-ה-meter הפנימי)
   - 0 טענות "AI/neural/commercial/VST-AU" עד Phase 4
 - [ ] ארכוב `docs/SELF_ROAST.md`, `docs/HONEST_TRUTH.md`, `docs/PROJECT_SUMMARY.md`, `docs/COMMERCIAL_READINESS_ROADMAP.md`, `docs/COMPETITIVE_GAP_ANALYSIS.md` ל-`docs/archive/`
-- [ ] כתיבת `docs/STATUS.md` חדש עם מצב נוכחי מאומת
+- [✓] כתיבת `docs/STATUS.md` חדש עם מצב נוכחי מאומת — נכתב ונכתב מחדש (2026-09-05, Task 15) עם מספרים מאומתים מהסשן עצמו
 - [ ] כתיבת `docs/ARCHITECTURE.md` עם ה-layered architecture מסעיף 2
 - [ ] כתיבת `docs/ROADMAP.md` עם Phases 0-5
 - [ ] כתיבת `docs/QUALITY_GATES.md` עם acceptance criteria

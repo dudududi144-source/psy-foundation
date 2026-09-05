@@ -52,6 +52,13 @@ per-type migration.
 Only after Step 4 has run green for one release cycle: delete the repo's
 local DSP/transport copy. This is the step that pays — no more divergence.
 
+> **Already degrading your sound today?** Read
+> `docs/CONSUMER_SUPPORT_PSY5.md` — the diagnosis of the psy5 regression
+> (stale vendored snapshot with an alive PingPongDelay NaN bug,
+> multi-source-of-truth state corruption, no mix glue) and the rescue
+> protocol, including `scripts/acceptance-check.mjs`, a standalone
+> node+ffmpeg gate you can run on your own renders before touching anything.
+
 ## What the owner must decide
 
 - Per-repo go/no-go (each repo's worklog records its own state).

@@ -64,7 +64,7 @@ Same dimensions as the baseline audit.
 
 ## 4. What would close the remaining gap
 
-1. **Family adoption (external).** The foundation side is ready and waiting: v2.0.0 bundle, PSYBUS v2, device conformance suite, adoption offer. The 16 repos are read-only for this engineer by mandate; the move is theirs.
+1. **Family adoption (external).** The foundation side is ready and waiting: v2.0.0 bundle, PSYBUS v2, device conformance suite, adoption offer. The 16 repos are read-only for this engineer by mandate; the move is theirs. **Task 15 added the active support channel:** `docs/CONSUMER_SUPPORT_PSY5.md` (evidence-based diagnosis of the psy5 sound regression — stale vendored snapshot with the alive PingPongDelay NaN bug, multi-source-of-truth state corruption, missing mix glue) plus `scripts/acceptance-check.mjs`, a standalone node+ffmpeg WAV gate family agents can run on their own renders — gates identical to this repo's verify claims, positive+negative tested (clipping, DC, dead-channel, quiet, canonical PASS).
 2. ~~Stereo lead path (internal feature).~~ **Resolved in Task 14 — by record correction and deletion, not by a feature.** Fresh measurement falsified the premise: the reference render was ALREADY true stereo (lead voice mono → lead channel stereo via `ChannelFX` width 0.9 + ping-pong + stereo reverb → master `StereoWidener` 1.3 + M/S widen 1.5; measured on a real 2-bar render: stereoWidth 0.884, max \|L−R\| 1.135, side RMS 0.201). `LeadRecipe.stereoWidth` was a duplicate declaration of a control that lives (wired, measured) at the channel/master bus — deleted per wire-or-delete. The F21 contract-surface fields (`SoundDNA.stereoWidth`, `StereoConfig.width`) stay under the documented Vertical-Proof Freeze with honest CONTRACT-SURFACE-ONLY comments. No md5 re-baseline needed — nothing that fed a render changed.
 3. ~~Dead-export audit (LOW).~~ **Done (Task 13).** Repo-wide pass by `scripts/audit-exports.mjs`; 49 first-party dead exports removed, dormant DDSP branch deleted, ONNX/RAVE/DDSP research island archived (`archive/neural-onnx-research/`). md5 baselines unchanged. Re-run anytime: `node scripts/audit-exports.mjs --include-apps` (exit 1 with `--strict` when new dead exports appear).
 
@@ -81,6 +81,7 @@ rg 'Math\.random' packages/music/src/audio   # fix comments only
 # Runtime truth (139 s)
 node scripts/verify.mjs          # 28 pass / 0 fail — md5 baselines identical post-Task-12 AND post-Task-13
 node scripts/audit-exports.mjs --include-apps   # 2 remaining dead exports = vendored shadcn, by policy
+node scripts/acceptance-check.mjs <render.wav>  # Task 15 consumer gate — PASS on the canonical render, FAIL on broken audio
 
 # Five gates at audit time (re-confirmed after Task 12 strictness sweep and Task 13 dead-export removal)
 bun test                         # 957 pass / 0 fail / 0 skip
@@ -88,4 +89,4 @@ tsc --noEmit (all packages)      # 0 errors — now under noUncheckedIndexedAcce
 biome check                      # 0 problems (257 files)
 ```
 
-*Signed: Z.ai — Lead Foundation Engineer (continuation session). Worklog: Tasks 11–13. Every verdict above was re-derived in this session from current code and runtime runs; nothing was copied from prior claims.*
+*Signed: Z.ai — Lead Foundation Engineer (continuation session). Worklog: Tasks 11–15. Every verdict above was re-derived in this session from current code and runtime runs; nothing was copied from prior claims.*

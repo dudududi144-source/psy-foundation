@@ -46,7 +46,7 @@ curl -H "x-api-key: $PSY_API_KEY" "http://localhost:3000/api/render-forensic?bar
 |--------|-----------|----------------|--------|
 | Duration | 13.24s | 13.244s | ffprobe |
 | Integrated LUFS | **-10.9** | -10.7 | ffmpeg ebur128 |
-| True Peak | -1.5 (4x Catmull-Rom) | -1.5 (ITU FIR) | ffmpeg ebur128 |
+| True Peak | -1.5 (4x Catmull-Rom) | -1.2 (ITU FIR) | ffmpeg ebur128 |
 | LRA | 3.9 LU | 3.9 LU | ffmpeg ebur128 |
 | Sample rate / channels | 44100 Hz / 2 | 44100 Hz / 2 | ffprobe |
 
@@ -143,6 +143,7 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 - **Plan:** `docs/PLAN_V3_MASTER.md` — 6 phases, per-task acceptance gates
 - **Audit:** `docs/AUDIT_FORENSIC_2026-09-04.md` — independent measured audit (3.5/10 → target ≥7)
 - **Charter:** `docs/ENGINEER_CHARTER.md` — continuous control protocol, Five Gates
+- **Family support:** `docs/CONSUMER_SUPPORT_PSY5.md` — evidence-based rescue guide + `scripts/acceptance-check.mjs` (standalone WAV gate, node+ffmpeg only)
 - **Rule:** no README claim without a verify.mjs check behind it.
 
 ## Project Journey
@@ -161,7 +162,9 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 | **Z.ai 4.2 follow-up** | **Streaming WAV header-first (TTFB ≪ 500 ms verify-locked), byte-identical chunked PCM, shared render geometry** | `654478e` |
 | **Z.ai audit follow-up** | **C1–C10 re-verified on fresh evidence: 3.5 → 7.5** | `6d4e1c9` |
 | **Z.ai Task 12** | **Strict mode repo-wide (`noUncheckedIndexedAccess`), voice dead-flags closed, byte-identical render proof** | `edd1e5f` |
-| **Z.ai Task 13** | **Dead-export audit: 49 first-party dead exports removed, dormant DDSP branch deleted, neural/ONNX island archived — md5 baselines identical** | this commit |
+| **Z.ai Task 13** | **Dead-export audit: 49 first-party dead exports removed, dormant DDSP branch deleted, neural/ONNX island archived — md5 baselines identical** | `f4382e9` |
+| **Z.ai Task 14** | **Stereo truth: record correction, `LeadRecipe.stereoWidth` deleted — runtime proof the reference render IS true stereo (width 0.884); baselines identical** | `52f7432` |
+| **Z.ai Task 15** | **Self-review fixes + family support: `acceptance-check.mjs` standalone consumer gate, `docs/CONSUMER_SUPPORT_PSY5.md` rescue guide, STATUS.md rewritten, audit-tool `--json` fix — canonical baseline re-proven live (`f2f81ed6`)** | this commit |
 
 ## Tech Stack
 
@@ -170,6 +173,6 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 - **Web:** Next.js 16 (App Router)
 - **Audio:** Web Audio API, AudioWorklet, ZDF SVF
 - **VST:** archived prototype (`archive/vst-prototype/`) — honest post-mortem inside
-- **Tests:** `bun test` (957) + `scripts/verify.mjs` (28 live claims) + `scripts/audit-exports.mjs` (dead-export audit: 2 remaining = vendored shadcn, by policy)
+- **Tests:** `bun test` (957) + `scripts/verify.mjs` (28 live claims) + `scripts/audit-exports.mjs` (dead-export audit: 2 remaining = vendored shadcn, by policy) + `scripts/acceptance-check.mjs` (consumer WAV gate)
 - **Linter:** Biome 1.9.4
 - **License:** UNLICENSED (private; family adoption under separate agreement — see `docs/FAMILY_ADOPTION_OFFER.md`)

@@ -20,7 +20,7 @@
  * Usage: node scripts/audit-exports.mjs [--strict] [--json <path>]
  */
 
-import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
 
 const ROOT = resolve(new URL('..', import.meta.url).pathname)
@@ -304,8 +304,12 @@ console.log(`DEAD exports     : ${totalDead}`)
 if (process.argv.includes('--json')) {
   const i = process.argv.indexOf('--json')
   const out = process.argv[i + 1] ?? 'audit/dead-exports-report.json'
-  writeFileSync(join(ROOT, out), JSON.stringify(report, null, 2))
-  console.log(`json report -> ${out}`)
+  // resolve() (not join()): an absolute --json path must win over ROOT, and a
+  // relative one is resolved against ROOT; mkdir so nested targets work.
+  const target = resolve(ROOT, out)
+  mkdirSync(dirname(target), { recursive: true })
+  writeFileSync(target, JSON.stringify(report, null, 2))
+  console.log(`json report -> ${target}`)
 }
 
 if (process.argv.includes('--strict') && totalDead > 0) process.exit(1)
