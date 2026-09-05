@@ -4403,3 +4403,22 @@ Work Log:
 
 Stage Summary:
 - The family's proof story is now environment-loss-proof: after a third wipe, everything was rebuilt from GitHub in minutes and BOTH adoption pipelines re-proven over live HTTP — the wire is not a one-session experiment, it is a reproducible property. psysampler gained the family's first honest OVERALL coverage gate (bun's per-file threshold semantics documented as a trap). Remaining open items stay owner-gated: anthem draft stereo WARN (cosmetic), psyreason onboarding, psy-sampler vs psysampler duplication decision.
+
+---
+Task ID: 24 (Gates become unavoidable — owner mandate "continue, only on those same folders")
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- Continue family work strictly inside the authorized folders (psy-foundation, psy-anthem, psysampler). psy5 untouched; psyreason still owner-gated; no new repos.
+
+Work Log:
+- STATE READ: Task 23 (draft-path stereo WARN) was already completed and pushed inside anthem (7795ce1, v13.9.3 — root-caused TWO defects: draftify() spread clamp AND full-band noise bursts inflating true peak +2.6 dBTP; both fixed at source, draft+drums 10/10 gates) with a psysampler docs counterpart (8dd539f). Foundation-side records were stale (matrix §5 item 3 still open, worklog ended at Task 22).
+- GAP FOUND (the real next item): both consumer repos' coverage floors existed but CI never called them. Anthem's script header even deferred wiring over a suspected bun 1.1.44 coverage-table drift; psysampler's CI coverage job only uploaded numbers to codecov without enforcing anything.
+- MEASUREMENT KILLED THE CONCERN: downloaded a real bun 1.1.44 binary, ran anthem's suite under it — the "All files | funcs | lines |" row is IDENTICAL to current bun's (89.14 / 90.67). No format drift; wiring needed no bun bump.
+- WIRING: anthem ci.yml gains "Coverage floor (overall, honest)" step after the test step (floor 85%; a7aa120, v0.3.3, CHANGELOG 13.9.4); psysampler ci.yml coverage job gains the same enforcement after the coverage run (floor 75%; 4a065bd). Script headers updated to record the wiring + the disproven concern.
+- LOCAL PROOF BEFORE PUSH: anthem typecheck + validate 448/448 + suite 362/0 + coverage:floor PASS; psysampler full verify ladder exit 0 (suite + biome 132 files + floor PASS 79.41/81.63).
+- FOUNDATION COUNTERPART (this commit): FAMILY_MATRIX §5 item 3 → DONE (Task 23 evidence), item 5 → DONE (Tasks 22→24, both floors CI-enforced); §6 living log gains Task 23 + Task 24 entries. Lesson refined: a gate that CI does not run is documentation, not a gate.
+- BOUNDARY: psy5 untouched (bbe81c2); no new repos; every push followed by CI verification.
+
+Stage Summary:
+- The family's quality gates are no longer voluntary: coverage floors are enforced on GitHub for both consumer repos, the last suspected blocker was disproven by direct measurement, and the matrix/worklog reflect Tasks 23–24 truthfully. Remaining open items are ALL owner-gated: psyreason onboarding, psy-sampler vs psysampler duplication decision, and (only if ever authorized) psy5's coverage floor.

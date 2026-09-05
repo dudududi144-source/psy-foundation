@@ -87,17 +87,26 @@ get the same ladder the moment the owner activates them.
    `docs/CONSUMER_SUPPORT.md` §5b: the measured economics table
    (hats +0.5 LU/+15.5 KB; lead +1.8 LU/−7 KB; form −0.30 LU/+31.8 KB;
    gain-escalation pumps then loses) + five practical rules.
-3. **Draft-path stereo WARN.** Anthem draft spreads are clamped ≤ 0.5 →
-   stereo-stats WARN. Optional small fix inside anthem (raise draft spread
-   floor); cosmetic, preview-only.
+3. ~~**Draft-path stereo WARN.**~~ **DONE (Task 23, anthem `7795ce1`).**
+   Gating the draft path for the first time (`scripts/draft-render-check.ts`)
+   root-caused TWO defects, not one: the `draftify()` spread clamp ≤ 0.5
+   that collapsed L/R statistics (the WARN), AND true-peak clipping from
+   full-band noise bursts (draft+drums TP +2.6 dBTP — every burst now
+   band-limited at the source, 2-pole 11 kHz, local per-burst state).
+   Measured after: draft+drums 10/10 gates (I=−9.0, TP=−0.4, LRA 4.8);
+   draft 0 FAIL 0 WARN; determinism byte-identical. v13.9.3.
 4. **psyreason** (pushed after this session started): next candidate for
    the same READ→…→TAG adoption, pending owner authorization.
-5. **Coverage floors for consumer repos.** Bun's `coverageThreshold` is
-   PER-FILE (proven 2026-09-05: psysampler overall 79.4% funcs / 81.6%
-   lines still exits 1 at 0.75 because ui.js sits at 25%) — an overall
-   floor needs a measuring script. psysampler got one
-   (`scripts/coverage-floor.mjs`, `bun run coverage:floor`, wired into
-   `verify`); anthem/psy5 can copy the pattern when wanted.
+5. ~~**Coverage floors for consumer repos.**~~ **DONE (Tasks 22→24).**
+   Bun's `coverageThreshold` is PER-FILE (proven 2026-09-05: psysampler
+   overall 79.4% funcs / 81.6% lines still exits 1 at 0.75 because ui.js
+   sits at 25%) — an overall floor needs a measuring script. Both consumer
+   repos now have one AND enforce it in CI: psysampler (floor 75%,
+   measured 79.41/81.63; CI coverage job fails below it, `4a065bd`) and
+   anthem (floor 85%, measured 89.14/90.67; CI step after the tests,
+   `a7aa120` — the bun 1.1.44 pin emits an identical All-files row, the
+   suspected format drift was disproven by measurement). psy5 can copy
+   the pattern when the owner authorizes writing there.
 
 ## 6. Post-Task-20 updates (the living log of this document)
 
@@ -118,3 +127,17 @@ get the same ladder the moment the owner activates them.
   cap honest 400, and the halves workaround). The family wire survives
   environment loss because GitHub is the source of truth, and the e2e
   suites are the proof instrument.
+- **Task 23 — draft quality joins the family gate (anthem `7795ce1`).**
+  First gating of the draft path found two defects: the stereo WARN's
+  root cause (`draftify()` spread clamp) and, hiding behind it, true-peak
+  clipping from full-band noise bursts (+2.6 dBTP). Both fixed at the
+  source; draft+drums now 10/10 gates. See §5 item 3. psysampler's
+  counterpart commit (`8dd539f`) only corrected doc counts — no code.
+- **Task 24 — gates become unavoidable (anthem `a7aa120`, psysampler
+  `4a065bd`).** The coverage floors existed but nothing in CI called
+  them: anthem's script header even deferred wiring over a suspected
+  bun-1.1.44 table-format drift. Concern disproven by measurement (real
+  1.1.44 binary, identical All-files row), and the floors are now CI
+  steps — anthem after the test step, psysampler in the coverage job.
+  Lesson refined: a gate that CI does not run is documentation, not a
+  gate.
