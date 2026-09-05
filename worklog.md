@@ -4120,3 +4120,31 @@ Work Log:
 Stage Summary:
 - PLAN_V3 4.2 — the last deferral — is now COMPLETE. First byte on a long (88-bar) render arrives in ~24ms (the RIFF header), 25.7 MB of PCM then streams in backpressured chunks, bit-identical to the buffered encoder; every locked md5/LUFS/TP baseline still passes unchanged. No DSP files' behavior changed — forensic-bridge only gained the shared geometry function.
 - Final repo state: main @ this commit, 957 tests / 0 fail / 0 skip, verify 28/28, tsc 0, biome 0. PLAN_V3_MASTER now has ZERO deferrals.
+
+---
+Task ID: 11 (Post-execution verification audit — C1-C10 re-check)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- User resumed the session ("תמשיך") after PLAN_V3 completion; token re-validated and remote confirmed in sync. Next value step: a follow-up forensic audit verifying each of the original audit's C1-C10 critical findings with fresh evidence, producing an honest post-execution scorecard.
+
+Work Log:
+- Re-read the uploaded token file; validated via GitHub API (HTTP 200, dudududi144-source); `git ls-remote` confirmed main/tags/branches fully synced (654478e on both sides) — nothing was left unpushed from Task 10.
+- Ran the full verify suite fresh: 28/28 (138 s) — determinism md5 (8+88 bars), LUFS/TP ffmpeg parity, streaming TTFB 24 ms, DoS guards, rate limiting, cache parity.
+- Re-derived evidence for every critical finding at the exact audited locations:
+  - C1: master chain lives in packages/dsp/src/master/{limiter,loudness,multiband,ott}.ts; apps/web imports @psy-foundation/dsp in 5+ files incl. worklet source.
+  - C2: single canonical PolyBLEP/ZDF/MoogLadder; worklet = build artifact (D6); MoogLadder stability clamp documented at filters.ts:157-205; VST archived.
+  - C3: real lookahead in master/limiter.ts (5 ms); repo-wide `ceiling * 0.65` → 0 hits.
+  - C4/C5: worklet is TS source over canonical DSP compiled by scripts/build-worklet.mjs; `const SR = 44100` → 0 hits; honesty label on the realtime section (4.4).
+  - C6: runtime proof — upload-reference 200+hash; style-transfer default 200 (verify title literally says "was guaranteed 500"); em-dash only in comments.
+  - C7: runtime proof — bars guard 400s, 429+Retry-After, off-loop pool + coalescing + LRU cache, loud-truncation streaming, no double render.
+  - C8: critic metrics are real measurements or null (stereoContrast :221; note-based metrics :198/:231/:239); literals survive only as "Was:" comments.
+  - C9: channel shipped (v2.0.0 bundle, PSYBUS v2, conformance suite, adoption offer); 0/16 runtime consumption remains open-external (16 repos read-only by mandate).
+  - C10: seeded Rng from section.seed (hats :119/:176, kick click :68/:160); md5-locked determinism.
+- Honest negatives found and recorded (not glossed over): kick-voice.ts:49 `readonly active = false` still dead; stereoWidth declared + preset-assigned but zero read sites; tsconfig strictness flags still false (apps/web:7-8, dsp, music); dead-export audit not performed. All listed in §2/§4 of the new doc with a Task 12 proposal.
+- Wrote docs/AUDIT_FOLLOWUP_2026-09-05.md: per-finding verdict table, re-check of all high/medium items, scorecard 3.5 → 7.5 on the same dimensions, gap-closing plan (family adoption external; strictness sweep + voice cleanup proposed as Task 12), reproducibility block.
+- Five Gates re-run at audit time: bun test 957/0/0skip (113.9 s), typecheck 0 (all packages), biome 0 (257 files), verify 28/28.
+
+Stage Summary:
+- The audit's trajectory claim is now independently re-proven: 3.5/10 → 7.5/10, with C1-C8 + C10 RESOLVED on fresh evidence, C9 shipped-as-channel (adoption external), and the only structural internals left are the strictness sweep and two voice-level dead flags — all queued as Task 12 proposals.
+- New artifact: docs/AUDIT_FOLLOWUP_2026-09-05.md. Repo remains green; this commit is docs-only.
