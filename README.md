@@ -143,7 +143,7 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 - **Plan:** `docs/PLAN_V3_MASTER.md` — 6 phases, per-task acceptance gates
 - **Audit:** `docs/AUDIT_FORENSIC_2026-09-04.md` — independent measured audit (3.5/10 → target ≥7)
 - **Charter:** `docs/ENGINEER_CHARTER.md` — continuous control protocol, Five Gates
-- **Family support:** `docs/CONSUMER_SUPPORT_PSY5.md` — evidence-based rescue guide + `scripts/acceptance-check.mjs` (standalone WAV gate, node+ffmpeg only)
+- **Family support:** `docs/CONSUMER_SUPPORT.md` — the family-agent support kit (universal sound contract, integration ladder, onboarding checklist, diagnosis template); `docs/CONSUMER_SUPPORT_PSY5.md` — worked example; `scripts/acceptance-check.mjs` — standalone WAV gate (node+ffmpeg only)
 - **Rule:** no README claim without a verify.mjs check behind it.
 
 ## Project Journey
@@ -164,7 +164,8 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 | **Z.ai Task 12** | **Strict mode repo-wide (`noUncheckedIndexedAccess`), voice dead-flags closed, byte-identical render proof** | `edd1e5f` |
 | **Z.ai Task 13** | **Dead-export audit: 49 first-party dead exports removed, dormant DDSP branch deleted, neural/ONNX island archived — md5 baselines identical** | `f4382e9` |
 | **Z.ai Task 14** | **Stereo truth: record correction, `LeadRecipe.stereoWidth` deleted — runtime proof the reference render IS true stereo (width 0.884); baselines identical** | `52f7432` |
-| **Z.ai Task 15** | **Self-review fixes + family support: `acceptance-check.mjs` standalone consumer gate, `docs/CONSUMER_SUPPORT_PSY5.md` rescue guide, STATUS.md rewritten, audit-tool `--json` fix — canonical baseline re-proven live (`f2f81ed6`)** | this commit |
+| **Z.ai Task 15** | **Self-review fixes + family support: `acceptance-check.mjs` standalone consumer gate, `docs/CONSUMER_SUPPORT_PSY5.md` rescue guide, STATUS.md rewritten, audit-tool `--json` fix — canonical baseline re-proven live (`f2f81ed6`)** | `ee7383f` |
+| **Z.ai Task 16** | **Family-wide support kit (`docs/CONSUMER_SUPPORT.md`) for incoming agents (psy-anthem next); historical roadmaps bannered as superseded — no stale checkboxes read as open work** | this commit |
 
 ## Tech Stack
 

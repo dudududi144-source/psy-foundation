@@ -4249,3 +4249,21 @@ Stage Summary:
 - The user's review demand produced 4 real defects found and fixed (audit-tool --json path corruption, stale README TP figure, stale journey pointers, actively-misleading STATUS.md) — self-review is not ceremony; it caught things the Five Gates structurally cannot (docs drift).
 - The psy5 question got an executable answer, not advice: a single-file gate the psy5 agent can run on its own renders today (exit-code discipline), a rescue guide grounded in the repo's own audit evidence, and an adoption ladder that starts at zero risk (HTTP) and ends the vendored-copy disease. All inside psy-foundation; psy5 untouched, per charter.
 - Canonical baseline re-proven live this session: f2f81ed6 / I=−10.7 / TP=−1.2 / LRA=3.9.
+
+---
+Task ID: 16 (Family-wide support kit + stale-docs quarantine, ready for the psy-anthem agent)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- User (Hebrew): "Continue. I didn't understand — everything was in Chinese. But don't write to his folder. Continue what's needed. I will also send you the psy-anthem agent." — reply in Hebrew; confirm zero writes to psy5/family folders; prepare for the NEXT incoming client (psy-anthem, audited as an "independent orphan": no vendored copy at all).
+
+Work Log:
+- Write-path audit re-confirmed: this repo is the ONLY thing modified anywhere (psy-audit/ workspace no longer exists; no family folder touched in any session — git history here is the whole footprint).
+- NEW docs/CONSUMER_SUPPORT.md — the family-agent support kit, generalized from the psy5 worked example: 30-second "what is foundation", the universal sound contract (measured 2026-09-05), the acceptance-check one-file gate, the 4-tier integration ladder, a first-session checklist for an incoming agent (baseline → name parameter owners → kill parallel DSP copies → restore glue → determinism test → re-baseline), a fill-in diagnosis template (so psy-anthem arrives with evidence, not adjectives), FAQ, honest boundary.
+- Cross-links: README governance line now points at the general kit (psy5 doc demoted to worked example); CONSUMER_SUPPORT_PSY5.md header gained a "coming from another repo? start at the general kit" pointer.
+- STALE-DOCS QUARANTINE: docs/ROADMAP.md (122 unchecked boxes), docs/QUALITY_GATES.md (130), docs/ENGINEERING_ROADMAP_V2.md (17, incl. the obsolete "LUFS −9 ±0.5" fake-loud target) had NO status banners — an incoming agent would read hundreds of long-finished items as open work. Each now opens with a ⚠️ HISTORICAL banner: superseded by PLAN_V3_MASTER (complete) + STATUS.md (current truth) + Charter Five Gates, with the two conscious supersessions named (VST → archive, −9 → honest −10.7).
+- Gates: docs-only change + 1 new doc → bun test untouched since Task 15 run (957/0), typecheck 17/17, biome 0 (258 files), verify 28/28, audit-exports 2 (vendored policy) — all green this session.
+
+Stage Summary:
+- The support surface is now repo-agnostic: psy-anthem (or any family agent) has one entry point (CONSUMER_SUPPORT.md), one tool (acceptance-check.mjs), one worked example (psy5), and a diagnosis template that forces evidence-first questions. Nothing outside psy-foundation was written; the charter boundary held.
+- Historical planning docs are now marked as history — the repo's "what's needed" signal is unambiguous: STATUS.md's remaining gaps (family adoption = external; license decision; blind listening tests).

@@ -9,6 +9,10 @@
 > **Every number below was reproduced on 2026-09-05** against the canonical
 > render (`?bars=8&seed=42`, md5 `f2f81ed62a25743358417bed75ab67f7`) using
 > only ffmpeg + the standalone gate in `scripts/acceptance-check.mjs`.
+>
+> **Coming from another family repo (psy-anthem, psyboss, …)?** Start with
+> the general kit: `docs/CONSUMER_SUPPORT.md` — this document is the
+> worked example of it applied to one repo's audited regression.
 
 ---
 

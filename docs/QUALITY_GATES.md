@@ -1,5 +1,10 @@
 # PSY Foundation — Quality Gates
 
+> **⚠️ HISTORICAL (2026-08) — the standing gates today are the Charter's
+> Five Gates (`docs/ENGINEER_CHARTER.md`): bun test, tsc, biome,
+> `scripts/verify.mjs` (28 claims), `scripts/audit-exports.mjs`. This file
+> is the old phase-gate plan, kept for the record.**
+
 > What must be true before each phase is "done".
 > No phase is complete until its gate passes.
 

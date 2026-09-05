@@ -1,5 +1,11 @@
 # PSY Foundation — Roadmap
 
+> **⚠️ HISTORICAL (2026-08) — superseded by `PLAN_V3_MASTER.md` (all phases
+> complete) and `STATUS.md` (verified current state). The unchecked boxes
+> below are a frozen snapshot of old planning, NOT open work. Current truth:
+> `STATUS.md`. The standing acceptance gates are the Charter's Five Gates
+> (`ENGINEER_CHARTER.md`) + `scripts/verify.mjs` (28 claims).**
+
 > 5 phases, 16-20 weeks total (solo developer).
 > Each phase has explicit acceptance gates (see `docs/QUALITY_GATES.md`).
 

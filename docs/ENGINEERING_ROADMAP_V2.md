@@ -1,5 +1,10 @@
 # PSY Foundation — Engineering Roadmap v2 (Comprehensive)
 
+> **⚠️ HISTORICAL (2026-08-20) — every item in this plan was executed or
+> consciously superseded (VST → `archive/vst-prototype/`; LUFS −9 target →
+> honest −10.7 at a true −1.5 dBTP ceiling, see README "Loudness honesty
+> note"). Current truth: `STATUS.md`; standing gates: Charter Five Gates.**
+
 > **Created: 2026-08-20**
 > **Goal: Transform from 3/10 portfolio to verified, proven, end-to-end product**
 > **Method: Fix every lie → Unify engines → Wire composition → Audio quality → Real VST → Commercial features → E2E verification**
