@@ -1,0 +1,68 @@
+name: CI
+
+# The family's core gate ladder, on every push to main and every PR.
+# Order: cheap static checks -> tests -> cross-repo codec law -> full
+# render/forensic verification (ffmpeg is preinstalled on ubuntu runners).
+#
+# The family-sync-check step checks out the three consumer repos (public)
+# AFTER the test steps so their files can never leak into this repo's
+# lint/typecheck/test, then enforces the one-codec rule by measurement:
+# every vendored PSYBUS v2 codec byte must match packages/protocol/src/v2.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Lint (biome, zero warnings tolerated)
+        run: bun run lint
+
+      - name: Typecheck (all workspace packages)
+        run: bun run typecheck
+
+      - name: Unit tests
+        run: bun test
+
+      - name: Check out family siblings (for the sync check only)
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          repository: dudududi144-source/psy-anthem
+          path: family/psy-anthem
+
+      - name: Check out family siblings (psysampler)
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          repository: dudududi144-source/psysampler
+          path: family/psysampler
+
+      - name: Check out family siblings (psy5)
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          repository: dudududi144-source/psy5
+          path: family/psy5
+
+      - name: Family codec sync (one-codec rule, enforced by measurement)
+        if: github.event_name != 'pull_request'
+        run: node scripts/family-sync-check.mjs --family-root family
+
+      - name: Verify (render + forensic gates, 34 claims)
+        run: node scripts/verify.mjs

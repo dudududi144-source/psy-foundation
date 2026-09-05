@@ -153,7 +153,7 @@ const ok = drift === 0 && missing === 0
 const summary = {
   checkedAt: new Date().toISOString(),
   familyRoot,
-  foundation: md5(readFileSync(CANON.types)) + ' (types)',
+  foundation: `${md5(readFileSync(CANON.types))} (types)`,
   repos: Object.keys(MANIFEST),
   results,
   drift,
@@ -163,14 +163,14 @@ const summary = {
 if (jsonOut) {
   const outPath = resolve(jsonOut)
   mkdirSync(dirname(outPath), { recursive: true })
-  writeFileSync(outPath, JSON.stringify(summary, null, 2) + '\n')
+  writeFileSync(outPath, `${JSON.stringify(summary, null, 2)}\n`)
 }
 
 const pad = (s, n) => (s.length >= n ? s : s + ' '.repeat(n - s.length))
 for (const r of results) {
   const mark = r.status.startsWith('EXACT') ? 'PASS' : 'FAIL'
   console.log(
-    `${mark}  ${pad(r.repo, 12)} ${pad(r.file, 46)} ${r.status}${r.detail ? ' — ' + r.detail : ''}`
+    `${mark}  ${pad(r.repo, 12)} ${pad(r.file, 46)} ${r.status}${r.detail ? ` — ${r.detail}` : ''}`
   )
 }
 console.log(

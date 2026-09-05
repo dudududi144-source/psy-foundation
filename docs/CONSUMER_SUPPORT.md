@@ -118,6 +118,37 @@ First 3 sounds broken:  <what, since when, what changed before it broke>
   completes the economics table: song FORM bought structure, not loudness,
   −0.30 LU for +31.8 KB — density, not form, is the loudness lever).
 
+## 5b. Density guidance for render-notes consumers (measured)
+
+One question every consumer eventually asks: "my render is quieter than I
+expected — what do I send next?" The family has now measured the answer
+three times, on three device archetypes, and it is always the same lever.
+
+The economics (all measured end-to-end through `/api/render-notes` + the
+acceptance gate):
+
+| Change to the wire                        | Loudness result | Wire cost   | Source        |
+| ----------------------------------------- | --------------- | ----------- | ------------- |
+| More hat/percussion density               | +0.5 LU         | +15.5 KB    | psysampler 18 |
+| Sustained lead line (melody)              | +1.8 LU         | −7 KB       | psysampler 18 |
+| Song form A–B–A instead of plain A        | −0.30 LU        | +31.8 KB    | psy5 / PSY6 19|
+| Re-submitting the same notes after a gain ask | pumps, then LOSES loudness (−12.4 → −14.6 LUFS) | same | foundation 17-a |
+
+Practical rules:
+
+1. **Melody is the loudness lever.** Sustained bass/lead content buys more
+   LU than any other wire change, and often costs FEWER bytes than adding
+   percussion.
+2. **Do not chase LUFS by pushing gain/velocity.** The master chain applies
+   a single FIR true-peak safety; repeated gain-escalation resubmits change
+   tone, not loudness (the iterative loop was measured and removed in 17-a).
+3. **Form buys structure, not level.** A–B–A arrangements measure ~0.3 LU
+   quieter per byte than plain loops — use form because the song needs it.
+4. **Respect the per-section cap (2000 notes).** Dropped notes are reported
+   honestly in `X-Notes-Dropped` — a clean run is `0`.
+5. **A static loop measuring LRA ~0.1–0.3 is correct, not broken.** Motion
+   belongs to your live FX layer, not to the wire.
+
 ## 6. The honest boundary
 
 Foundation will not edit your repo (charter), will not ship surprise
