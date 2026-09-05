@@ -105,6 +105,8 @@ class LeadVoice {
   cutoff = 3000
   res = 0.3
   active = false
+  /** MIDI note this voice is currently playing (per-note noteOff). */
+  currentMidi: number | null = null
 
   noteOn(midi: number, velocity: number): void {
     this.freq = 440 * 2 ** ((midi - 69) / 12)
@@ -112,11 +114,13 @@ class LeadVoice {
     this.saw.reset()
     this.filter.reset()
     this.env.trigger(velocity)
+    this.currentMidi = midi
     this.active = true
   }
 
   noteOff(): void {
     this.active = false
+    this.currentMidi = null
   }
 
   process(): number {
@@ -143,6 +147,7 @@ class BassVoice {
   cutoff = 800
   res = 0.3
   active = false
+  currentMidi: number | null = null
 
   noteOn(midi: number, velocity: number): void {
     this.freq = 440 * 2 ** ((midi - 69) / 12)
@@ -152,11 +157,13 @@ class BassVoice {
     this.filter.reset()
     this.env.decay = 0.15
     this.env.trigger(velocity)
+    this.currentMidi = midi
     this.active = true
   }
 
   noteOff(): void {
     this.active = false
+    this.currentMidi = null
   }
 
   process(): number {
@@ -186,6 +193,7 @@ class PadVoice {
   cutoff = 600
   res = 0.2
   active = false
+  currentMidi: number | null = null
 
   noteOn(midi: number, velocity: number): void {
     this.freq = 440 * 2 ** ((midi - 69) / 12)
@@ -196,11 +204,13 @@ class PadVoice {
     this.filter.reset()
     this.env.decay = 0.8 // slow pad decay
     this.env.trigger(velocity * 0.5)
+    this.currentMidi = midi
     this.active = true
   }
 
   noteOff(): void {
     this.active = false
+    this.currentMidi = null
   }
 
   process(): number {
@@ -229,6 +239,7 @@ class AcidVoice {
   res = 0.8
   filterEnvAmount = 2000
   active = false
+  currentMidi: number | null = null
 
   noteOn(midi: number, velocity: number): void {
     this.freq = 440 * 2 ** ((midi - 69) / 12)
@@ -239,11 +250,13 @@ class AcidVoice {
     this.filterEnv.decay = 0.2
     this.env.trigger(velocity)
     this.filterEnv.trigger(1.0)
+    this.currentMidi = midi
     this.active = true
   }
 
   noteOff(): void {
     this.active = false
+    this.currentMidi = null
   }
 
   process(): number {
@@ -261,16 +274,22 @@ class AcidVoice {
   }
 }
 
-// ─── MessagePort protocol (identical to the previous artifact) ─────────────
+// ─── MessagePort protocol (Phase 4.5: per-note noteOff + mixer gains) ──────
+
+type VoiceSection = 'lead' | 'bass' | 'pad' | 'acid'
 
 type WorkletMessage =
   | { type: 'noteOn'; midi: number; velocity: number; voiceType?: string }
-  | { type: 'noteOff' }
+  /** Release the voice playing `midi` (per-note), or ALL active voices when
+   *  midi is omitted (back-compat with the original release-all semantics). */
+  | { type: 'noteOff'; midi?: number }
   | { type: 'setCutoff'; value: number }
   | { type: 'setResonance'; value: number }
   | { type: 'setMasterGain'; value: number }
   | { type: 'setStereoWidth'; value: number }
   | { type: 'setSidechain'; value: number }
+  /** Mixer strip (PLAN_V3 4.5): per-section gain, 0..~2. Mute = gain 0. */
+  | { type: 'setVoiceGain'; section: VoiceSection; value: number }
 
 // ─── Processor (13 voices + per-voice pan + master chain) ──────────────────
 
@@ -284,6 +303,10 @@ class PSY4Processor extends AudioWorkletProcessor {
   bassIdx = 0
   padIdx = 0
   masterGain = 0.3
+
+  // Mixer strip (PLAN_V3 4.5): per-section gains, applied at the voice mix
+  // stage (before the master chain — same point the offline mixer sits at).
+  voiceGains: Record<VoiceSection, number> = { lead: 1, bass: 1, pad: 1, acid: 1 }
 
   // Per-voice pan (equal-power, -1=left, 0=center, 1=right).
   // Phase B: replaced Haas fake stereo with per-voice pan.
@@ -359,8 +382,16 @@ class PSY4Processor extends AudioWorkletProcessor {
         // Trigger sidechain on any note (simulates kick duck).
         this.duckEnv = Math.max(1.0 - this.duckAmount, this.duckEnv * 0.85)
       } else if (msg.type === 'noteOff') {
-        for (const v of this.allVoices) {
-          if (v.active) v.noteOff()
+        if (msg.midi !== undefined) {
+          // Per-note release (PLAN_V3 4.5): only voices currently playing
+          // that note stop; held notes on other keys keep sounding.
+          for (const v of this.allVoices) {
+            if (v.active && v.currentMidi === msg.midi) v.noteOff()
+          }
+        } else {
+          for (const v of this.allVoices) {
+            if (v.active) v.noteOff()
+          }
         }
       } else if (msg.type === 'setCutoff') {
         for (const v of this.allVoices) v.cutoff = msg.value
@@ -372,6 +403,10 @@ class PSY4Processor extends AudioWorkletProcessor {
         this.msWidth = msg.value
       } else if (msg.type === 'setSidechain') {
         this.duckAmount = msg.value
+      } else if (msg.type === 'setVoiceGain') {
+        // Clamp to a sane mixer range (allow slight boost, forbid NaN/negatives).
+        const g = Number.isFinite(msg.value) ? Math.max(0, Math.min(2, msg.value)) : 1
+        this.voiceGains[msg.section] = g
       }
     }
   }
@@ -399,7 +434,7 @@ class PSY4Processor extends AudioWorkletProcessor {
       for (let v = 0; v < this.leadVoices.length; v++) {
         const voice = this.leadVoices[v]
         if (voice.active) {
-          const s = voice.process()
+          const s = voice.process() * this.voiceGains.lead
           const [gL, gR] = this.panToGain(this.leadPans[v])
           mixL += s * gL
           mixR += s * gR
@@ -410,7 +445,7 @@ class PSY4Processor extends AudioWorkletProcessor {
       for (let v = 0; v < this.bassVoices.length; v++) {
         const voice = this.bassVoices[v]
         if (voice.active) {
-          const s = voice.process()
+          const s = voice.process() * this.voiceGains.bass
           const [gL, gR] = this.panToGain(this.bassPans[v])
           mixL += s * gL
           mixR += s * gR
@@ -421,7 +456,7 @@ class PSY4Processor extends AudioWorkletProcessor {
       for (let v = 0; v < this.padVoices.length; v++) {
         const voice = this.padVoices[v]
         if (voice.active) {
-          const s = voice.process()
+          const s = voice.process() * this.voiceGains.pad
           const [gL, gR] = this.panToGain(this.padPans[v])
           mixL += s * gL
           mixR += s * gR
@@ -430,7 +465,7 @@ class PSY4Processor extends AudioWorkletProcessor {
 
       // Acid voice (1) center
       if (this.acidVoice.active) {
-        const s = this.acidVoice.process()
+        const s = this.acidVoice.process() * this.voiceGains.acid
         const center = Math.SQRT1_2 // center = equal power
         mixL += s * center
         mixR += s * center

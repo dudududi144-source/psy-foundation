@@ -27,11 +27,17 @@ interface MIDIAccess {
   onstatechange: (() => void) | null
 }
 
+export type VoiceSection = 'lead' | 'bass' | 'pad' | 'acid'
+
 export class PSY4AudioEngine {
   private audioContext: AudioContext | null = null
   private workletNode: AudioWorkletNode | null = null
   private midiAccess: MIDIAccess | null = null
   private initialized = false
+  /** Currently held notes (PLAN_V3 4.5): noteOn adds, noteOff releases that
+   *  note in the worklet; keeps pointer/keyboard/MIDI inputs honest about
+   *  which voices are still sounding. */
+  private heldNotes = new Set<number>()
 
   async init(): Promise<boolean> {
     if (this.initialized) return true
@@ -64,13 +70,39 @@ export class PSY4AudioEngine {
 
   noteOn(midi: number, velocity = 0.8, voiceType?: string): void {
     if (!this.workletNode) return
+    this.heldNotes.add(midi)
     this.workletNode.port.postMessage({ type: 'noteOn', midi, velocity, voiceType })
   }
 
-  // Phase 4 Day 2: noteOff support
-  noteOff(_midi?: number): void {
+  /** Release a specific held note (PLAN_V3 4.5). No-op if it is not held. */
+  noteOff(midi?: number): void {
     if (!this.workletNode) return
-    this.workletNode.port.postMessage({ type: 'noteOff' })
+    if (midi === undefined) {
+      // Release-all (legacy semantics): clear the held set too.
+      this.heldNotes.clear()
+      this.workletNode.port.postMessage({ type: 'noteOff' })
+      return
+    }
+    if (!this.heldNotes.has(midi)) return
+    this.heldNotes.delete(midi)
+    this.workletNode.port.postMessage({ type: 'noteOff', midi })
+  }
+
+  /** Is the note currently held (pointer/keyboard/MIDI)? */
+  isHeld(midi: number): boolean {
+    return this.heldNotes.has(midi)
+  }
+
+  /** Stop the transport cleanly: release every held note. */
+  releaseAll(): void {
+    this.noteOff()
+  }
+
+  /** Mixer strip (PLAN_V3 4.5): per-section gain 0..2 (mute = 0). */
+  setVoiceGain(section: VoiceSection, value: number): void {
+    if (!this.workletNode) return
+    const v = Number.isFinite(value) ? Math.max(0, Math.min(2, value)) : 1
+    this.workletNode.port.postMessage({ type: 'setVoiceGain', section, value: v })
   }
 
   setCutoff(value: number): void {
@@ -138,8 +170,13 @@ export class PSY4AudioEngine {
       if (input.name === name) {
         input.onmidimessage = (message) => {
           const [status, data1, data2] = message.data
+          // Note on (144 with velocity > 0) → noteOn.
+          // Note off (128, or 144 with velocity 0) → noteOff for THAT note
+          // (the old handler dropped releases entirely — notes never stopped).
           if (status === 144 && data2 > 0) {
             this.noteOn(data1, data2 / 127)
+          } else if (status === 128 || (status === 144 && data2 === 0)) {
+            this.noteOff(data1)
           }
         }
         found = true
@@ -148,13 +185,22 @@ export class PSY4AudioEngine {
     return found
   }
 
+  disconnectMIDIInputs(): void {
+    if (!this.midiAccess) return
+    for (const input of this.midiAccess.inputs.values()) {
+      input.onmidimessage = null
+    }
+  }
+
   dispose(): void {
+    this.disconnectMIDIInputs()
+    this.heldNotes.clear()
     if (this.workletNode) {
       this.workletNode.disconnect()
       this.workletNode = null
     }
     if (this.audioContext) {
-      this.audioContext.close()
+      void this.audioContext.close()
       this.audioContext = null
     }
     this.initialized = false

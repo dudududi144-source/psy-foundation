@@ -510,16 +510,19 @@
     cutoff = 3000;
     res = 0.3;
     active = false;
+    currentMidi = null;
     noteOn(midi, velocity) {
       this.freq = 440 * 2 ** ((midi - 69) / 12);
       this.saw.setFrequency(this.freq);
       this.saw.reset();
       this.filter.reset();
       this.env.trigger(velocity);
+      this.currentMidi = midi;
       this.active = true;
     }
     noteOff() {
       this.active = false;
+      this.currentMidi = null;
     }
     process() {
       if (!this.active)
@@ -544,6 +547,7 @@
     cutoff = 800;
     res = 0.3;
     active = false;
+    currentMidi = null;
     noteOn(midi, velocity) {
       this.freq = 440 * 2 ** ((midi - 69) / 12);
       this.saw.setFrequency(this.freq);
@@ -552,10 +556,12 @@
       this.filter.reset();
       this.env.decay = 0.15;
       this.env.trigger(velocity);
+      this.currentMidi = midi;
       this.active = true;
     }
     noteOff() {
       this.active = false;
+      this.currentMidi = null;
     }
     process() {
       if (!this.active)
@@ -584,6 +590,7 @@
     cutoff = 600;
     res = 0.2;
     active = false;
+    currentMidi = null;
     noteOn(midi, velocity) {
       this.freq = 440 * 2 ** ((midi - 69) / 12);
       this.saw1.setFrequency(this.freq);
@@ -593,10 +600,12 @@
       this.filter.reset();
       this.env.decay = 0.8;
       this.env.trigger(velocity * 0.5);
+      this.currentMidi = midi;
       this.active = true;
     }
     noteOff() {
       this.active = false;
+      this.currentMidi = null;
     }
     process() {
       if (!this.active)
@@ -623,6 +632,7 @@
     res = 0.8;
     filterEnvAmount = 2000;
     active = false;
+    currentMidi = null;
     noteOn(midi, velocity) {
       this.freq = 440 * 2 ** ((midi - 69) / 12);
       this.square.setFrequency(this.freq);
@@ -632,10 +642,12 @@
       this.filterEnv.decay = 0.2;
       this.env.trigger(velocity);
       this.filterEnv.trigger(1);
+      this.currentMidi = midi;
       this.active = true;
     }
     noteOff() {
       this.active = false;
+      this.currentMidi = null;
     }
     process() {
       if (!this.active)
@@ -662,6 +674,7 @@
     bassIdx = 0;
     padIdx = 0;
     masterGain = 0.3;
+    voiceGains = { lead: 1, bass: 1, pad: 1, acid: 1 };
     leadPans = [-0.6, -0.3, -0.1, 0.1, 0.3, 0.5, -0.4, 0.6];
     bassPans = [-0.2, 0.2];
     padPans = [-0.5, 0.5];
@@ -718,9 +731,16 @@
           }
           this.duckEnv = Math.max(1 - this.duckAmount, this.duckEnv * 0.85);
         } else if (msg.type === "noteOff") {
-          for (const v of this.allVoices) {
-            if (v.active)
-              v.noteOff();
+          if (msg.midi !== undefined) {
+            for (const v of this.allVoices) {
+              if (v.active && v.currentMidi === msg.midi)
+                v.noteOff();
+            }
+          } else {
+            for (const v of this.allVoices) {
+              if (v.active)
+                v.noteOff();
+            }
           }
         } else if (msg.type === "setCutoff") {
           for (const v of this.allVoices)
@@ -734,6 +754,9 @@
           this.msWidth = msg.value;
         } else if (msg.type === "setSidechain") {
           this.duckAmount = msg.value;
+        } else if (msg.type === "setVoiceGain") {
+          const g = Number.isFinite(msg.value) ? Math.max(0, Math.min(2, msg.value)) : 1;
+          this.voiceGains[msg.section] = g;
         }
       };
     }
@@ -754,7 +777,7 @@
         for (let v = 0;v < this.leadVoices.length; v++) {
           const voice = this.leadVoices[v];
           if (voice.active) {
-            const s = voice.process();
+            const s = voice.process() * this.voiceGains.lead;
             const [gL, gR] = this.panToGain(this.leadPans[v]);
             mixL += s * gL;
             mixR += s * gR;
@@ -763,7 +786,7 @@
         for (let v = 0;v < this.bassVoices.length; v++) {
           const voice = this.bassVoices[v];
           if (voice.active) {
-            const s = voice.process();
+            const s = voice.process() * this.voiceGains.bass;
             const [gL, gR] = this.panToGain(this.bassPans[v]);
             mixL += s * gL;
             mixR += s * gR;
@@ -772,14 +795,14 @@
         for (let v = 0;v < this.padVoices.length; v++) {
           const voice = this.padVoices[v];
           if (voice.active) {
-            const s = voice.process();
+            const s = voice.process() * this.voiceGains.pad;
             const [gL, gR] = this.panToGain(this.padPans[v]);
             mixL += s * gL;
             mixR += s * gR;
           }
         }
         if (this.acidVoice.active) {
-          const s = this.acidVoice.process();
+          const s = this.acidVoice.process() * this.voiceGains.acid;
           const center = Math.SQRT1_2;
           mixL += s * center;
           mixR += s * center;

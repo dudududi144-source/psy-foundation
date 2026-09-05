@@ -7,7 +7,7 @@
 > with a 10-package musical foundation, a JUCE plugin prototype, and a
 > real-time AudioWorklet. Independent forensic audit: `docs/AUDIT_FORENSIC_2026-09-04.md`.
 
-[![tests](https://img.shields.io/badge/tests-940%20pass%2C%200%20fail-brightgreen)]()
+[![tests](https://img.shields.io/badge/tests-942%20pass%2C%200%20fail-brightgreen)]()
 [![verify](https://img.shields.io/badge/verify-23%2F23%20claims%20green-success)]()
 [![version](https://img.shields.io/badge/foundation-v2.0.0-blue)]()
 [![license](https://img.shields.io/badge/license-UNLICENSED-red)]()
@@ -18,7 +18,7 @@
 
 ```bash
 bun install          # ~0.2s warm / ~10s cold
-bun test             # 940 pass, 0 fail, 0 skip
+bun test             # 942 pass, 0 fail, 0 skip
 bun run dev          # apps/web on http://localhost:3000 (PORT env respected)
 node scripts/verify.mjs   # executable truth: 23 endpoint/audio/infra claims, exit≠0 on any failure
 
@@ -103,7 +103,7 @@ re-renders.
 dsp, music, transport, protocol, analysis, learning, material, scheduler, device-sdk, fixtures
 
 ### Web app (`apps/web/`)
-- 940 tests pass, 0 fail, 0 skip
+- 942 tests pass, 0 fail, 0 skip
 - 6 HTTP API endpoints (all verified) + rate limiting + render cache + worker pool
 - Real-time AudioWorklet (13 voices) — generated from the CANONICAL
   `@psy-foundation/dsp` classes by `bun run build:worklet` (One-DSP: the
@@ -156,6 +156,6 @@ Prototype only — do not ship. Fix-or-archive decision pending (Plan Phase 5).
 - **Web:** Next.js 16 (App Router)
 - **Audio:** Web Audio API, AudioWorklet, ZDF SVF
 - **VST:** JUCE 7, CMake, C++17 (prototype)
-- **Tests:** `bun test` (940) + `scripts/verify.mjs` (23 live claims)
+- **Tests:** `bun test` (942) + `scripts/verify.mjs` (23 live claims)
 - **Linter:** Biome 1.9.4
 - **License:** UNLICENSED (private; family adoption under separate agreement — see `docs/FAMILY_ADOPTION_OFFER.md`)
