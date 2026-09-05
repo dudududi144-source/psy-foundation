@@ -127,7 +127,7 @@ export function transpose(
 /** Mirror the degree contour around the first note (first note unchanged). */
 export function invert(notes: MotifNote[], rootPc: number, scale: Scale): MotifNote[] {
   if (notes.length === 0) return []
-  const firstDeg = nearestDegree(rootPc, scale, notes[0].midi)
+  const firstDeg = nearestDegree(rootPc, scale, notes[0]!.midi)
   return notes.map((n, i) => {
     if (i === 0) return { ...n }
     const deg = nearestDegree(rootPc, scale, n.midi)

@@ -207,12 +207,11 @@ export class MoogLadder {
     const sat = x - Math.tanh(fb)
 
     for (let i = 0; i < 4; i++) {
+      const prev = this.stage[i] ?? 0
       const stageIn = i === 0 ? sat : (this.delay[i - 1] ?? 0)
-      this.stage[i] =
-        this.stage[i] +
-        this.p *
-          (Math.tanh(stageIn - this.k * (this.stage[i] ?? 0)) - Math.tanh(this.stage[i] ?? 0))
-      this.delay[i] = this.stage[i]
+      const next = prev + this.p * (Math.tanh(stageIn - this.k * prev) - Math.tanh(prev))
+      this.stage[i] = next
+      this.delay[i] = next
     }
 
     return this.delay[3] ?? 0

@@ -190,8 +190,9 @@ function computeBlocks(
     let sumSq = 0
     for (let i = 0; i < blockSize; i++) {
       const idx = start + i
-      const l = wL[idx]
-      const r = wR[idx]
+      // idx < N ≤ wL.length / wR.length — `!` is a free loop invariant.
+      const l = wL[idx]!
+      const r = wR[idx]!
       sumSq += l * l + r * r
     }
     const z = sumSq / blockSize
@@ -203,13 +204,13 @@ function computeBlocks(
 /** Percentile of a sorted-ascending array (linear interpolation). */
 function percentile(sortedAsc: number[], p: number): number {
   if (sortedAsc.length === 0) return SILENCE_LUFS
-  if (sortedAsc.length === 1) return sortedAsc[0]
+  if (sortedAsc.length === 1) return sortedAsc[0]!
   const idx = (p / 100) * (sortedAsc.length - 1)
   const lo = Math.floor(idx)
   const hi = Math.ceil(idx)
-  if (lo === hi) return sortedAsc[lo]
+  if (lo === hi) return sortedAsc[lo]!
   const frac = idx - lo
-  return sortedAsc[lo] * (1 - frac) + sortedAsc[hi] * frac
+  return sortedAsc[lo]! * (1 - frac) + sortedAsc[hi]! * frac
 }
 
 // ─── Main entry point ───────────────────────────────────────────────────────
@@ -257,8 +258,8 @@ export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number
   const wR = new Float32Array(N)
   let maxAbs = 0
   for (let i = 0; i < N; i++) {
-    const l = L[i]
-    const r = R[i]
+    const l = L[i]!
+    const r = R[i]!
     wL[i] = filterL.process(l)
     wR[i] = filterR.process(r)
     const al = Math.abs(l)
@@ -275,14 +276,14 @@ export function measureLUFS(L: Float32Array, R: Float32Array, sampleRate: number
     const im1 = i > 0 ? i - 1 : 0
     const ip1 = i < N - 1 ? i + 1 : i
     const ip2 = i < N - 2 ? i + 2 : ip1
-    const lP = L[im1]
-    const lC = L[i]
-    const lN = L[ip1]
-    const lN2 = L[ip2]
-    const rP = R[im1]
-    const rC = R[i]
-    const rN = R[ip1]
-    const rN2 = R[ip2]
+    const lP = L[im1]!
+    const lC = L[i]!
+    const lN = L[ip1]!
+    const lN2 = L[ip2]!
+    const rP = R[im1]!
+    const rC = R[i]!
+    const rN = R[ip1]!
+    const rN2 = R[ip2]!
     // Phase 1: t=0.25
     let v = -0.0703125 * lP + 0.8671875 * lC + 0.2265625 * lN - 0.0234375 * lN2
     if (v > truePeakMax) truePeakMax = v

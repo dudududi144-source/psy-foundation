@@ -43,10 +43,11 @@ export const DEFAULT_KICK_RECIPE: KickRecipe = {
 
 /**
  * A single kick voice. Call noteOn() to trigger, then process() per sample
- * until active === false.
+ * until isActive === false. (The old `readonly active = false` dead field —
+ * flagged by the 2026-09-04 audit as a dead-flag voice — was removed in
+ * Task 12; the real lifecycle is the `isActive` getter.)
  */
 export class KickVoice {
-  readonly active = false
   private _active = false
   private readonly sr: number
   private recipe: KickRecipe

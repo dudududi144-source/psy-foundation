@@ -199,8 +199,8 @@ export class OTT {
     // Upward expansion naturally compensates for downward compression.
 
     for (let i = 0; i < N; i++) {
-      const xL = L[i]
-      const xR = R[i]
+      const xL = L[i]!
+      const xR = R[i]!
 
       // Split into 3 bands (L channel)
       const [lowL, restL] = this.lowXoverL.process(xL)

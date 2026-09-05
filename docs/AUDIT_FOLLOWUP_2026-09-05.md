@@ -32,13 +32,13 @@ Every verdict below was re-derived in this session, not copied from worklog clai
 |---|---|---|
 | Fake `LufsMeter` in packages/dsp (HIGH) | ✅ RESOLVED | Deleted per DECISIONS_V3 D5; real ITU-R BS.1770-4 meter in `master/loudness.ts` (K-weighting shelf, 400/100 ms blocks, −70/−10 gating); ffmpeg ebur128 parity in verify: I=−10.7 LUFS, TP −1.2 dBTP, LRA 3.9. |
 | Learning contextKey double-counts energy, BPM unused (HIGH) | ✅ RESOLVED | BPM term removed (9a00067). |
-| Dead-flag voices: `readonly active = false`; noteStartTime ≡ 0; `stereoWidth` accepted and never read (HIGH) | ⚠️ PARTIAL | `noteStartTime` now real (`lead-voice.ts:164`); honesty pass labels mono reality (4.4). **Still open:** `kick-voice.ts:49` `readonly active = false`; `stereoWidth` declared + preset-assigned but **zero read sites** in render logic. See §4. |
+| Dead-flag voices: `readonly active = false`; noteStartTime ≡ 0; `stereoWidth` accepted and never read (HIGH) | ✅ RESOLVED (Task 12) | `noteStartTime` real since Phase 1 (`lead-voice.ts:164`); stale `KickVoice.active` field **deleted** (real lifecycle is the `isActive` getter, used by the renderer); `LeadRecipe.stereoWidth` is now honestly documented as **RESERVED/NOT WIRED** — the lead renders mono and the UI honesty labels say so. Wiring it = stereo render path + md5 re-baseline, tracked as a feature, not a lie. |
 | VST findings (HIGH) | ✅ RESOLVED (decision B) | Honestly archived with post-mortem + explicit revival conditions (`archive/vst-prototype/`, Task 9). |
 | Stale 2.3 MB WAV committed (MED) | ✅ RESOLVED | Deleted; repo history slimmed. |
 | Test theater — grep-as-e2e, self-referential MIDI test (MED) | ✅ RESOLVED | Grep tests rewritten to structural claims; runtime truth is verify.mjs's 28 end-to-end claims (real HTTP, real ffmpeg, real md5). |
 | Vanity benchmark inventing named-artist targets (MED) | ✅ RESOLVED | Deleted (9a00067). |
 | Orphaned `data/*.json` with false "Used by" (MED) | ✅ RESOLVED | Deleted. |
-| tsconfig strictness downgrades: `noUncheckedIndexedAccess:false`, `noImplicitAny:false` (MED) | ❌ OPEN | `apps/web/tsconfig.json:7-8`, `packages/dsp/tsconfig.json:3`, `packages/music/tsconfig.json:3`. Proposed as post-V3 hardening sweep (§4, item 2). |
+| tsconfig strictness downgrades: `noUncheckedIndexedAccess:false`, `noImplicitAny:false` (MED) | ✅ RESOLVED (Task 12) | All downgrades **deleted**: `noUncheckedIndexedAccess: true` now inherited from `tsconfig.base.json` in every package; `noImplicitAny` no longer disabled in apps/web. Fallout fixed (87 dsp + 40 music + 112 web errors) with loop-invariant assertions and `?? 0` read-before-write accumulators — **proven semantically equivalent**: all locked md5 baselines identical (`f2f81ed6…` 8-bar, `88ecc4b8…` 88-bar), critic score bit-identical (0.7141728947862114). |
 | ~40-55% dead exports (LOW) | ⚠️ PARTIAL | v2.0.0 release bundle restructured the public surface; a full dead-export audit was not performed. |
 
 ---
@@ -50,7 +50,7 @@ Same dimensions as the baseline audit.
 | Dimension | 2026-09-04 | 2026-09-05 | One-line justification |
 |---|---|---|---|
 | Offline render core | 7/10 | 9/10 | Same ffmpeg-verified deterministic core; limiter lookahead real; ITU meter in-package; shared render geometry; determinism md5-locked at 8 and 88 bars. |
-| packages/ foundation | 4.5/10 | 8.5/10 | DSP lives at home; real meter; stable ladder; v2.0.0 release channel; strictness flags remain off. |
+| packages/ foundation | 4.5/10 | 9/10 | DSP lives at home; real meter; stable ladder; v2.0.0 release channel; strict mode (`noUncheckedIndexedAccess`) enforced repo-wide. |
 | Real-time engine | 2/10 | 7/10 | Build artifact of the canonical chain (parity by construction); SR from runtime; sketchpad honestly labeled as the lighter arrangement. |
 | VST | 2/10 | — archived | Honest archive with revival conditions (decision B). Scored no longer applicable. |
 | Web UI / product | 3/10 | 7/10 | Tool-grade sketchpad (4.5), honesty labeling (4.4), session persistence (4.6); residual dead-code sweep not audited this pass. |
@@ -65,9 +65,8 @@ Same dimensions as the baseline audit.
 ## 4. What would close the remaining gap
 
 1. **Family adoption (external).** The foundation side is ready and waiting: v2.0.0 bundle, PSYBUS v2, device conformance suite, adoption offer. The 16 repos are read-only for this engineer by mandate; the move is theirs.
-2. **Strictness sweep (internal, proposed Task 12).** Enable `noUncheckedIndexedAccess` + `noImplicitAny` across all packages, fix the fallout, lock with the gates. Mechanical but broad; scheduled as its own session so it cannot half-land.
-3. **Voice-dead-flag cleanup (internal, can ride with Task 12).** Read or remove `stereoWidth`; give kick's `active` flag a real lifecycle or delete it.
-4. **Dead-export audit (LOW).** One grep-driven pass per package against the v2.0.0 public surface.
+2. **Stereo lead path (internal feature).** `LeadRecipe.stereoWidth` is declared but not wired; wiring it means L/R render buffers and an intentional, documented md5 re-baseline.
+3. **Dead-export audit (LOW).** One grep-driven pass per package against the v2.0.0 public surface.
 
 ---
 
@@ -79,12 +78,12 @@ rg 'ceiling \* 0\.65'            # 0 hits (audit reference comment only)
 rg 'const SR = 44100'            # 0 hits
 rg 'Math\.random' packages/music/src/audio   # fix comments only
 
-# Runtime truth (138 s)
-node scripts/verify.mjs          # 28 pass / 0 fail
+# Runtime truth (139 s)
+node scripts/verify.mjs          # 28 pass / 0 fail — md5 baselines identical post-Task-12
 
-# Five gates at audit time
+# Five gates at audit time (re-confirmed after Task 12 strictness sweep)
 bun test                         # 957 pass / 0 fail / 0 skip
-tsc --noEmit (all packages)      # 0 errors
+tsc --noEmit (all packages)      # 0 errors — now under noUncheckedIndexedAccess everywhere
 biome check                      # 0 problems (257 files)
 ```
 

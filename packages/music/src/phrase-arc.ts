@@ -151,13 +151,13 @@ export function evaluatePhraseArc(
   const countsByBar = new Array<number>(bars).fill(0)
   for (const n of notes) {
     if (n.bar < 0 || n.bar >= bars) continue
-    countsByBar[n.bar]++
-    registerByBar[n.bar] += n.midi
+    countsByBar[n.bar] = (countsByBar[n.bar] ?? 0) + 1
+    registerByBar[n.bar] = (registerByBar[n.bar] ?? 0) + n.midi
   }
   for (let bar = 0; bar < bars; bar++) {
     const c = countsByBar[bar] ?? 0
     densityByBar[bar] = c > 0 ? Math.min(1, c / 8) : 0
-    registerByBar[bar] = c > 0 ? registerByBar[bar] / c : 0
+    registerByBar[bar] = c > 0 ? (registerByBar[bar] ?? 0) / c : 0
   }
   // Coherence: correlation between measured density and arc density.
   let coherence = pearsonCorrelation(
@@ -175,8 +175,8 @@ export function evaluatePhraseArc(
   const peakIdx = argMax(tensionProxy)
   const before = tensionProxy.slice(0, peakIdx)
   const after = tensionProxy.slice(peakIdx + 1)
-  const risingEnergy = before.length > 0 ? Math.max(0, before[before.length - 1] - before[0]) : 0
-  const fallingEnergy = after.length > 0 ? Math.max(0, after[0] - after[after.length - 1]) : 0
+  const risingEnergy = before.length > 0 ? Math.max(0, before[before.length - 1]! - before[0]!) : 0
+  const fallingEnergy = after.length > 0 ? Math.max(0, after[0]! - after[after.length - 1]!) : 0
   const totalRange = Math.max(...tensionProxy) - Math.min(...tensionProxy)
   const development =
     totalRange > 0 ? Math.max(0, Math.min(1, (risingEnergy + fallingEnergy) / (2 * totalRange))) : 0
@@ -189,7 +189,7 @@ export function evaluatePhraseArc(
     const pc = ((n.midi % PC_COUNT) + PC_COUNT) % PC_COUNT
     // We don't have the scale here; approximate stability by rootPc = first note pc.
     if (finalBarNotes.length > 0) {
-      const firstPc = ((finalBarNotes[0].midi % PC_COUNT) + PC_COUNT) % PC_COUNT
+      const firstPc = ((finalBarNotes[0]!.midi % PC_COUNT) + PC_COUNT) % PC_COUNT
       const dist = Math.min((pc - firstPc + 12) % 12, (firstPc - pc + 12) % 12)
       if (dist <= 2 || dist === 7) stableHits++
     }

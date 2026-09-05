@@ -1326,10 +1326,14 @@ export async function renderFoundationSection(
   const hpState = [0, 0]
   const hpA = (1 / SR) * 2 * Math.PI * MASTER_SPEC.hpFreq
   for (let i = 0; i < totalSamples; i++) {
-    hpState[0] += (hpA * (samplesL[i]! - hpState[0])) / (1 + hpA)
-    hpState[1] += (hpA * (samplesR[i]! - hpState[1])) / (1 + hpA)
-    samplesL[i] = samplesL[i]! - hpState[0]
-    samplesR[i] = samplesR[i]! - hpState[1]
+    const sL = samplesL[i]!
+    const sR = samplesR[i]!
+    const hp0 = hpState[0]!
+    const hp1 = hpState[1]!
+    hpState[0] = hp0 + (hpA * (sL - hp0)) / (1 + hpA)
+    hpState[1] = hp1 + (hpA * (sR - hp1)) / (1 + hpA)
+    samplesL[i] = sL - hpState[0]!
+    samplesR[i] = sR - hpState[1]!
   }
 
   // 0b. M/S processing (professional psytrance master chain)

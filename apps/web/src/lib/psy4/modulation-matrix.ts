@@ -114,9 +114,9 @@ export class ModulationMatrix {
     }
     if (source === 'env') return this.envValue
     if (source === 'velocity') return this.velocity
-    if (source === 'macro1') return this.macros.macro1 * 2 - 1
-    if (source === 'macro2') return this.macros.macro2 * 2 - 1
-    if (source === 'macro3') return this.macros.macro3 * 2 - 1
+    if (source === 'macro1') return (this.macros.macro1 ?? 0) * 2 - 1
+    if (source === 'macro2') return (this.macros.macro2 ?? 0) * 2 - 1
+    if (source === 'macro3') return (this.macros.macro3 ?? 0) * 2 - 1
     return 0
   }
 

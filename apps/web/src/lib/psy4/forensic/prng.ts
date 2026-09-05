@@ -34,7 +34,8 @@ export class Rng {
 
   /** Pick from array */
   pick<T>(arr: T[]): T {
-    return arr[this.int(0, arr.length - 1)]
+    // int() returns an index in [0, arr.length - 1] — always valid.
+    return arr[this.int(0, arr.length - 1)]!
   }
 
   /** Boolean with probability p */

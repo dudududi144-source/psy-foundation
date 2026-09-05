@@ -192,7 +192,7 @@ class CompactReverb {
 
     let longestDelaySec = 0
     for (let i = 0; i < 4; i++) {
-      const len = Math.max(8, Math.floor(CompactReverb.COMB_BASE[i] * roomScale))
+      const len = Math.max(8, Math.floor(CompactReverb.COMB_BASE[i]! * roomScale))
       this.combBufs.push(new Float32Array(len))
       longestDelaySec = Math.max(longestDelaySec, len / sampleRate)
     }
@@ -218,8 +218,8 @@ class CompactReverb {
     this.apBufsR = []
     this.apIdxR = new Int32Array(2)
     for (let i = 0; i < 2; i++) {
-      this.apBufsL.push(new Float32Array(CompactReverb.ALLPASS_L[i]))
-      this.apBufsR.push(new Float32Array(CompactReverb.ALLPASS_R[i]))
+      this.apBufsL.push(new Float32Array(CompactReverb.ALLPASS_L[i]!))
+      this.apBufsR.push(new Float32Array(CompactReverb.ALLPASS_R[i]!))
     }
   }
 
@@ -232,11 +232,12 @@ class CompactReverb {
     // 4 parallel comb filters with damping LP in the feedback path
     let combSum = 0
     for (let i = 0; i < 4; i++) {
-      const buf = this.combBufs[i]
-      const idx = this.combIdx[i]
-      const delayed = buf[idx]
+      // Loop invariants: i < 4 = bank sizes; idx ∈ [0, buf.length).
+      const buf = this.combBufs[i]!
+      const idx = this.combIdx[i]!
+      const delayed = buf[idx]!
       // One-pole damping LP on the delayed signal (absorbs highs over time)
-      const lp = this.combLP[i]
+      const lp = this.combLP[i]!
       const damped = delayed + this.combDamping * (lp - delayed)
       this.combLP[i] = damped
       const out = inSample + damped * this.combFeedback
@@ -249,9 +250,9 @@ class CompactReverb {
     // Two series allpass for L channel
     let apL = combSum
     for (let i = 0; i < 2; i++) {
-      const buf = this.apBufsL[i]
-      const idx = this.apIdxL[i]
-      const delayed = buf[idx]
+      const buf = this.apBufsL[i]!
+      const idx = this.apIdxL[i]!
+      const delayed = buf[idx]!
       const out = -apL * this.apFeedback + delayed
       buf[idx] = apL + delayed * this.apFeedback
       this.apIdxL[i] = (idx + 1) % buf.length
@@ -261,9 +262,9 @@ class CompactReverb {
     // Two series allpass for R channel (different delays → stereo width)
     let apR = combSum
     for (let i = 0; i < 2; i++) {
-      const buf = this.apBufsR[i]
-      const idx = this.apIdxR[i]
-      const delayed = buf[idx]
+      const buf = this.apBufsR[i]!
+      const idx = this.apIdxR[i]!
+      const delayed = buf[idx]!
       const out = -apR * this.apFeedback + delayed
       buf[idx] = apR + delayed * this.apFeedback
       this.apIdxR[i] = (idx + 1) % buf.length
@@ -408,11 +409,11 @@ export class ChannelFX {
       const readL =
         this.delayBufL[
           (this.delayWriteIdx - this.delaySamplesL + this.delayBufSize) % this.delayBufSize
-        ]
+        ]!
       const readR =
         this.delayBufR[
           (this.delayWriteIdx - this.delaySamplesR + this.delayBufSize) % this.delayBufSize
-        ]
+        ]!
 
       // Ping-pong cross-feedback: L's feedback feeds R's input and vice-versa.
       // This makes echoes bounce between the channels → stereo ping-pong effect.
@@ -452,7 +453,7 @@ export class ChannelFX {
     // side gain slightly boosts the difference signal for a wider image.
     if (this.widthDelaySamples > 0) {
       // Haas: delay the right channel by N samples
-      const wDelayed = this.widthBuf[this.widthIdx]
+      const wDelayed = this.widthBuf[this.widthIdx]!
       this.widthBuf[this.widthIdx] = R
       this.widthIdx = (this.widthIdx + 1) % this.widthBuf.length
       R = wDelayed

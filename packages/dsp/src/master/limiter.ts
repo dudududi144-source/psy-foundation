@@ -80,7 +80,10 @@ export interface TruePeakLimiterOptions {
  *  phase 0 (t=0), phase 1 (t=0.25), phase 2 (t=0.5), phase 3 (t=0.75).
  *  Each phase is [c_{-1}, c_0, c_1, c_2] applied to [x[i-1], x[i], x[i+1], x[i+2]].
  *  All four phases sum to 1.0 (DC-preserving). */
-const CATMULL_ROM_PHASES: readonly number[][] = [
+/** Exact tuple type: elements are `number` (not `number | undefined`) even
+ *  under noUncheckedIndexedAccess, so the hot loop needs no assertions. */
+type PhaseCoeffs = readonly [number, number, number, number]
+const CATMULL_ROM_PHASES: readonly [PhaseCoeffs, PhaseCoeffs, PhaseCoeffs, PhaseCoeffs] = [
   [0, 1, 0, 0], // phase 0: identity (t=0)
   [-0.0703125, 0.8671875, 0.2265625, -0.0234375], // phase 1: t=0.25
   [-0.0625, 0.5625, 0.5625, -0.0625], // phase 2: t=0.5
@@ -155,18 +158,21 @@ export class TruePeakLimiter {
       const im1 = i > 0 ? i - 1 : 0
       const ip1 = i < N - 1 ? i + 1 : i
       const ip2 = i < N - 2 ? i + 2 : ip1
-      const lPrev = L[im1]
-      const lCur = L[i]
-      const lNext = L[ip1]
-      const lNext2 = L[ip2]
-      const rPrev = R[im1]
-      const rCur = R[i]
-      const rNext = R[ip1]
-      const rNext2 = R[ip2]
+      // Loop invariant: im1/ip1/ip2 ∈ [0, N) ⊆ [0, L.length) — `!` is free.
+      const lPrev = L[im1]!
+      const lCur = L[i]!
+      const lNext = L[ip1]!
+      const lNext2 = L[ip2]!
+      const rPrev = R[im1]!
+      const rCur = R[i]!
+      const rNext = R[ip1]!
+      const rNext2 = R[ip2]!
 
       let maxPeak = 0
       for (let phase = 0; phase < 4; phase++) {
-        const c = CATMULL_ROM_PHASES[phase]
+        // Tuple indexed by a runtime number still gains `| undefined` under
+        // noUncheckedIndexedAccess — the invariant (phase ∈ [0,4)) is free here.
+        const c = CATMULL_ROM_PHASES[phase]!
         const lVal = c[0] * lPrev + c[1] * lCur + c[2] * lNext + c[3] * lNext2
         const rVal = c[0] * rPrev + c[1] * rCur + c[2] * rNext + c[3] * rNext2
         const al = Math.abs(lVal)
@@ -189,12 +195,13 @@ export class TruePeakLimiter {
       const dq: number[] = []
       for (let i = N - 1; i >= 0; i--) {
         // Pop indices that fell out of the window [i, i+D-1]
-        while (dq.length > 0 && dq[dq.length - 1] > i + D - 1) dq.pop()
+        const cur = peaks[i]! // i < N
+        while (dq.length > 0 && dq[dq.length - 1]! > i + D - 1) dq.pop()
         // Maintain decreasing values from front: pop back while smaller
-        while (dq.length > 0 && peaks[dq[dq.length - 1]] <= peaks[i]) dq.pop()
+        while (dq.length > 0 && peaks[dq[dq.length - 1]!]! <= cur) dq.pop()
         dq.push(i)
         // Front of the deque (largest remaining) is the window max
-        windowMax[i] = peaks[dq[0]]
+        windowMax[i] = peaks[dq[0]!]!
       }
     }
 
@@ -203,8 +210,9 @@ export class TruePeakLimiter {
     let maxGr = this.maxGainReductionDb
     for (let i = 0; i < N; i++) {
       let target = 1
-      if (windowMax[i] > threshold) {
-        target = threshold / windowMax[i]
+      const w = windowMax[i]!
+      if (w > threshold) {
+        target = threshold / w
       }
       const coef = target < envelope ? attackCoef : releaseCoef
       envelope += (target - envelope) * coef
@@ -214,8 +222,8 @@ export class TruePeakLimiter {
       }
       // Apply the smoothed envelope to the CURRENT sample (no delay line —
       // the lookahead already came from seeing the future in Pass 2).
-      L[i] = L[i] * envelope
-      R[i] = R[i] * envelope
+      L[i] = L[i]! * envelope
+      R[i] = R[i]! * envelope
     }
 
     // ── Pass 4: brickwall clip at the ADVERTISED ceiling ──
@@ -226,8 +234,8 @@ export class TruePeakLimiter {
     // guaranteed ≤ ceiling; see the inter-sample honesty note above for the
     // (documented) ITU-FIR true-peak caveat.
     for (let i = 0; i < N; i++) {
-      let sL = L[i]
-      let sR = R[i]
+      let sL = L[i]!
+      let sR = R[i]!
       if (sL > ceiling) sL = ceiling
       else if (sL < -ceiling) sL = -ceiling
       if (sR > ceiling) sR = ceiling

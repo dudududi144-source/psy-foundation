@@ -318,8 +318,8 @@ export class MultibandCompressor {
     let minGrHigh = 1
 
     for (let i = 0; i < n; i++) {
-      const xL = L[i]
-      const xR = R[i]
+      const xL = L[i]!
+      const xR = R[i]!
 
       // Band-split per channel.
       const [lowL, restL] = this.lowXoverL.process(xL)

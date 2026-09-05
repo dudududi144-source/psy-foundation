@@ -198,10 +198,10 @@ function buildPattern(seed: number): Array<{ bass: number | null; lead: number |
   const leadChoices = [0, 3, 5, 7, 10]
   const steps: Array<{ bass: number | null; lead: number | null }> = []
   for (let i = 0; i < 16; i++) {
-    const off = bassChoices[Math.floor(rnd() * bassChoices.length)]
+    const off = bassChoices[Math.floor(rnd() * bassChoices.length)]!
     const bass = rnd() < 0.85 ? root + off : null
     const lead =
-      i % 4 === 2 || rnd() < 0.2 ? 60 + leadChoices[Math.floor(rnd() * leadChoices.length)] : null
+      i % 4 === 2 || rnd() < 0.2 ? 60 + leadChoices[Math.floor(rnd() * leadChoices.length)]! : null
     steps.push({ bass, lead })
   }
   return steps
@@ -351,7 +351,8 @@ export default function Home() {
     const stepMs = Math.max(40, Math.round(15000 / bpm)) // 16th note
     const pattern = buildPattern(seed)
     transportRef.current = setInterval(() => {
-      const step = pattern[stepRef.current % 16]
+      // Modulo 16 on a 16-entry pattern → always a valid step.
+      const step = pattern[stepRef.current % 16]!
       if (step.bass !== null) {
         eng.noteOn(step.bass, 0.9)
         setTimeout(() => eng.noteOff(step.bass as number), stepMs * 0.85)
@@ -1040,8 +1041,8 @@ export default function Home() {
                       'A#',
                       'B',
                     ]
-                    const note = noteNames[midi % 12] + Math.floor(midi / 12 - 1)
-                    const isBlack = noteNames[midi % 12].includes('#')
+                    const note = noteNames[midi % 12]! + Math.floor(midi / 12 - 1)
+                    const isBlack = noteNames[midi % 12]!.includes('#')
                     const keyHint = Object.entries(KEY_MAP).find(([, m]) => m === midi)?.[0]
                     const held = heldNotes.includes(midi)
                     return (
@@ -1463,21 +1464,32 @@ export default function Home() {
                   <span className="text-zinc-500">Bars: {arrangement.totalBars}</span>
                 </div>
                 <div className="grid gap-1.5">
-                  {arrangement.sections.map((s, i) => (
-                    <div
-                      // biome-ignore lint/suspicious/noArrayIndexKey: index is stable for these lists
-                      key={`item-${i}`}
-                      className="flex items-center gap-2 text-xs rounded border border-amber-500/20 bg-amber-500/5 p-2"
-                    >
-                      <span className="text-amber-400 font-mono w-16 shrink-0">{s.name}</span>
-                      <span className="text-zinc-400 w-12">{s.bars} bars</span>
-                      <span className="text-zinc-400 w-16">E: {Math.round(s.energy * 100)}%</span>
-                      <span className="text-zinc-400 w-16">{s.tensionShape}</span>
-                      <span className="text-zinc-500 text-[10px] flex-1 truncate">
-                        {s.voices.length} voices
-                      </span>
-                    </div>
-                  ))}
+                  {arrangement.sections.map(
+                    (
+                      s: {
+                        name: string
+                        bars: number
+                        energy: number
+                        tensionShape: string
+                        voices: unknown[]
+                      },
+                      i: number
+                    ) => (
+                      <div
+                        // biome-ignore lint/suspicious/noArrayIndexKey: index is stable for these lists
+                        key={`item-${i}`}
+                        className="flex items-center gap-2 text-xs rounded border border-amber-500/20 bg-amber-500/5 p-2"
+                      >
+                        <span className="text-amber-400 font-mono w-16 shrink-0">{s.name}</span>
+                        <span className="text-zinc-400 w-12">{s.bars} bars</span>
+                        <span className="text-zinc-400 w-16">E: {Math.round(s.energy * 100)}%</span>
+                        <span className="text-zinc-400 w-16">{s.tensionShape}</span>
+                        <span className="text-zinc-500 text-[10px] flex-1 truncate">
+                          {s.voices.length} voices
+                        </span>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             )}

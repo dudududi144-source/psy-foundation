@@ -94,13 +94,16 @@ export class VoicePool<V extends Voice> {
       this.freeSet.delete(freeIdx)
       this.linkOutstanding(freeIdx)
       this._activeCount += 1
-      return this.voices[freeIdx]
+      // freeIdx comes from freeSet — always a valid voice index.
+      return this.voices[freeIdx]!
     }
     if (this.maxVoices === 0) {
       throw new Error('VoicePool.allocate(): pool has zero voices (voiceCount = 0)')
     }
     const idx = this.outHead
-    const stolen = this.voices[idx]
+    // Steal path only runs when NO voice is free → the outstanding list is
+    // non-empty → outHead is a valid voice index.
+    const stolen = this.voices[idx]!
     this.unlinkOutstanding(idx)
     this.linkOutstanding(idx) // re-handed out: becomes the newest outstanding
     stolen.panic()
@@ -168,8 +171,9 @@ export class VoicePool<V extends Voice> {
   }
 
   private unlinkOutstanding(idx: number): void {
-    const prev = this.outPrev[idx]
-    const next = this.outNext[idx]
+    // Any index in the outstanding list was written by linkOutstanding first.
+    const prev = this.outPrev[idx]!
+    const next = this.outNext[idx]!
     if (prev !== NOT_IN_LIST) {
       this.outNext[prev] = next
     } else {

@@ -219,10 +219,10 @@ export function measurePhraseCoherence(
   const motifById = new Map<string, Motif>(motifs.map((m) => [m.id, m]))
   const slots = phrase.slots
   // openingClosingRelationship: similarity between first and last bar's motif.
-  const firstMotif = slots[0]?.motifId ? motifById.get(slots[0].motifId) : undefined
-  const lastMotif = slots[slots.length - 1]?.motifId
-    ? motifById.get(slots[slots.length - 1].motifId ?? '')
-    : undefined
+  const openingSlot = slots[0]
+  const closingSlot = slots[slots.length - 1]
+  const firstMotif = openingSlot?.motifId ? motifById.get(openingSlot.motifId) : undefined
+  const lastMotif = closingSlot?.motifId ? motifById.get(closingSlot.motifId) : undefined
   const openingClosing =
     firstMotif && lastMotif
       ? motifSimilarity(firstMotif, lastMotif)
@@ -261,8 +261,10 @@ export function measurePhraseCoherence(
   // phraseContinuity: average similarity between consecutive bars' motifs.
   const continuities: number[] = []
   for (let i = 1; i < slots.length; i++) {
-    const prev = slots[i - 1]?.motifId ? motifById.get(slots[i - 1].motifId ?? '') : undefined
-    const cur = slots[i]?.motifId ? motifById.get(slots[i].motifId ?? '') : undefined
+    const prevSlot = slots[i - 1]
+    const curSlot = slots[i]
+    const prev = prevSlot?.motifId ? motifById.get(prevSlot.motifId) : undefined
+    const cur = curSlot?.motifId ? motifById.get(curSlot.motifId) : undefined
     if (prev && cur) continuities.push(motifSimilarity(prev, cur))
   }
   const phraseContinuity = continuities.length > 0 ? clamp01(mean(continuities)) : 0.5
@@ -418,7 +420,8 @@ export function measureRhythmicCoherence(
   // accentContinuity: average Jaccard of consecutive bars' accent sets.
   const accentJaccards: number[] = []
   for (let i = 1; i < accentSets.length; i++) {
-    accentJaccards.push(setJaccard(accentSets[i - 1], accentSets[i]))
+    // Loop invariant: i ∈ [1, len) → both indices are valid bars.
+    accentJaccards.push(setJaccard(accentSets[i - 1]!, accentSets[i]!))
   }
   const accentContinuity = accentJaccards.length > 0 ? clamp01(mean(accentJaccards)) : 1
   // phraseEndingRhythm: how distinct the last bar's density is from the
@@ -579,7 +582,7 @@ export function measureStructuralCoherence(
     if (idxs.length < 2) continue
     const gaps: number[] = []
     for (let i = 1; i < idxs.length; i++) {
-      gaps.push(idxs[i] - idxs[i - 1])
+      gaps.push(idxs[i]! - idxs[i - 1]!)
     }
     // Well-spaced = consistent gaps (low coefficient of variation).
     const m = mean(gaps)
@@ -599,8 +602,9 @@ export function measureStructuralCoherence(
       developmentDistance: 0,
     }
   }
-  const firstPlan = phrasePlans[0]
-  const lastPlan = phrasePlans[phrasePlans.length - 1]
+  // Guarded by the length < 2 return above — both indices are valid.
+  const firstPlan = phrasePlans[0]!
+  const lastPlan = phrasePlans[phrasePlans.length - 1]!
   const firstPcs = phrasePcs(firstPlan)
   const lastPcs = phrasePcs(lastPlan)
   const union = new Set<number>([...firstPcs, ...lastPcs])

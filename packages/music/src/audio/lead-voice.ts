@@ -54,7 +54,11 @@ export interface LeadRecipe {
   saturationDrive: number
   /** FM amount (0..1, for FM families). */
   fmAmount: number
-  /** Stereo width 0..1. */
+  /** RESERVED (NOT WIRED): stereo width 0..1. Documented honestly per the
+   *  2026-09-04 audit: the lead renders MONO today — no render path reads this
+   *  field yet. Wiring it requires a stereo render path (L/R buffers) and a
+   *  re-baseline of every locked md5; until then this is declared data, not
+   *  behavior, and the UI honesty labels describe the lead as mono. */
   stereoWidth: number
   /** Overall gain 0..1. */
   gain: number

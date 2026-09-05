@@ -158,16 +158,16 @@ export class SchroederReverb {
 
   constructor() {
     for (let i = 0; i < 4; i++) {
-      this.combBuffersL.push(new Float32Array(this.combDelaysL[i]))
-      this.combBuffersR.push(new Float32Array(this.combDelaysR[i]))
+      this.combBuffersL.push(new Float32Array(this.combDelaysL[i]!))
+      this.combBuffersR.push(new Float32Array(this.combDelaysR[i]!))
       this.combIdxL.push(0)
       this.combIdxR.push(0)
       this.combLPL.push(0)
       this.combLPR.push(0)
     }
     for (let i = 0; i < 2; i++) {
-      this.allpassBuffersL.push(new Float32Array(this.allpassDelaysL[i]))
-      this.allpassBuffersR.push(new Float32Array(this.allpassDelaysR[i]))
+      this.allpassBuffersL.push(new Float32Array(this.allpassDelaysL[i]!))
+      this.allpassBuffersR.push(new Float32Array(this.allpassDelaysR[i]!))
       this.allpassIdxL.push(0)
       this.allpassIdxR.push(0)
     }
@@ -290,13 +290,15 @@ export class StereoDelay {
     const rightDelaySamples = Math.floor(this.rightDelay * sr)
     const leftReadIdx = (this.leftIdx - leftDelaySamples + this.bufferSize) % this.bufferSize
     const rightReadIdx = (this.rightIdx - rightDelaySamples + this.bufferSize) % this.bufferSize
-    const leftDelayed = this.leftBuf[leftReadIdx]
-    const rightDelayed = this.rightBuf[rightReadIdx]
+    const leftDelayed = this.leftBuf[leftReadIdx]!
+    const rightDelayed = this.rightBuf[rightReadIdx]!
     const fbCutoff = 0.3
-    this.fbLP[0] = this.fbLP[0] + fbCutoff * (leftDelayed - this.fbLP[0])
-    this.fbLP[1] = this.fbLP[1] + fbCutoff * (rightDelayed - this.fbLP[1])
-    const leftWrite = l * this.inputGain + this.fbLP[1] * this.feedback
-    const rightWrite = r * this.inputGain + this.fbLP[0] * this.feedback
+    const fb0 = this.fbLP[0]!
+    const fb1 = this.fbLP[1]!
+    this.fbLP[0] = fb0 + fbCutoff * (leftDelayed - fb0)
+    this.fbLP[1] = fb1 + fbCutoff * (rightDelayed - fb1)
+    const leftWrite = l * this.inputGain + this.fbLP[1]! * this.feedback
+    const rightWrite = r * this.inputGain + this.fbLP[0]! * this.feedback
     this.leftBuf[this.leftIdx] = leftWrite
     this.rightBuf[this.rightIdx] = rightWrite
     this.leftIdx = (this.leftIdx + 1) % this.bufferSize

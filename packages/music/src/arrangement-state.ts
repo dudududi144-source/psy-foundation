@@ -270,12 +270,13 @@ export function planArrangement(opts: {
   if (diff < 0) {
     // Trim from the largest allocations first.
     for (let i = adjusted.length - 2; i >= 0 && diff < 0; i--) {
-      const trim = Math.min(adjusted[i] - 2, -diff)
-      adjusted[i] -= trim
+      const trim = Math.min(adjusted[i]! - 2, -diff)
+      adjusted[i] = adjusted[i]! - trim
       diff += trim
     }
   } else if (diff > 0) {
-    adjusted[adjusted.length - 1] += diff
+    const lastIdx = adjusted.length - 1
+    adjusted[lastIdx] = adjusted[lastIdx]! + diff
   }
 
   for (let i = 0; i < STATE_ORDER.length; i++) {

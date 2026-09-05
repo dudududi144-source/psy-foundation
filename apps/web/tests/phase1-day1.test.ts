@@ -124,7 +124,7 @@ describe('StereoWidener — Phase 1 Day 1 fix', () => {
     // Mono signal
     for (let i = 0; i < n; i++) {
       L[i] = Math.sin((2 * Math.PI * 440 * i) / SR) * 0.5
-      R[i] = L[i]
+      R[i] = L[i]!
     }
 
     sw.processBuffer(L, R)

@@ -880,7 +880,7 @@ export class CompositionEngine {
       if (!generated.includes(0)) generated.unshift(0)
       onsets = generated.sort((a, b) => a - b)
     }
-    const velocities = onsets.map((s) => (s === 0 ? 1.0 : 0.7 + groove.accent[s] * 0.2))
+    const velocities = onsets.map((s) => (s === 0 ? 1.0 : 0.7 + (groove.accent[s] ?? 0) * 0.2))
     return { onsets, velocities }
   }
 

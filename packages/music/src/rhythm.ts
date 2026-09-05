@@ -107,8 +107,8 @@ export function combine(a: RhythmPattern, b: RhythmPattern): RhythmPattern {
   const hasVel = a.velocities !== undefined || b.velocities !== undefined
   const velocities = hasVel ? new Array<number>(n).fill(0) : undefined
   for (let i = 0; i < n; i++) {
-    const ha = i < a.hits.length && a.hits[i]
-    const hb = i < b.hits.length && b.hits[i]
+    const ha = i < a.hits.length && (a.hits[i] ?? false)
+    const hb = i < b.hits.length && (b.hits[i] ?? false)
     hits[i] = ha || hb
     if (velocities) {
       const va = a.velocities && i < a.velocities.length ? (a.velocities[i] as number) : 0

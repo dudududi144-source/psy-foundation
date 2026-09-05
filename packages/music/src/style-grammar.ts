@@ -164,7 +164,8 @@ export const DEFAULT_STYLE = 'full-on'
 
 /** Look up a style grammar by name. Falls back to {@link DEFAULT_STYLE}. */
 export function getStyleGrammar(styleName: string): StyleGrammar {
-  return STYLE_GRAMMARS[styleName] ?? STYLE_GRAMMARS[DEFAULT_STYLE]
+  // DEFAULT_STYLE is guaranteed present in STYLE_GRAMMARS (its own entry).
+  return STYLE_GRAMMARS[styleName] ?? STYLE_GRAMMARS[DEFAULT_STYLE]!
 }
 
 function clamp01(v: number): number {

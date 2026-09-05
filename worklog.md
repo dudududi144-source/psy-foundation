@@ -4148,3 +4148,26 @@ Work Log:
 Stage Summary:
 - The audit's trajectory claim is now independently re-proven: 3.5/10 → 7.5/10, with C1-C8 + C10 RESOLVED on fresh evidence, C9 shipped-as-channel (adoption external), and the only structural internals left are the strictness sweep and two voice-level dead flags — all queued as Task 12 proposals.
 - New artifact: docs/AUDIT_FOLLOWUP_2026-09-05.md. Repo remains green; this commit is docs-only.
+
+---
+Task ID: 12 (Post-V3 hardening: strictness sweep + voice dead-flag cleanup)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- Execute the Task-12 proposals queued in AUDIT_FOLLOWUP_2026-09-05.md §4: enable noUncheckedIndexedAccess + noImplicitAny repo-wide (the audit's MED tsconfig finding), and clean up the voice dead-flags (HIGH finding, PARTIAL after Task 11).
+
+Work Log:
+- Strictness sweep, package by package:
+  - packages/dsp: enabled noUncheckedIndexedAccess → 87 errors. Fixed: limiter.ts (CATMULL_ROM_PHASES retyped as exact 4-tuple, loop-invariant `!` on buffer reads, deque reads asserted), loudness.ts (percentile + block loops), filters.ts MoogLadder stage loop (local `prev` — also removes a latent NaN-on-hole edge), voicePool.ts (freeSet/steal-path/link-list invariants), ott.ts/multiband.ts channel reads. 94/94 tests pass after.
+  - packages/music: enabled → 40 errors across 8 files (audio-critic FFT/averageSpectrum/call-response accumulators, coherence slot reads, phrase-arc bar accumulators, rhythm hits, motif invert guard, style-grammar DEFAULT_STYLE fallback, composition-engine groove accents). Fixed with `?? 0` read-before-write accumulators and guarded `!`s. One name collision (lastSlot) caught by tsc and renamed. 358/358 tests pass.
+  - apps/web: removed BOTH downgrades → 112 errors across 11 files (channel-fx reverb/allpass/delay/width buffers, worklet voice loops + output channels, audio-critic copy of the same patterns, forensic mixing feedback LP + delay reads, forensic-bridge HP loop restructured with locals preserving update order, page.tsx pattern/note-name reads + implicit-any map callback, prng.pick, modulation-matrix macros, latent-decoder BARK bins, reference-analyzer, phase1-day1 test). 3 formatting nits auto-fixed by biome.
+- Semantic-equivalence proof: full verify run AFTER the sweep — all locked baselines identical (8-bar md5 f2f81ed6…, 88-bar streaming md5 88ecc4b8…, critic score 0.7141728947862114 bit-identical, LUFS I=-10.7 / TP -1.2 unchanged). The fixes changed types, not audio.
+- Voice dead-flags (audit HIGH, was PARTIAL):
+  - KickVoice: deleted the stale `readonly active = false` field (real lifecycle: `_active` + `isActive` getter, which the renderer's triggerVoiceAt loop actually uses; zero consumers of `.active` found repo-wide). Doc comment updated to reference isActive.
+  - LeadRecipe.stereoWidth: honest resolution — wiring it requires an L/R stereo render path and an intentional md5 re-baseline (feature-scale, not cleanup). Field documented as RESERVED/NOT WIRED in the interface; UI honesty labels already describe the lead as mono. The "mono marketed as stereo" lie dies in documentation, matching the charter.
+- AUDIT_FOLLOWUP_2026-09-05.md updated: strictness row ❌OPEN → ✅RESOLVED with equivalence proof; dead-flag voices row ⚠️PARTIAL → ✅RESOLVED; §4 gap list re-scoped (family adoption external / stereo lead feature / dead-export audit LOW); packages/foundation dimension 8.5 → 9 (strict mode enforced repo-wide); overall holds at 7.5 pending external family adoption.
+- Five Gates after all changes: typecheck 0 across all 17 packages (now under noUncheckedIndexedAccess + noImplicitAny everywhere), biome 0 (257 files), bun test 957/0/0 (full suite pre-kick-change; music 358/0 after; tsc compile-proof that nothing referenced the deleted field), verify 28/28 with byte-identical outputs.
+
+Stage Summary:
+- The tsconfig strictness finding — the last ❌OPEN item in the follow-up audit — is RESOLVED, and the HIGH dead-flag voices item is RESOLVED. Every internal finding from the 2026-09-04 forensic audit is now closed or honestly documented as an external dependency (family adoption) / reserved feature (stereo lead) / LOW residual (dead exports).
+- What remains for a future session: family adoption (their move), stereo lead path (intentional re-baseline project), dead-export audit (LOW).

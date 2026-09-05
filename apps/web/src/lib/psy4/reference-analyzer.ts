@@ -106,7 +106,7 @@ export function analyzeReference(
         im += frame[n]! * Math.sin(angle)
       }
       const mag = Math.sqrt(re * re + im * im)
-      avgSpectrum[k] += mag
+      avgSpectrum[k] = (avgSpectrum[k] ?? 0) + mag
       totalWeighted += ((k * sampleRate) / fftSize) * mag
       totalMag += mag
     }

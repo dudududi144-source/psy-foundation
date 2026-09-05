@@ -515,7 +515,7 @@ function computeDFT(frame: Float32Array, numBins: number): number[] {
 
 function averageSpectrum(spectra: number[][]): number[] {
   if (spectra.length === 0) return []
-  const numBins = spectra[0]?.length
+  const numBins = spectra[0]?.length ?? 0
   const avg = new Array(numBins).fill(0)
   for (const s of spectra) {
     for (let i = 0; i < numBins; i++) {
@@ -845,7 +845,10 @@ function computeArticulation(pcm: Float32Array, sampleRate: number): number {
  */
 function computeMelodicClarityFromNotes(notes: CriticNoteEvent[]): number {
   const hist = new Array<number>(12).fill(0)
-  for (const n of notes) hist[((n.pitchMidi % 12) + 12) % 12] += 1
+  for (const n of notes) {
+    const pc = ((n.pitchMidi % 12) + 12) % 12
+    hist[pc] = (hist[pc] ?? 0) + 1
+  }
   const total = notes.length
   let distinct = 0
   let entropy = 0
@@ -1132,19 +1135,19 @@ function computeCallResponseFromNotes(notes: CriticNoteEvent[], stepsPerBar: num
     const pitch = isCall ? callPitch : respPitch
     const count = isCall ? callCount : respCount
     const slot = ((nt.startStep % barLen) + barLen) % barLen
-    onset[slot] += 1
-    vel[slot] += nt.velocity ?? 0.7
-    pitch[slot] += nt.pitchMidi
-    count[slot] += 1
+    onset[slot] = (onset[slot] ?? 0) + 1
+    vel[slot] = (vel[slot] ?? 0) + (nt.velocity ?? 0.7)
+    pitch[slot] = (pitch[slot] ?? 0) + nt.pitchMidi
+    count[slot] = (count[slot] ?? 0) + 1
   }
   for (let s = 0; s < barLen; s++) {
-    if (callCount[s] > 0) {
-      callVel[s] /= callCount[s]
-      callPitch[s] /= callCount[s]
+    if ((callCount[s] ?? 0) > 0) {
+      callVel[s] = (callVel[s] ?? 0) / callCount[s]!
+      callPitch[s] = (callPitch[s] ?? 0) / callCount[s]!
     }
-    if (respCount[s] > 0) {
-      respVel[s] /= respCount[s]
-      respPitch[s] /= respCount[s]
+    if ((respCount[s] ?? 0) > 0) {
+      respVel[s] = (respVel[s] ?? 0) / respCount[s]!
+      respPitch[s] = (respPitch[s] ?? 0) / respCount[s]!
     }
   }
   // Union support: slots where at least one half has a note. Slots silent in

@@ -140,7 +140,7 @@ function buildBinToBand(edges: BandEdges, fftSize: number, sampleRate: number): 
   let band = 0
   for (let i = 0; i <= halfBins; i++) {
     const freq = (i * sampleRate) / fftSize
-    while (band < BARK_BANDS && freq >= edges[band + 1]) band++
+    while (band < BARK_BANDS && freq >= edges[band + 1]!) band++
     binToBand[i] = band < BARK_BANDS ? band : BARK_BANDS - 1
   }
   return binToBand
@@ -205,8 +205,8 @@ export class LatentDecoder {
       const b = binToBand[k]!
       const rr = re[k]!
       const ii = im[k]!
-      bandEnergy[b] += rr * rr + ii * ii
-      bandCount[b]++
+      bandEnergy[b] = (bandEnergy[b] ?? 0) + rr * rr + ii * ii
+      bandCount[b] = (bandCount[b] ?? 0) + 1
     }
 
     let totalEnergy = 0

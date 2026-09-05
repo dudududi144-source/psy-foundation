@@ -367,15 +367,16 @@ class PSY4Processor extends AudioWorkletProcessor {
         if (msg.voiceType === 'acid') {
           this.acidVoice.noteOn(msg.midi, msg.velocity)
         } else if (msg.midi < 48) {
-          const voice = this.bassVoices[this.bassIdx % this.bassVoices.length]
+          // Modulo a positive fixed voice count → always a valid index.
+          const voice = this.bassVoices[this.bassIdx % this.bassVoices.length]!
           voice.noteOn(msg.midi, msg.velocity)
           this.bassIdx++
         } else if (msg.midi >= 72) {
-          const voice = this.padVoices[this.padIdx % this.padVoices.length]
+          const voice = this.padVoices[this.padIdx % this.padVoices.length]!
           voice.noteOn(msg.midi, msg.velocity)
           this.padIdx++
         } else {
-          const voice = this.leadVoices[this.voiceIdx % this.leadVoices.length]
+          const voice = this.leadVoices[this.voiceIdx % this.leadVoices.length]!
           voice.noteOn(msg.midi, msg.velocity)
           this.voiceIdx++
         }
@@ -421,8 +422,8 @@ class PSY4Processor extends AudioWorkletProcessor {
     const output = outputs[0]
     if (!output || output.length === 0) return true
 
-    const channelL = output[0]
-    const channelR = output[1] || output[0]
+    const channelL = output[0]!
+    const channelR = output[1] ?? channelL
     const frames = channelL.length
 
     // ── 1. Render voices with per-voice pan, sidechain duck, master gain ──
@@ -432,10 +433,10 @@ class PSY4Processor extends AudioWorkletProcessor {
 
       // Lead voices (8) with spread pan
       for (let v = 0; v < this.leadVoices.length; v++) {
-        const voice = this.leadVoices[v]
+        const voice = this.leadVoices[v]!
         if (voice.active) {
           const s = voice.process() * this.voiceGains.lead
-          const [gL, gR] = this.panToGain(this.leadPans[v])
+          const [gL, gR] = this.panToGain(this.leadPans[v]!)
           mixL += s * gL
           mixR += s * gR
         }
@@ -443,10 +444,10 @@ class PSY4Processor extends AudioWorkletProcessor {
 
       // Bass voices (2) with slight pan
       for (let v = 0; v < this.bassVoices.length; v++) {
-        const voice = this.bassVoices[v]
+        const voice = this.bassVoices[v]!
         if (voice.active) {
           const s = voice.process() * this.voiceGains.bass
-          const [gL, gR] = this.panToGain(this.bassPans[v])
+          const [gL, gR] = this.panToGain(this.bassPans[v]!)
           mixL += s * gL
           mixR += s * gR
         }
@@ -454,10 +455,10 @@ class PSY4Processor extends AudioWorkletProcessor {
 
       // Pad voices (2) with wide pan
       for (let v = 0; v < this.padVoices.length; v++) {
-        const voice = this.padVoices[v]
+        const voice = this.padVoices[v]!
         if (voice.active) {
           const s = voice.process() * this.voiceGains.pad
-          const [gL, gR] = this.panToGain(this.padPans[v])
+          const [gL, gR] = this.panToGain(this.padPans[v]!)
           mixL += s * gL
           mixR += s * gR
         }
@@ -485,8 +486,8 @@ class PSY4Processor extends AudioWorkletProcessor {
 
     // ── 4-6. Saturation, M/S width, simplified limiter, brickwall ──
     for (let i = 0; i < frames; i++) {
-      let outL = channelL[i]
-      let outR = channelR[i]
+      let outL = channelL[i]!
+      let outR = channelR[i]!
 
       // 4. Soft saturation (tanh)
       outL = Math.tanh(outL * 1.2) * 0.7 + outL * 0.3
