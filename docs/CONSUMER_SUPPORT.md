@@ -107,12 +107,16 @@ First 3 sounds broken:  <what, since when, what changed before it broke>
   `ts` (seconds) × bpm; `track` must be one of the 16 foundation voices;
   sparse note streams master to a lower LUFS than full mixes (quiet is a
   property of your arrangement, not a bug) — true peak safety is enforced
-  by an FIR meter either way. Worked examples (both proven end-to-end with
+  by an FIR meter either way. Worked examples (all proven end-to-end with
   the same claim pattern): psy-anthem's repo (Task 17-b, 53/53 claims,
-  `scripts/e2e-pipeline.ts`) and psysampler's repo (Task 18, 23/23 claims,
+  `scripts/e2e-pipeline.ts`), psysampler's repo (Task 18, 23/23 claims,
   `scripts/e2e-pipeline.mjs` — plus a measured density/melody loudness-lever
   experiment: hat density bought +0.5 LU for +15.5 KB of wire, a sustained
-  lead line bought +1.8 LU for −7 KB; melody is the loudness lever).
+  lead line bought +1.8 LU for −7 KB; melody is the loudness lever), and
+  PSY6's repo (Task 19, 8/8 claims, `tools/e2e-pipeline.mjs` — the
+  groovebox's own deterministic walker drives the wire; its measured line
+  completes the economics table: song FORM bought structure, not loudness,
+  −0.30 LU for +31.8 KB — density, not form, is the loudness lever).
 
 ## 6. The honest boundary
 
