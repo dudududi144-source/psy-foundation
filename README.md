@@ -1,15 +1,16 @@
 # PSY Foundation — Procedural Psytrance Synthesis Engine
 
-> **Status: Phase 0 "Truth" complete (PLAN_V3_MASTER) — every claim below is
-> reproduced by `node scripts/verify.mjs` (19 claims, 0 fail, ~48s).**
-> A TypeScript DSP engine that renders psytrance audio via HTTP API,
+> **Status: Phases 0–3 complete, Phase 4 "Product" underway (PLAN_V3_MASTER).
+> Foundation v2.0.0 — One DSP, honest metrics, PSYBUS v2, device conformance.
+> Every claim below is reproduced by `node scripts/verify.mjs` (23 claims,
+> 0 fail).** A TypeScript DSP engine that renders psytrance audio via HTTP API,
 > with a 10-package musical foundation, a JUCE plugin prototype, and a
 > real-time AudioWorklet. Independent forensic audit: `docs/AUDIT_FORENSIC_2026-09-04.md`.
 
-[![tests](https://img.shields.io/badge/tests-809%20pass%2C%200%20fail-brightgreen)]()
-[![verify](https://img.shields.io/badge/verify-19%2F19%20claims%20green-success)]()
-[![packages](https://img.shields.io/badge/packages-10%20foundation%20%2B%20web%20app-blue)]()
-[![license](https://img.shields.io/badge/license-MIT-blue)]()
+[![tests](https://img.shields.io/badge/tests-940%20pass%2C%200%20fail-brightgreen)]()
+[![verify](https://img.shields.io/badge/verify-23%2F23%20claims%20green-success)]()
+[![version](https://img.shields.io/badge/foundation-v2.0.0-blue)]()
+[![license](https://img.shields.io/badge/license-UNLICENSED-red)]()
 
 ---
 
@@ -17,9 +18,9 @@
 
 ```bash
 bun install          # ~0.2s warm / ~10s cold
-bun test             # 809 pass, 5 skip (documented GAPs), 0 fail
+bun test             # 940 pass, 0 fail, 0 skip
 bun run dev          # apps/web on http://localhost:3000 (PORT env respected)
-node scripts/verify.mjs   # executable truth: 19 endpoint/audio claims, exit≠0 on any failure
+node scripts/verify.mjs   # executable truth: 23 endpoint/audio/infra claims, exit≠0 on any failure
 
 # render audio (deterministic — same seed → bit-identical WAV)
 curl "http://localhost:3000/api/render-forensic?bars=8&seed=42" -o out.wav
@@ -29,6 +30,9 @@ curl "http://localhost:3000/api/render-forensic?bars=8&style=darkpsy" -o dark.wa
 
 # render with specific progression
 curl "http://localhost:3000/api/render-forensic?bars=8&progression=hypnotic" -o drone.wav
+
+# operator/CI mode: PSY_API_KEY=... bun run dev, then:
+curl -H "x-api-key: $PSY_API_KEY" "http://localhost:3000/api/render-forensic?bars=8&seed=42" -o out.wav
 ```
 
 ---
@@ -75,6 +79,22 @@ violation) — `?bars=9999999` can no longer allocate 10M bars of events.
 Failures are honest (`500` with the real error) — no silent sample-fallback
 re-renders.
 
+**Product hardening (Phase 4):**
+- **Rate limiting** — per-IP token buckets per endpoint (render 4-burst,
+  optimize 2, upload 3, style 4; refills per-second). Exhausted bucket →
+  `429` + `Retry-After`. Bucket map is bounded (10k IPs, 10min idle TTL).
+- **API-key mode** — set `PSY_API_KEY` and present `x-api-key` to bypass
+  buckets (operator/CI). In key mode, keyless requests get `429` (never `401`
+  — no free recon about which knob to turn).
+- **Render cache + coalescing** — identical full-mix requests within the LRU
+  window (8 entries / 64 MiB) are served from cache; concurrent identical
+  requests share ONE render. `X-Render-Cache: hit|miss` reports honestly;
+  `?nocache=1` forces a real re-render.
+- **Off-loop rendering** — renders run inside a pool of forked worker
+  processes (`X-Render-Worker: worker`), byte-identical to the in-thread path
+  (parity-locked by test). Bounded queue → honest `503` under overload;
+  worker crash → one reboot, then honest in-thread fallback.
+
 ---
 
 ## What's Here
@@ -83,11 +103,12 @@ re-renders.
 dsp, music, transport, protocol, analysis, learning, material, scheduler, device-sdk, fixtures
 
 ### Web app (`apps/web/`)
-- 809 tests pass, 0 fail (5 honest `GAP:` skips in consumer-contract)
-- 6 HTTP API endpoints (all verified)
-- Real-time AudioWorklet (13 voices) — **honesty note:** the worklet is a
-  lighter engine than the offline renderer (4 synth types, simplified master
-  chain); full parity is Phase 1-4 of `docs/PLAN_V3_MASTER.md`, not shipped yet
+- 940 tests pass, 0 fail, 0 skip
+- 6 HTTP API endpoints (all verified) + rate limiting + render cache + worker pool
+- Real-time AudioWorklet (13 voices) — generated from the CANONICAL
+  `@psy-foundation/dsp` classes by `bun run build:worklet` (One-DSP: the
+  offline render and the worklet share one implementation; parity fixtures
+  lock the generated artifact)
 - PresetManager (11 factory + user presets), SpectrumAnalyzer (60fps)
 - Multi-export WAV/AIFF (FLAC honestly rejected with 501)
 - Stems export (drum/bass/music)
@@ -123,7 +144,10 @@ Prototype only — do not ship. Fix-or-archive decision pending (Plan Phase 5).
 | A-G | Fix lies → unify → compose → quality → VST → commercial → E2E | v1.0.0 |
 | Roast 1-11 | 11 self-audit fix rounds (lint 0, tests 809, honest FLAC/rejections) | v1.2.0 |
 | **Z.ai Phase 0** | **Truth: 2 dead endpoints fixed, DoS guards, exact-bars contract, tsc 0, verify.mjs, README regen** | `6f231ca` |
-| **Z.ai Phase 1 core** | **Limiter rewrite (real lookahead + ceiling-true brickwall), MoogLadder stability clamp, worklet sample-rate fix, packages determinism (seeded hats/click), 2-pass LUFS convergence** | this commit |
+| **Z.ai Phase 1** | **One DSP: master chain in @psy-foundation/dsp, worklet built from it, limiter rewrite, MoogLadder stability, worklet SR fix** | `75dad8a` |
+| **Z.ai Phase 2** | **Honest metrics: critics de-gamed, hidden constants deleted, behavior locks** | `9a00067` |
+| **Z.ai Phase 3** | **Foundation for the family: v2.0.0, release ESM bundle, PSYBUS v2, device conformance, transport GAP closure** | `a579001`, tag `foundation-v2.0.0` |
+| **Z.ai Phase 4** | **Product: worker pool + render cache + coalescing, rate limiting + API-key mode, verify 23 claims** | this commit |
 
 ## Tech Stack
 
@@ -132,6 +156,6 @@ Prototype only — do not ship. Fix-or-archive decision pending (Plan Phase 5).
 - **Web:** Next.js 16 (App Router)
 - **Audio:** Web Audio API, AudioWorklet, ZDF SVF
 - **VST:** JUCE 7, CMake, C++17 (prototype)
-- **Tests:** `bun test` (809) + `scripts/verify.mjs` (19 live claims)
+- **Tests:** `bun test` (940) + `scripts/verify.mjs` (23 live claims)
 - **Linter:** Biome 1.9.4
-- **License:** MIT
+- **License:** UNLICENSED (private; family adoption under separate agreement — see `docs/FAMILY_ADOPTION_OFFER.md`)

@@ -10,6 +10,7 @@
       "**/coverage/**",
       "**/public/**",
       "release/**",
+      "apps/web/workers/**",
       "**/*.json",
       "**/next.config.mjs",
       "**/postcss.config.mjs",

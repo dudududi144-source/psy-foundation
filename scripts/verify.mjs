@@ -15,7 +15,7 @@
  */
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -139,11 +139,40 @@ async function main() {
 
   // ── boot server ──────────────────────────────────────────────────────────
   console.log('Booting dev server…')
+  // PLAN_V3 4.3: boot in API-key mode; verify presents the key on every call
+  // EXCEPT the rate-limit claim (which must hit the 429 path like a stranger).
+  const API_KEY = 'psy-verify-key'
+  const HDRS = { 'x-api-key': API_KEY }
+  // Kill leftovers from a previous crashed run (a stale server with OLD code
+  // would otherwise answer our probes and poison every claim).
+  const pidFile = join(process.cwd(), 'apps', 'web', '.verify-server-pid')
+  try {
+    const oldPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
+    if (Number.isInteger(oldPid) && oldPid > 0) {
+      try {
+        process.kill(-oldPid, 'SIGKILL')
+      } catch {
+        /* group gone */
+      }
+      try {
+        process.kill(oldPid, 'SIGKILL')
+      } catch {
+        /* pid gone */
+      }
+    }
+  } catch {
+    /* no pidfile */
+  }
+
+  // detached + process-group kill: bun spawns next dev which spawns
+  // next-server — killing only the parent orphans the rest.
   const server = spawn('bun', ['run', 'dev'], {
     cwd: join(process.cwd(), 'apps', 'web'),
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), PSY_API_KEY: API_KEY },
     stdio: ['ignore', 'pipe', 'pipe'],
+    detached: true,
   })
+  if (server.pid) writeFileSync(pidFile, String(server.pid))
   let serverLog = ''
   server.stdout.on('data', (d) => {
     serverLog += d
@@ -173,7 +202,7 @@ async function main() {
   try {
     // ── page ───────────────────────────────────────────────────────────────
     {
-      const res = await fetchT(`${BASE}/`, {}, 30000)
+      const res = await fetchT(`${BASE}/`, { headers: HDRS }, 30000)
       const body = await res.text()
       claim(
         'GET / renders',
@@ -187,7 +216,11 @@ async function main() {
     {
       console.log('  …rendering bars=8 seed=42 (first compile ~10-20s)')
       const t = Date.now()
-      const res = await fetchT(`${BASE}/api/render-forensic?bars=8&seed=42`, {}, 240000)
+      const res = await fetchT(
+        `${BASE}/api/render-forensic?bars=8&seed=42&nocache=1`,
+        { headers: HDRS },
+        240000
+      )
       const buf = Buffer.from(await res.arrayBuffer())
       writeFileSync(wav1Path, buf)
       const dur = ((Date.now() - t) / 1000).toFixed(1)
@@ -201,7 +234,11 @@ async function main() {
     }
     {
       console.log('  …second render for determinism')
-      const res = await fetchT(`${BASE}/api/render-forensic?bars=8&seed=42`, {}, 240000)
+      const res = await fetchT(
+        `${BASE}/api/render-forensic?bars=8&seed=42&nocache=1`,
+        { headers: HDRS },
+        240000
+      )
       const buf = Buffer.from(await res.arrayBuffer())
       const wav2Path = join(tmp, 'b.wav')
       writeFileSync(wav2Path, buf)
@@ -214,7 +251,7 @@ async function main() {
       )
     }
     {
-      const res = await fetchT(`${BASE}/api/render-forensic?bars=9999999`, {}, 30000)
+      const res = await fetchT(`${BASE}/api/render-forensic?bars=9999999`, { headers: HDRS }, 30000)
       const j = await res.json().catch(() => ({}))
       claim(
         'DoS guard: bars=9999999 → 400',
@@ -223,18 +260,73 @@ async function main() {
       )
     }
     {
-      const res = await fetchT(`${BASE}/api/render-forensic?bars=0`, {}, 30000)
+      const res = await fetchT(`${BASE}/api/render-forensic?bars=0`, { headers: HDRS }, 30000)
       claim('DoS guard: bars=0 → 400', res.status === 400, `status=${res.status}`)
     }
     {
-      const res = await fetchT(`${BASE}/api/render-forensic?bars=8&seed=42&format=flac`, {}, 30000)
+      const res = await fetchT(
+        `${BASE}/api/render-forensic?bars=8&seed=42&format=flac`,
+        // opts must be a fetch init — the key rides INSIDE `headers` (passing
+        // HDRS bare would top-level-spread it and the request goes keyless,
+        // hitting 429 in key mode instead of the 501 under test).
+        { headers: HDRS },
+        30000
+      )
       claim('FLAC honestly rejected (501)', res.status === 501, `status=${res.status}`)
+    }
+
+    // ── PLAN_V3 4.1: cache + worker headers ────────────────────────────────
+    {
+      const res = await fetchT(
+        `${BASE}/api/render-forensic?bars=8&seed=42`,
+        { headers: HDRS },
+        240000
+      )
+      const res2 = await fetchT(
+        `${BASE}/api/render-forensic?bars=8&seed=42`,
+        { headers: HDRS },
+        60000
+      )
+      const cacheHeader = res.headers.get('x-render-cache') ?? 'none'
+      const cacheHeader2 = res2.headers.get('x-render-cache') ?? 'none'
+      const workerHeader = res.headers.get('x-render-worker') ?? 'none'
+      claim(
+        'render cache: identical request → hit',
+        cacheHeader === 'miss' && cacheHeader2 === 'hit',
+        `first=${cacheHeader}, second=${cacheHeader2}`
+      )
+      claim(
+        'render off event loop: worker/inline header reported',
+        workerHeader === 'worker' ||
+          workerHeader === 'inline' ||
+          workerHeader === 'inline-fallback',
+        `X-Render-Worker=${workerHeader}`
+      )
+    }
+
+    // ── PLAN_V3 4.3: rate limit — 6 rapid keyless renders → 429 ────────────
+    {
+      let saw429 = false
+      let retryAfter = null
+      for (let i = 0; i < 6; i++) {
+        const res = await fetchT(`${BASE}/api/render-forensic?bars=1&seed=${i}`, {}, 60000)
+        if (res.status === 429) {
+          saw429 = true
+          retryAfter = res.headers.get('retry-after')
+          break
+        }
+      }
+      claim(
+        'rate limit: burst without key → 429 + Retry-After',
+        saw429,
+        `retryAfter=${retryAfter ?? 'n/a'}`
+      )
     }
     {
       console.log('  …rendering style=darkpsy')
       const res = await fetchT(
         `${BASE}/api/render-forensic?bars=8&seed=42&style=darkpsy`,
-        {},
+        { headers: HDRS },
         240000
       )
       const buf = await res.arrayBuffer()
@@ -270,7 +362,11 @@ async function main() {
 
     // ── arrangement exact-bars contract ───────────────────────────────────
     for (const bars of [8, 88]) {
-      const res = await fetchT(`${BASE}/api/arrangement?seed=42&bars=${bars}`, {}, 60000)
+      const res = await fetchT(
+        `${BASE}/api/arrangement?seed=42&bars=${bars}`,
+        { headers: HDRS },
+        60000
+      )
       const j = await res.json()
       const sum = (j.sections ?? []).reduce((a, s) => a + s.bars, 0)
       claim(
@@ -280,7 +376,11 @@ async function main() {
       )
     }
     {
-      const res = await fetchT(`${BASE}/api/arrangement?seed=42&bars=8&mode=short`, {}, 60000)
+      const res = await fetchT(
+        `${BASE}/api/arrangement?seed=42&bars=8&mode=short`,
+        { headers: HDRS },
+        60000
+      )
       const j = await res.json()
       const sum = (j.sections ?? []).reduce((a, s) => a + s.bars, 0)
       claim('arrangement short mode respects bars', res.status === 200 && sum === 8, `Σ=${sum}`)
@@ -290,7 +390,11 @@ async function main() {
     {
       console.log('  …audio-critique (~20s)')
       const t = Date.now()
-      const res = await fetchT(`${BASE}/api/audio-critique?bars=8&seed=42`, {}, 240000)
+      const res = await fetchT(
+        `${BASE}/api/audio-critique?bars=8&seed=42`,
+        { headers: HDRS },
+        240000
+      )
       const j = await res.json()
       const sec = ((Date.now() - t) / 1000).toFixed(1)
       const metricCount = Object.keys(j.metrics ?? {}).length
@@ -308,7 +412,7 @@ async function main() {
       wavForm.append('audio', new Blob([wavBytes], { type: 'audio/wav' }), 'ref.wav')
       const res = await fetchT(
         `${BASE}/api/upload-reference`,
-        { method: 'POST', body: wavForm },
+        { method: 'POST', body: wavForm, headers: HDRS },
         120000
       )
       const j = await res.json()
@@ -322,7 +426,7 @@ async function main() {
         console.log('  …style-transfer with reference (~5s)')
         const res2 = await fetchT(
           `${BASE}/api/style-transfer?bars=8&seed=42&reference=${j.hash}&blend=0.5`,
-          {},
+          { headers: HDRS },
           240000
         )
         const header = res2.headers.get('x-style-transfer') ?? ''
@@ -336,7 +440,11 @@ async function main() {
     }
     {
       // Default style-transfer (no reference) — was a guaranteed 500 (em-dash header).
-      const res = await fetchT(`${BASE}/api/style-transfer?bars=8&seed=42`, {}, 240000)
+      const res = await fetchT(
+        `${BASE}/api/style-transfer?bars=8&seed=42`,
+        { headers: HDRS },
+        240000
+      )
       const header = res.headers.get('x-style-transfer') ?? ''
       claim(
         'style-transfer default → 200 (was guaranteed 500)',
@@ -354,7 +462,7 @@ async function main() {
       )
       const res = await fetchT(
         `${BASE}/api/upload-reference`,
-        { method: 'POST', body: form },
+        { method: 'POST', body: form, headers: HDRS },
         60000
       )
       claim(
@@ -368,7 +476,11 @@ async function main() {
     if (!QUICK) {
       console.log('  …optimize 2 iterations (~15s)')
       const t = Date.now()
-      const res = await fetchT(`${BASE}/api/optimize?bars=8&seed=42&iterations=2`, {}, 300000)
+      const res = await fetchT(
+        `${BASE}/api/optimize?bars=8&seed=42&iterations=2`,
+        { headers: HDRS },
+        300000
+      )
       const j = await res.json()
       const sec = ((Date.now() - t) / 1000).toFixed(1)
       claim(
@@ -390,7 +502,17 @@ async function main() {
     console.log(`Details: ${join(tmp, 'results.json')}\n`)
     if (failed > 0) process.exitCode = 1
   } finally {
-    server.kill('SIGTERM')
+    try {
+      if (server.pid) process.kill(-server.pid, 'SIGKILL')
+    } catch {
+      /* group gone */
+    }
+    server.kill('SIGKILL')
+    try {
+      unlinkSync(pidFile)
+    } catch {
+      /* already gone */
+    }
     clearTimeout(watchdog)
   }
 }

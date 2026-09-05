@@ -4046,3 +4046,22 @@ Stage Summary:
 - Foundation-v2.0.0 tagged+pushed. 927 pass / 0 fail / 0 SKIP (was 5 skip at 867 tests). tsc 0, biome 0, verify --quick 20/20.
 - Everything pushed to origin/main: 63ea4d9, 3bcc5a5, 21f0c03, b55cd0e + tag, ace5d5c.
 - Remaining roadmap: Phase 4 (product hardening), Phase 5 (VST decision).
+
+---
+Task ID: 7 (Phase 4 part 1: 4.1 renders off event loop + 4.3 rate limiting)
+Agent: Z.ai Code (lead engineer; salvaged mid-flight uncommitted work from a crashed prior session, reviewed, fixed, gated)
+
+Work Log:
+- Assessed the uncommitted Phase 4 tree left by a crashed session: render pool + cache + coalescer + worker entry + build script + tests existed and were well-formed, but render-forensic route referenced `takeToken` WITHOUT importing it (guaranteed ReferenceError 500 on every render) and contradicted the documented 4.3 policy (inlined 401-for-keyless logic that made 429 unreachable in key mode).
+- Fixed render-forensic: `enforceRateLimit('render', req)` — same one-line policy as optimize/style/upload routes; removed the dead 401 branch.
+- Fixed rate-limit.ts: removed CJS `require('next/server')` (static NextResponse import), corrected the design comment to the honest semantics: without PSY_API_KEY everyone is bucketed; with it, key holders bypass and keyless callers get 429 (never 401 — no recon).
+- Fixed verify.mjs probe bug found by the first verify run: two probes passed `HDRS` bare or omitted headers entirely — `fetchT` spreads opts into fetch init, so the key never rode inside `headers` → 429 instead of the 501/400 under test. Both probes now present the key per the verify contract ("key on every call EXCEPT the rate-limit claim").
+- Updated stale test comment (401→429) + `delete process.env` → undefined assignment for biome.
+- README regenerated to current truth: 940 tests / 23 claims / v2.0.0; license corrected MIT → UNLICENSED (no LICENSE file exists — old badge was a false claim, charter violation); documented rate limiting, API-key mode, cache/coalescing, off-loop rendering; journey table extended with Phases 1/2/3/4.
+- Five Gates: bun test 940/0/0skip (+13 Phase-4 tests: cache LRU/byte-cap, coalescing, token-bucket burst/per-IP/key-mode, worker-vs-in-thread byte-identical parity, bounded-queue 503 backpressure), workspace typecheck 0, biome 0, verify FULL 23/23 (incl. optimize claim; ffmpeg ebur128 LUFS I=-10.7, TP -1.2 dBTP embedded), lint 0.
+
+Stage Summary:
+- PLAN_V3 4.1 + 4.3 COMPLETE: renders are off the event loop (forked worker pool, bounded queue, honest 503 + degraded-mode fallback), full-mix renders are LRU-cached + coalesced (X-Render-Cache header, ?nocache=1 escape hatch), all compute routes rate-limited per-IP with bounded buckets, optional PSY_API_KEY operator mode. Upload store bounded (32 refs, 1h TTL) from earlier Phase 0/4 work.
+- Worker artifact apps/web/workers/render-worker.mjs is a committed generated artifact (build-render-worker.mjs, deterministic ×2, biome-ignored like the worklet precedent).
+- Remaining in Phase 4: 4.2 (streaming WAV first-byte), 4.4 (realtime honesty labeling — largely satisfied by One-DSP but UI labeling pending), 4.5 (UI tool-grade), 4.6 (session persistence). Then Phase 5 (VST fix-or-archive).
+- NOT yet committed at time of writing — commit follows this entry.

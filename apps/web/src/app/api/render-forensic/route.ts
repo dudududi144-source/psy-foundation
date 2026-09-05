@@ -7,6 +7,9 @@ import {
 } from '@/lib/psy4/forensic-bridge'
 import { type ExportFormat, encodeAiff, getMimeType } from '@/lib/psy4/multi-export'
 import { FACTORY_PRESETS } from '@/lib/psy4/preset-manager'
+import { enforceRateLimit } from '@/lib/rate-limit'
+import { getRenderCache, getRenderCoalescer } from '@/lib/render/render-cache'
+import { getRenderPool } from '@/lib/render/render-pool'
 import { CompositionEngine } from '@psy-foundation/music'
 import { createIdentityA } from '@psy-foundation/music'
 import { type NextRequest, NextResponse } from 'next/server'
@@ -27,6 +30,12 @@ const VALID_STEMS: Set<string> = new Set(['drum', 'bass', 'music'])
 const VALID_FORMATS: Set<string> = new Set(['wav', 'aiff', 'flac'])
 
 export async function GET(req: NextRequest) {
+  // PLAN_V3 4.3 — rate limit BEFORE any work, same policy as every compute
+  // route: strangers are bucketed (429 + Retry-After when empty); key holders
+  // (PSY_API_KEY + x-api-key) bypass buckets entirely (operator/CI mode).
+  const limited = enforceRateLimit('render', req)
+  if (limited) return limited
+
   const params = validateBarsSeed(req, 8)
   if (!params.ok) return params.response
   const { bars, seed } = params
@@ -103,24 +112,120 @@ export async function GET(req: NextRequest) {
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
 
-  // When a stem is requested, we render with stems=true so the bus outputs are
-  // captured. Otherwise (full mix) we skip the stem allocation entirely.
-  // Phase 0 (truth): single render attempt. The old catch-retry silently
-  // re-rendered the whole song without samples, doubling CPU cost and hiding
-  // the root cause. Failures now return an honest 500.
-  const rendered = await renderOnce(() =>
-    renderFoundationSection(section, {
-      useSamples,
-      bpm: ctx.bpm,
-      config: renderConfig,
-      stems: stem !== null,
-    })
-  )
-  if (!rendered.ok) {
-    console.error('Render failed:', rendered.error.message)
-    return NextResponse.json({ error: `Render failed: ${rendered.error.message}` }, { status: 500 })
+  // PLAN_V3 4.1 — canonical cache key over EVERY render-affecting param.
+  // ?nocache=1 forces a real re-render (verify's determinism claim must prove
+  // re-render determinism, not cache determinism) and skips cache store.
+  const nocache = req.nextUrl.searchParams.get('nocache') === '1'
+  const cacheKey = JSON.stringify({
+    bars,
+    seed,
+    useSamples,
+    stem,
+    format,
+    progression: progression ?? null,
+    bassMode: bassMode ?? null,
+    style: style ?? null,
+    preset: presetName ?? null,
+  })
+
+  // Cache hit (fast path): full-mix renders only — the stem path mutates
+  // buffers in place (idempotent peak normalization), so cached stems stay
+  // correct, but we still only cache full mixes to keep the fast path pure.
+  const cache = getRenderCache()
+  if (stem === null && !nocache) {
+    const cached = cache.get(cacheKey)
+    if (cached) {
+      const wav =
+        format === 'aiff'
+          ? encodeAiff(cached.samplesL, cached.samplesR, cached.sampleRate)
+          : encodeWav(cached.samplesL, cached.samplesR, cached.sampleRate)
+      return new NextResponse(wav, {
+        headers: {
+          'Content-Type': getMimeType(format),
+          'Content-Length': wav.byteLength.toString(),
+          'Cache-Control': 'no-cache',
+          'X-Export-Format': format,
+          'X-Render-Cache': 'hit',
+        },
+      })
+    }
   }
-  const result: RenderResult = rendered.result
+
+  // Render via the shared path: coalesced (concurrent identical requests
+  // share ONE render) + off the event loop when the worker pool is alive.
+  // The coalesced task either produces a render or an honest error response.
+  type RenderOutcome =
+    | { kind: 'render'; result: RenderResult }
+    | { kind: 'error'; response: NextResponse }
+  const coalescer = getRenderCoalescer<RenderOutcome>()
+  let viaWorker = 'inline'
+  const outcome: RenderOutcome = await coalescer.run(cacheKey, async (): Promise<RenderOutcome> => {
+    const pool = getRenderPool()
+    if (pool.isAvailable()) {
+      viaWorker = 'worker'
+      try {
+        const reply = await pool.render({
+          bars,
+          seed,
+          useSamples,
+          bpm: ctx.bpm,
+          wantStems: stem !== null,
+          ctx,
+          config: renderConfig,
+        })
+        // WorkerRenderOk mirrors RenderResult exactly (stems included); the
+        // pool parity test locks byte-identical output vs the in-thread path.
+        return { kind: 'render', result: reply as unknown as RenderResult }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (message.includes('render queue full')) {
+          return {
+            kind: 'error',
+            response: NextResponse.json(
+              { error: 'render queue full — retry shortly' },
+              { status: 503, headers: { 'Retry-After': '5' } }
+            ),
+          }
+        }
+        console.error('Worker render failed, falling back in-thread:', message)
+        viaWorker = 'inline-fallback'
+      }
+    }
+    // In-thread fallback (dev without artifact / degraded pool). Phase 0
+    // (truth): single render attempt, honest 500 on failure.
+    const rendered = await renderOnce(() =>
+      renderFoundationSection(section, {
+        useSamples,
+        bpm: ctx.bpm,
+        config: renderConfig,
+        stems: stem !== null,
+      })
+    )
+    if (!rendered.ok) {
+      return {
+        kind: 'error',
+        response: NextResponse.json(
+          { error: `Render failed: ${rendered.error.message}` },
+          { status: 500 }
+        ),
+      }
+    }
+    return { kind: 'render', result: rendered.result }
+  })
+
+  if (outcome.kind === 'error') {
+    return outcome.response
+  }
+  const result: RenderResult = outcome.result
+
+  // Cache the completed full-mix render (stems/nocache paths skip caching).
+  if (stem === null && !nocache) {
+    cache.set(cacheKey, { ...result, stems: result.stems ?? null })
+  }
+  const renderHeaders: Record<string, string> = {
+    'X-Render-Worker': viaWorker,
+    'X-Render-Cache': 'miss',
+  }
 
   // Stem export path: encode only the requested bus as a stereo WAV.
   if (stem !== null && result.stems) {
@@ -163,6 +268,7 @@ export async function GET(req: NextRequest) {
         'Cache-Control': 'no-cache',
         'X-Stem-Bus': stem,
         'X-Stem-Peak-Normalized': peak > 1e-6 ? 'true' : 'false',
+        ...renderHeaders,
       },
     })
   }
@@ -195,6 +301,7 @@ export async function GET(req: NextRequest) {
       'Content-Length': audioBuffer.byteLength.toString(),
       'Cache-Control': 'no-cache',
       'X-Export-Format': actualFormat,
+      ...renderHeaders,
     },
   })
 }

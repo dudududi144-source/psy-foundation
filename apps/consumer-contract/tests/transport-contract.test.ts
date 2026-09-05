@@ -124,12 +124,12 @@ describe('CONTRACT T9: out-of-order observation rejection', () => {
 // The gaps are now implemented; the tests assert the REAL contract, and the
 // gap doc records the closing commits.
 
+import { binToFreq, spectrum } from '@psy-foundation/analysis'
 import { LocalScheduler } from '@psy-foundation/device-sdk'
 import { getFixture } from '@psy-foundation/fixtures'
 import { PROTOCOL_VERSION } from '@psy-foundation/protocol'
 import type { TransportState } from '@psy-foundation/protocol'
 import { PSYBUS_PROTOCOL_VERSION } from '@psy-foundation/protocol/v2'
-import { binToFreq, spectrum } from '../../../packages/analysis/src/index.ts'
 
 function makeState(beat: number): TransportState {
   return {

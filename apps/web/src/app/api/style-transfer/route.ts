@@ -6,6 +6,7 @@ import {
   renderFoundationSection,
 } from '@/lib/psy4/forensic-bridge'
 import { NeuralStyleTransfer } from '@/lib/psy4/research/neural/latent-decoder'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { CompositionEngine, createIdentityA } from '@psy-foundation/music'
 import { type NextRequest, NextResponse } from 'next/server'
 
@@ -70,6 +71,8 @@ function processChannel(
 }
 
 export async function GET(req: NextRequest) {
+  const limited = enforceRateLimit('style', req)
+  if (limited) return limited
   const params = validateBarsSeed(req, 8)
   if (!params.ok) return params.response
   const { bars, seed } = params

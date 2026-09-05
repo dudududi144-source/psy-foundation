@@ -1,4 +1,5 @@
 import { type LatentVector, NeuralStyleTransfer } from '@/lib/psy4/research/neural/latent-decoder'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -32,6 +33,8 @@ export const maxDuration = 60
 
 // In-memory storage for reference latents (production: use a database)
 const REFERENCE_STORE_MAX = 32
+/** PLAN_V3 4.3: entries expire after 1 hour (bounded TTL, not just bounded size). */
+const REFERENCE_STORE_TTL_MS = 60 * 60 * 1000
 const referenceStore = new Map<string, { latent: LatentVector; name: string; uploadedAt: number }>()
 
 const RIFF = 0x52494646 // "RIFF"
@@ -143,6 +146,8 @@ export function parseWav(buffer: ArrayBuffer): { result?: ParsedWav; error?: str
 }
 
 export async function POST(req: NextRequest) {
+  const limited = enforceRateLimit('upload', req)
+  if (limited) return limited
   try {
     const formData = await req.formData()
     const file = formData.get('audio') as File | null
@@ -239,8 +244,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** Get a stored reference latent by hash (for style-transfer route) */
+/** Get a stored reference latent by hash (for style-transfer route). TTL-aware. */
 export function getReferenceLatent(hash: string): LatentVector | null {
   const ref = referenceStore.get(hash)
-  return ref ? ref.latent : null
+  if (!ref) return null
+  if (Date.now() - ref.uploadedAt > REFERENCE_STORE_TTL_MS) {
+    referenceStore.delete(hash)
+    return null
+  }
+  return ref.latent
 }

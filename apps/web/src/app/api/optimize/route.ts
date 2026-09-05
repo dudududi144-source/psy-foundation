@@ -1,5 +1,6 @@
 import { renderOnce, validateBarsSeed } from '@/lib/api-params'
 import { optimizeRender } from '@/lib/psy4/auto-fixer'
+import { enforceRateLimit } from '@/lib/rate-limit'
 import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -7,6 +8,8 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes — full 8-iteration optimization at bars=8 can take ~90s
 
 export async function GET(req: NextRequest) {
+  const limited = enforceRateLimit('optimize', req)
+  if (limited) return limited
   const params = validateBarsSeed(req, 8)
   if (!params.ok) return params.response
   const { bars, seed } = params
