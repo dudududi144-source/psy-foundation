@@ -13,4 +13,3 @@ export const DEFAULT_SR = 44100
 /** Common alternative sample rates for offline rendering. */
 export const SR_48K = 48000
 export const SR_96K = 96000
-export const SR_192K = 192000

@@ -4171,3 +4171,28 @@ Work Log:
 Stage Summary:
 - The tsconfig strictness finding — the last ❌OPEN item in the follow-up audit — is RESOLVED, and the HIGH dead-flag voices item is RESOLVED. Every internal finding from the 2026-09-04 forensic audit is now closed or honestly documented as an external dependency (family adoption) / reserved feature (stereo lead) / LOW residual (dead exports).
 - What remains for a future session: family adoption (their move), stereo lead path (intentional re-baseline project), dead-export audit (LOW).
+
+---
+Task ID: 13 (Dead-export audit — AUDIT_FOLLOWUP §4 item 3, the last internal LOW finding)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- User resumed ("תמשיך דחוף לריפו…", full architect authority). Push was already fully synced (verified: main edd1e5f local==remote, 35/35 tags, archive branches present). Next value step from the repo's own guidance: the dead-export audit queued as §4 item 3 of AUDIT_FOLLOWUP_2026-09-05.md.
+
+Work Log:
+- Push state re-verified first (git ls-remote: main SHA equal both sides, tags 35/35 after dedup, all rebuild branches on remote) — nothing was unpushed; this task is new work, not a retry.
+- Built scripts/audit-exports.mjs (dependency-free, permanent tool): parses every export form (named/type/star/star-as/decl), resolves re-export chains and package-specifier imports, computes each package's PUBLIC surface (reachable from index.ts — same BFS for the apps/web barrel), then classifies every exported symbol: PUBLIC (in-repo consumers / awaiting external), INTERNAL-USED, DEAD (zero references outside the declaring file, token-set based — conservative: comments under-report death, never over-report it).
+- First pass (packages only): 10 packages, 697 public symbols, 0–9 dead per package — 9 dead, ALL in packages/music (recipe types + comparePCM). Extended with --include-apps: labs +12, apps/web +30 → 51 total.
+- Module-liveness deep-dive before touching anything: api-params/constants/multi-export/design-system/channel-presets/rate-limit/render-* are ALIVE modules with dead exports inside; hooks/use-mobile.ts is an orphan file; research/neural is a closed island (only latent-decoder.ts is alive via /api/style-transfer + roast-fix test).
+- Surgery, 49 first-party dead exports:
+  - packages/music (9): IterationResult/AudioQualityReport/LeadRecipe/BassLayerRecipe + DEFAULT_{BASS,KICK,LEAD}_RECIPE + BuildHarmonicPlanOptions un-exported (all load-bearing in-file: function signatures, default params); comparePCM + its only consumer computeSimpleSpectrum DELETED (never referenced anywhere).
+  - apps/web (28 first-party): MAX_BARS/MAX_VARIATIONS/MAX_SEED/BucketSpec/BucketName/clientIp/CacheOptions/PoolJob/PoolOptions/StreamWavOptions/ParsedWav/BusConfig/RenderGeometry/DeviceDesignPreset un-exported; ValidatedParams/SR_192K/DEVICE_PRESETS/getChannelFX deleted; multi-export.ts: encodeWavFmt (a SECOND WAV encoder diverging from the md5-locked canonical encodeWav — the exact C2 pattern), encodeAudio, ExportOptions, getFileExtension deleted; unused ChannelFX value import fixed to type-only. hooks/use-mobile.ts deleted (orphan scaffold).
+  - labs (12): barrel-only metric/result types un-exported in benchmark/differential/reference/sync/transport-runtime labs.
+  - POLICY: the 2 remaining findings (toast.tsx ToastAction, use-toast.ts reducer) are vendored shadcn/ui surface — untouched by policy, documented in the report and README.
+- Dormant DDSP branch (found by tsc, not the audit — psy-voices.ts imported ddsp-harmonic via a type-only import): setDDSP had ZERO callers → the render branch (DDSP > wavetable > BLSaw priority) was unreachable. Deleted field+setter+branch; ddsp-harmonic.ts re-archived. Rationale: the charter's wire-or-delete rule; a branch that tsc proves compiles but nothing triggers is exactly the "accepted but unread" lie pattern.
+- Neural/ONNX island (onnx-inference.ts, ddsp-noise.ts, ddsp-harmonic.ts, training/) archived to archive/neural-onnx-research/ with an honest post-mortem: what each file was, why it died (no consumers, no .onnx models, onnxruntime not even a dependency), what shipped instead (latent-decoder = honest spectral DSP, blend=0 bit-identical no-op), and explicit revival conditions. biome ignore gained archive/** (frozen evidence is not live code — matches the VST archive precedent).
+- Five Gates after all changes: bun test 957/0/0skip (109.4s — count unchanged, no test touched), tsc 0 across 17 packages, biome 0 (257 files, 4 auto-format fixes), verify FULL 28/28 (138.3s) with BYTE-IDENTICAL baselines: 8-bar md5 f2f81ed6…, 88-bar streaming md5 88ecc4b8…, critic score 0.7141728947862114 bit-identical — the dead code provably fed zero bits into any render.
+- Docs: AUDIT_FOLLOWUP §2 dead-export row ⚠️PARTIAL → ✅RESOLVED with evidence; §3 Web UI note + overall-gap line updated (strictness AND dead exports closed); §4 item 3 struck through as Done with re-run instructions (--strict exits 1 on regressions); §5 reproducibility gained the audit command. README journey table gained Task 13 row (and the stale "this commit" markers on the 4.2 row corrected to 654478e) + audit tool added to Tests line.
+
+Stage Summary:
+- The last internal LOW finding from the 2026-09-04 forensic audit is CLOSED. Every export in the repo is now either public v2.0.0 surface, in-repo-consumed, or one of 2 documented vendored shadcn symbols. The only remaining scorecard gap is family adoption (external by mandate). The dead-export check is now a permanent repo tool (audit-exports.mjs) usable with --strict as a regression gate.

@@ -19,7 +19,7 @@ import { Transport } from '@psy-foundation/transport'
 import type { TransportObservation } from '@psy-foundation/transport'
 
 /** A deterministic input stream for differential testing. */
-export interface DifferentialFixture {
+interface DifferentialFixture {
   id: string
   description: string
   /** Initial BPM for the transport. */
@@ -39,7 +39,7 @@ export interface DifferentialFixture {
 }
 
 /** The result of running a fixture through foundation Transport. */
-export interface DifferentialResult {
+interface DifferentialResult {
   fixtureId: string
   finalBpm: number
   finalBeat: number

@@ -28,7 +28,7 @@ import { TransportClock } from '@psy-foundation/transport'
 
 // ── Timing benchmarks ──
 
-export interface TimingMetrics {
+interface TimingMetrics {
   fixtureId: string
   meanPhaseErrorMs: number
   medianPhaseErrorMs: number
@@ -104,7 +104,7 @@ export function benchmarkTiming(fixtureId: string): TimingMetrics {
 
 // ── Runtime benchmarks ──
 
-export interface RuntimeMetrics {
+interface RuntimeMetrics {
   transportProcessNs: number
   schedulerProcessNs: number
   analysisFrameNs: number
@@ -200,7 +200,7 @@ export function benchmarkRuntime(): RuntimeMetrics {
 
 // ── Music benchmarks ──
 
-export interface MusicMetrics {
+interface MusicMetrics {
   motifDiversity: number
   variationCount: number
   harmonicConflicts: number
@@ -265,7 +265,7 @@ export function benchmarkMusic(): MusicMetrics {
 
 // ── Learning benchmarks ──
 
-export interface LearningMetrics {
+interface LearningMetrics {
   totalExperiences: number
   averageReward: number
   regret: number
@@ -344,7 +344,7 @@ export function benchmarkLearning(): LearningMetrics {
 
 // ── Full report ──
 
-export interface FullBenchmarkReport {
+interface FullBenchmarkReport {
   timing: TimingMetrics[]
   runtime: RuntimeMetrics
   music: MusicMetrics

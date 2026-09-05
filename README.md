@@ -158,7 +158,10 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 | **Z.ai Phase 3** | **Foundation for the family: v2.0.0, release ESM bundle, PSYBUS v2, device conformance, transport GAP closure** | `a579001`, tag `foundation-v2.0.0` |
 | **Z.ai Phase 4** | **Product: worker pool + render cache + coalescing, rate limiting + API-key mode, realtime tool-grade UI, session persistence** | `bc7abc2`, `c830c14` |
 | **Z.ai Phase 5** | **VST honestly archived to `archive/vst-prototype/` (decision B) — PLAN_V3 all phases complete** | `f44b323` |
-| **Z.ai 4.2 follow-up** | **Streaming WAV header-first (TTFB ≪ 500 ms verify-locked), byte-identical chunked PCM, shared render geometry** | this commit |
+| **Z.ai 4.2 follow-up** | **Streaming WAV header-first (TTFB ≪ 500 ms verify-locked), byte-identical chunked PCM, shared render geometry** | `654478e` |
+| **Z.ai audit follow-up** | **C1–C10 re-verified on fresh evidence: 3.5 → 7.5** | `6d4e1c9` |
+| **Z.ai Task 12** | **Strict mode repo-wide (`noUncheckedIndexedAccess`), voice dead-flags closed, byte-identical render proof** | `edd1e5f` |
+| **Z.ai Task 13** | **Dead-export audit: 49 first-party dead exports removed, dormant DDSP branch deleted, neural/ONNX island archived — md5 baselines identical** | this commit |
 
 ## Tech Stack
 
@@ -167,6 +170,6 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 - **Web:** Next.js 16 (App Router)
 - **Audio:** Web Audio API, AudioWorklet, ZDF SVF
 - **VST:** archived prototype (`archive/vst-prototype/`) — honest post-mortem inside
-- **Tests:** `bun test` (957) + `scripts/verify.mjs` (28 live claims)
+- **Tests:** `bun test` (957) + `scripts/verify.mjs` (28 live claims) + `scripts/audit-exports.mjs` (dead-export audit: 2 remaining = vendored shadcn, by policy)
 - **Linter:** Biome 1.9.4
 - **License:** UNLICENSED (private; family adoption under separate agreement — see `docs/FAMILY_ADOPTION_OFFER.md`)

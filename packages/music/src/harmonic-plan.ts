@@ -73,7 +73,7 @@ export interface HarmonicPlan {
   scaleName: string
 }
 
-export interface BuildHarmonicPlanOptions {
+interface BuildHarmonicPlanOptions {
   bars: number
   /** Absolute bar index where the phrase starts within the section. */
   startBar: number

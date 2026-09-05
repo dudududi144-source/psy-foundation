@@ -19,7 +19,8 @@ import type { ComposedSection } from '../composition-engine.ts'
 import { type AudioCritique, critiqueAudio } from './audio-critic.ts'
 import { DEFAULT_RENDER_CONFIG, type RenderConfig, renderSection } from './audio-renderer.ts'
 
-export interface IterationResult {
+/** One listen→diagnose→fix step. Internal — the loop returns the report, callers read fields. */
+interface IterationResult {
   iteration: number
   pcm: Float32Array
   critique: AudioCritique
@@ -27,7 +28,7 @@ export interface IterationResult {
   correctionsApplied: string[]
 }
 
-export interface AudioQualityReport {
+interface AudioQualityReport {
   iterations: IterationResult[]
   finalScore: number
   initialScore: number
@@ -258,56 +259,4 @@ function applyCorrections(
   }
 
   return { config: newConfig, corrections }
-}
-
-/**
- * Compare two PCM buffers and return a diff summary.
- */
-export function comparePCM(
-  a: Float32Array,
-  b: Float32Array
-): {
-  rmsDifference: number
-  spectralDifference: number
-  energyDifference: number
-} {
-  const minLen = Math.min(a.length, b.length)
-  let rmsDiff = 0
-  let energyDiff = 0
-  for (let i = 0; i < minLen; i++) {
-    const diff = (a[i] ?? 0) - (b[i] ?? 0)
-    rmsDiff += diff * diff
-    energyDiff += Math.abs(Math.abs(a[i] ?? 0) - Math.abs(b[i] ?? 0))
-  }
-  rmsDiff = Math.sqrt(rmsDiff / minLen)
-  energyDiff /= minLen
-
-  // Spectral difference (simplified).
-  const fftSize = 256
-  const specA = computeSimpleSpectrum(a.slice(0, Math.min(a.length, fftSize)), 64)
-  const specB = computeSimpleSpectrum(b.slice(0, Math.min(b.length, fftSize)), 64)
-  let specDiff = 0
-  for (let i = 0; i < specA.length; i++) {
-    specDiff += Math.abs((specA[i] ?? 0) - (specB[i] ?? 0))
-  }
-  specDiff /= specA.length
-
-  return { rmsDifference: rmsDiff, spectralDifference: specDiff, energyDifference: energyDiff }
-}
-
-function computeSimpleSpectrum(frame: Float32Array, numBins: number): number[] {
-  const N = frame.length
-  const spectrum = new Array(numBins).fill(0)
-  for (let k = 0; k < numBins; k++) {
-    let real = 0
-    let imag = 0
-    const freq = k / N
-    for (let n = 0; n < N; n++) {
-      const angle = -2 * Math.PI * freq * n
-      real += (frame[n] ?? 0) * Math.cos(angle)
-      imag += (frame[n] ?? 0) * Math.sin(angle)
-    }
-    spectrum[k] = Math.sqrt(real * real + imag * imag) / N
-  }
-  return spectrum
 }

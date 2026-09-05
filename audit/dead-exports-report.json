@@ -1,0 +1,181 @@
+{
+  "generatedAt": "2026-09-05T02:50:52.866Z",
+  "packages": {
+    "analysis": {
+      "public": {
+        "usedInRepo": 43,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 0,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "apps/benchmark-lab": {
+      "public": {
+        "usedInRepo": 0,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 6,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "apps/differential-lab": {
+      "public": {
+        "usedInRepo": 0,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 3,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "apps/reference-lab": {
+      "public": {
+        "usedInRepo": 0,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 3,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "apps/sync-lab": {
+      "public": {
+        "usedInRepo": 0,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 3,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "apps/transport-runtime-lab": {
+      "public": {
+        "usedInRepo": 0,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 2,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "apps/web": {
+      "public": {
+        "usedInRepo": 129,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 80,
+      "dead": [
+        {
+          "sym": "ToastAction",
+          "file": "apps/web/src/components/ui/toast.tsx"
+        },
+        {
+          "sym": "reducer",
+          "file": "apps/web/src/hooks/use-toast.ts"
+        }
+      ],
+      "publicNoConsumer": []
+    },
+    "device-sdk": {
+      "public": {
+        "usedInRepo": 17,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 12,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "dsp": {
+      "public": {
+        "usedInRepo": 45,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 0,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "fixtures": {
+      "public": {
+        "usedInRepo": 26,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 0,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "learning": {
+      "public": {
+        "usedInRepo": 24,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 0,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "material": {
+      "public": {
+        "usedInRepo": 34,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 1,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "music": {
+      "public": {
+        "usedInRepo": 385,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 17,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "protocol": {
+      "public": {
+        "usedInRepo": 67,
+        "awaitingExternalConsumer": 22
+      },
+      "internalUsed": 0,
+      "dead": [],
+      "publicNoConsumer": [
+        "V2TypeWitness (packages/protocol/src/v2/deprecations.ts)",
+        "LegacyName (packages/protocol/src/v2/deprecations.ts)",
+        "V2Name (packages/protocol/src/v2/deprecations.ts)",
+        "LegacyModuleName (packages/protocol/src/v2/deprecations.ts)",
+        "DeprecationEntry (packages/protocol/src/v2/deprecations.ts)",
+        "legacyModuleOf (packages/protocol/src/v2/deprecations.ts)",
+        "NOT_DEPRECATED_NOTE (packages/protocol/src/v2/deprecations.ts)",
+        "PsybusErrorCode (packages/protocol/src/v2/envelope.ts)",
+        "PsybusError (packages/protocol/src/v2/envelope.ts)",
+        "MAX_JSON_DEPTH (packages/protocol/src/v2/envelope.ts)",
+        "EnvelopeInput (packages/protocol/src/v2/envelope.ts)",
+        "DecodeOptions (packages/protocol/src/v2/envelope.ts)",
+        "Rev (packages/protocol/src/v2/types.ts)",
+        "SceneId (packages/protocol/src/v2/types.ts)",
+        "ParamId (packages/protocol/src/v2/types.ts)",
+        "ChokeGroupId (packages/protocol/src/v2/types.ts)",
+        "MusicalKey (packages/protocol/src/v2/types.ts)",
+        "SampleLicense (packages/protocol/src/v2/types.ts)",
+        "TransportSeekPayload (packages/protocol/src/v2/types.ts)",
+        "TransportStartPayload (packages/protocol/src/v2/types.ts)",
+        "TransportStopPayload (packages/protocol/src/v2/types.ts)",
+        "ChokePayload (packages/protocol/src/v2/types.ts)"
+      ]
+    },
+    "scheduler": {
+      "public": {
+        "usedInRepo": 11,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 0,
+      "dead": [],
+      "publicNoConsumer": []
+    },
+    "transport": {
+      "public": {
+        "usedInRepo": 23,
+        "awaitingExternalConsumer": 0
+      },
+      "internalUsed": 0,
+      "dead": [],
+      "publicNoConsumer": []
+    }
+  }
+}

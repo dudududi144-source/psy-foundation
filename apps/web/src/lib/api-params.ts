@@ -10,15 +10,10 @@ import { type NextRequest, NextResponse } from 'next/server'
  */
 
 /** Hard render ceiling: 88 bars ≈ 145s of audio ≈ ~25MB WAV. */
-export const MAX_BARS = 88
-export const MAX_VARIATIONS = 24
+const MAX_BARS = 88
+const MAX_VARIATIONS = 24
 /** seeds are uint32-ish; keep 31 bits so all multiplies stay in float-safe range. */
-export const MAX_SEED = 2147483647
-
-export interface ValidatedParams {
-  bars: number
-  seed: number
-}
+const MAX_SEED = 2147483647
 
 function badRequest(errors: string[]): NextResponse {
   return NextResponse.json({ error: 'Invalid query parameters', details: errors }, { status: 400 })

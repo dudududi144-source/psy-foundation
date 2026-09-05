@@ -9,7 +9,7 @@ import { fastTanh } from './dsp'
 
 // ─── Bus Processor (compression + HP + saturation per bus) ─────────────────
 
-export interface BusConfig {
+interface BusConfig {
   hpFreq: number
   compThr: number
   compRatio: number

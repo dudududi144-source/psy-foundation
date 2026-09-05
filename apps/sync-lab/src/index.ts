@@ -16,7 +16,7 @@ import { getFixture } from '@psy-foundation/fixtures'
 import { TransportClock } from '@psy-foundation/transport'
 import type { BeatObservation } from '@psy-foundation/transport'
 
-export interface SimulatedDevice {
+interface SimulatedDevice {
   id: string
   clock: TransportClock
   /** Network offset: this device receives beats N seconds late. */
@@ -29,7 +29,7 @@ export interface SimulatedDevice {
   seed: number
 }
 
-export interface SyncReport {
+interface SyncReport {
   fixtureId: string
   bpm: number
   devices: Array<{

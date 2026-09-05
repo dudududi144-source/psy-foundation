@@ -27,7 +27,7 @@ export interface KickRecipe {
   gain: number
 }
 
-export const DEFAULT_KICK_RECIPE: KickRecipe = {
+const DEFAULT_KICK_RECIPE: KickRecipe = {
   pitchStart: 150,
   pitchEnd: 50,
   pitchDropTime: 0.03,

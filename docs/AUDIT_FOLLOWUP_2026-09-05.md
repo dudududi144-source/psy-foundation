@@ -39,7 +39,7 @@ Every verdict below was re-derived in this session, not copied from worklog clai
 | Vanity benchmark inventing named-artist targets (MED) | ✅ RESOLVED | Deleted (9a00067). |
 | Orphaned `data/*.json` with false "Used by" (MED) | ✅ RESOLVED | Deleted. |
 | tsconfig strictness downgrades: `noUncheckedIndexedAccess:false`, `noImplicitAny:false` (MED) | ✅ RESOLVED (Task 12) | All downgrades **deleted**: `noUncheckedIndexedAccess: true` now inherited from `tsconfig.base.json` in every package; `noImplicitAny` no longer disabled in apps/web. Fallout fixed (87 dsp + 40 music + 112 web errors) with loop-invariant assertions and `?? 0` read-before-write accumulators — **proven semantically equivalent**: all locked md5 baselines identical (`f2f81ed6…` 8-bar, `88ecc4b8…` 88-bar), critic score bit-identical (0.7141728947862114). |
-| ~40-55% dead exports (LOW) | ⚠️ PARTIAL | v2.0.0 release bundle restructured the public surface; a full dead-export audit was not performed. |
+| ~40-55% dead exports (LOW) | ✅ RESOLVED (Task 13) | Repo-wide audit by `scripts/audit-exports.mjs` (export-parser + token-reference index, conservative). 49 first-party dead exports removed (8 un-exported types/consts in music, 41 in apps/web+labs: un-exports, unused validators, a duplicate WAV encoder, orphan hooks); the dormant DDSP render branch (`setDDSP`, zero callers) deleted; the never-wired ONNX/RAVE/DDSP island archived to `archive/neural-onnx-research/` with revival conditions. The 2 remaining findings are vendored shadcn/ui surface (`ToastAction`, `useToast.reducer`) — untouched by policy. **Equivalence proven:** all locked md5 baselines identical (`f2f81ed6…`, `88ecc4b8…`), critic score bit-identical, verify 28/28. |
 
 ---
 
@@ -53,12 +53,12 @@ Same dimensions as the baseline audit.
 | packages/ foundation | 4.5/10 | 9/10 | DSP lives at home; real meter; stable ladder; v2.0.0 release channel; strict mode (`noUncheckedIndexedAccess`) enforced repo-wide. |
 | Real-time engine | 2/10 | 7/10 | Build artifact of the canonical chain (parity by construction); SR from runtime; sketchpad honestly labeled as the lighter arrangement. |
 | VST | 2/10 | — archived | Honest archive with revival conditions (decision B). Scored no longer applicable. |
-| Web UI / product | 3/10 | 7/10 | Tool-grade sketchpad (4.5), honesty labeling (4.4), session persistence (4.6); residual dead-code sweep not audited this pass. |
+| Web UI / product | 3/10 | 7/10 | Tool-grade sketchpad (4.5), honesty labeling (4.4), session persistence (4.6); dead-code sweep completed (Task 13: 49 exports + dormant branch + research island). |
 | API surface | 3/10 | 8/10 | 6/6 endpoints live at runtime; input guards; 429 + Retry-After; off-loop pool + cache + coalescing; streaming TTFB ~24 ms. |
 | Test suite honesty | 5/10 | 8/10 | 957 tests, 0 fail, 0 skip; grep theater rewritten; verify.mjs 28 runtime claims incl. determinism, LUFS/TP ffmpeg parity, streaming, rate limiting. |
 | Docs / claims honesty | 3/10 | 8.5/10 | Decision records D1–D8; honesty labels in UI; README regenerated from verify output; honest VST post-mortem; this follow-up audit. |
 | Family integration | 0/10 | 5/10 | Release channel + adoption offer + PSYBUS v2 + conformance suite shipped; **0/16 runtime consumers remains** (external dependency, repos read-only by mandate). |
-| **Overall commercial readiness** | **3.5/10** | **7.5/10** | Real core, real product, real platform. Remaining gap: one external dependency (family adoption) + one internal hardening sweep (strictness). |
+| **Overall commercial readiness** | **3.5/10** | **7.5/10** | Real core, real product, real platform. Remaining gap: one external dependency (family adoption). Internal items (strictness, dead exports) are closed — see §4. |
 
 ---
 
@@ -66,7 +66,7 @@ Same dimensions as the baseline audit.
 
 1. **Family adoption (external).** The foundation side is ready and waiting: v2.0.0 bundle, PSYBUS v2, device conformance suite, adoption offer. The 16 repos are read-only for this engineer by mandate; the move is theirs.
 2. **Stereo lead path (internal feature).** `LeadRecipe.stereoWidth` is declared but not wired; wiring it means L/R render buffers and an intentional, documented md5 re-baseline.
-3. **Dead-export audit (LOW).** One grep-driven pass per package against the v2.0.0 public surface.
+3. ~~Dead-export audit (LOW).~~ **Done (Task 13).** Repo-wide pass by `scripts/audit-exports.mjs`; 49 first-party dead exports removed, dormant DDSP branch deleted, ONNX/RAVE/DDSP research island archived (`archive/neural-onnx-research/`). md5 baselines unchanged. Re-run anytime: `node scripts/audit-exports.mjs --include-apps` (exit 1 with `--strict` when new dead exports appear).
 
 ---
 
@@ -79,12 +79,13 @@ rg 'const SR = 44100'            # 0 hits
 rg 'Math\.random' packages/music/src/audio   # fix comments only
 
 # Runtime truth (139 s)
-node scripts/verify.mjs          # 28 pass / 0 fail — md5 baselines identical post-Task-12
+node scripts/verify.mjs          # 28 pass / 0 fail — md5 baselines identical post-Task-12 AND post-Task-13
+node scripts/audit-exports.mjs --include-apps   # 2 remaining dead exports = vendored shadcn, by policy
 
-# Five gates at audit time (re-confirmed after Task 12 strictness sweep)
+# Five gates at audit time (re-confirmed after Task 12 strictness sweep and Task 13 dead-export removal)
 bun test                         # 957 pass / 0 fail / 0 skip
 tsc --noEmit (all packages)      # 0 errors — now under noUncheckedIndexedAccess everywhere
 biome check                      # 0 problems (257 files)
 ```
 
-*Signed: Z.ai — Lead Foundation Engineer (continuation session). Worklog: Task 11. Every verdict above was re-derived in this session from current code and runtime runs; nothing was copied from prior claims.*
+*Signed: Z.ai — Lead Foundation Engineer (continuation session). Worklog: Tasks 11–13. Every verdict above was re-derived in this session from current code and runtime runs; nothing was copied from prior claims.*

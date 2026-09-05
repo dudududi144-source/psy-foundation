@@ -103,7 +103,7 @@ export async function* encodeWavChunks(
   yield* encodeWavPcmChunks(samplesL, samplesR, framesPerChunk)
 }
 
-export interface StreamWavOptions {
+interface StreamWavOptions {
   /** Exact frame count — drives the declared Content-Length. */
   totalFrames: number
   sampleRate: number

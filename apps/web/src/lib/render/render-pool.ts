@@ -45,7 +45,7 @@ function resolveArtifact(): string | null {
  * here so the pool has NO module dependency on the worker source: importing
  * it made Turbopack bundle the whole render pipeline (and its dynamic
  * imports) into the route graph. Keep in sync with the worker entry. */
-export interface PoolJob {
+interface PoolJob {
   id: number
   bars: number
   seed: number
@@ -80,7 +80,7 @@ interface WorkerRenderErr {
 
 type WorkerRenderReply = WorkerRenderOk | WorkerRenderErr
 
-export interface PoolOptions {
+interface PoolOptions {
   size?: number
   maxQueue?: number
 }

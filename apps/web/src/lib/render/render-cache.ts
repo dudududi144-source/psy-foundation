@@ -27,7 +27,7 @@ export interface CachedRender {
   stems: null | Record<string, Float32Array>
 }
 
-export interface CacheOptions {
+interface CacheOptions {
   maxEntries?: number
   /** Total Float32 sample bytes across cached results. Default 64 MiB. */
   maxTotalBytes?: number

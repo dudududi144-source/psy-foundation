@@ -17,7 +17,7 @@
  */
 import { type NextRequest, NextResponse } from 'next/server'
 
-export interface BucketSpec {
+interface BucketSpec {
   /** Bucket capacity (burst size). */
   capacity: number
   /** Refill rate in tokens per second. */
@@ -35,7 +35,7 @@ export const BUCKETS = {
   style: { capacity: 4, refillPerSec: 0.5 } as BucketSpec,
 } as const
 
-export type BucketName = keyof typeof BUCKETS
+type BucketName = keyof typeof BUCKETS
 
 const MAX_IPS = 10_000
 const IDLE_TTL_MS = 10 * 60 * 1000
@@ -74,7 +74,7 @@ function sweepIfDue(now: number): void {
   }
 }
 
-export function clientIp(req: NextRequest): string {
+function clientIp(req: NextRequest): string {
   const fwd = req.headers.get('x-forwarded-for')
   if (fwd) {
     const first = fwd.split(',')[0]?.trim()

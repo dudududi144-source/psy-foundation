@@ -28,7 +28,7 @@ export type SoundFamily =
   | 'ATMOSPHERIC'
   | 'PLUCK'
 
-export interface LeadRecipe {
+interface LeadRecipe {
   /** Sound family — drives the overall architecture. */
   family: SoundFamily
   /** Oscillator type for the primary layer. */
@@ -64,7 +64,7 @@ export interface LeadRecipe {
   gain: number
 }
 
-export const DEFAULT_LEAD_RECIPE: LeadRecipe = {
+const DEFAULT_LEAD_RECIPE: LeadRecipe = {
   family: 'PSY_ACID',
   oscType: 'saw',
   layerCount: 2,

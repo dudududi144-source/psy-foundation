@@ -16,7 +16,7 @@ import { BiquadFilter, MoogLadder } from '@psy-foundation/dsp'
 import { FmOscillator, PolyBlepOsc } from '@psy-foundation/dsp'
 import { tanhSaturation } from '@psy-foundation/dsp'
 
-export interface BassLayerRecipe {
+interface BassLayerRecipe {
   /** Oscillator type. */
   type: 'sine' | 'saw' | 'square' | 'triangle' | 'fm'
   /** Mix level 0..1. */
@@ -54,7 +54,7 @@ export interface BassRecipe {
   gain: number
 }
 
-export const DEFAULT_BASS_RECIPE: BassRecipe = {
+const DEFAULT_BASS_RECIPE: BassRecipe = {
   sub: {
     type: 'sine',
     mix: 0.6,

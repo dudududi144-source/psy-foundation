@@ -42,7 +42,7 @@ const WAVE = 0x57415645 // "WAVE"
 const FMT = 0x666d7420 // "fmt "
 const DATA = 0x64617461 // "data"
 
-export interface ParsedWav {
+interface ParsedWav {
   samples: Float32Array
   sampleRate: number
   channels: number

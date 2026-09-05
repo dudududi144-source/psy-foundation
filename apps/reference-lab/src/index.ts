@@ -14,7 +14,7 @@ import type { AnalyzerFrame } from '@psy-foundation/analysis'
 import { corpus, getFixture } from '@psy-foundation/fixtures'
 import type { Fixture } from '@psy-foundation/fixtures'
 
-export interface AnalysisReport {
+interface AnalysisReport {
   fixtureId: string
   anomaly: string
   durationSec: number
@@ -65,7 +65,7 @@ export function analyzeFixture(fixtureId: string): AnalysisReport {
 /**
  * Analyze a raw audio signal. Returns a full report.
  */
-export function analyzeSignal(
+function analyzeSignal(
   signal: Float32Array,
   sampleRate: number,
   fixtureId = 'custom',

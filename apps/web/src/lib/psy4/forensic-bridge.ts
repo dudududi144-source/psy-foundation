@@ -251,7 +251,7 @@ export interface RenderResult {
  * it, so the streamed header can never drift from the render's own math.
  * (Defense in depth: the wav-stream parity test locks streamed bytes to
  * `encodeWav`, and the route aborts loudly on any length mismatch.) */
-export interface RenderGeometry {
+interface RenderGeometry {
   samplesPerStep: number
   samplesPerBar: number
   /** samplesPerBar × bar count — the render's exact frame count. */

@@ -86,3 +86,6 @@ tool-results/
 dev.log
 dev.out.log
 server.log
+
+# verify.mjs runtime artifacts
+apps/web/.verify-server-pid

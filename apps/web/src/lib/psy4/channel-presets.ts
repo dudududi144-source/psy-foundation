@@ -23,7 +23,6 @@
  * panned to give the high-end groove width without smearing the center.
  */
 
-import { ChannelFX } from './channel-fx'
 import type { ChannelFXConfig } from './channel-fx'
 
 export type VoiceType =
@@ -169,14 +168,4 @@ export const CHANNEL_PRESETS: Record<VoiceType, ChannelFXConfig> = {
     pan: -0.25,
     width: 0.4,
   },
-}
-
-/**
- * Build a ready-to-use ChannelFX instance for a given voice type.
- *
- * The returned ChannelFX is freshly constructed — independent state, safe to
- * mutate via `reset()` without affecting any other channel.
- */
-export function getChannelFX(type: VoiceType, sampleRate?: number): ChannelFX {
-  return new ChannelFX(CHANNEL_PRESETS[type], sampleRate)
 }

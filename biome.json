@@ -18,7 +18,8 @@
       "**/components.json",
       "**/tsconfig.json",
       "**/tsconfig.base.json",
-      "**/research/**"
+      "**/research/**",
+      "archive/**"
     ]
   },
   "formatter": {

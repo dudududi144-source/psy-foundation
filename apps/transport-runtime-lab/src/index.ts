@@ -38,7 +38,7 @@ export class SimulatedAudioContext {
   }
 }
 
-export interface RuntimeProofResult {
+interface RuntimeProofResult {
   testName: string
   passed: boolean
   evidence: string

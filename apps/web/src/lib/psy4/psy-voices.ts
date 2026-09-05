@@ -27,7 +27,6 @@ import { Rng } from './forensic/prng'
 import { GrainCloud } from './granular'
 import type { ModulationMatrix } from './modulation-matrix'
 import type { WaveguideString } from './physical/waveguide-string'
-import type { DDSPHarmonic } from './research/neural/ddsp-harmonic'
 import {
   ACID_SPEC,
   BASS_SPEC,
@@ -348,10 +347,9 @@ export class PsyLead {
   // Wavetable morph position 0..1 (default 0.5 = middle of multi-table)
   private wavetablePos = 0.5
 
-  // DDSP Harmonic synth (optional — Phase 3 neural synthesis mode)
-  // When set, replaces the fundamental layer with a differentiable harmonic
-  // additive synthesizer. 60 harmonics, controllable amplitudes.
-  private ddsp: DDSPHarmonic | null = null
+  // DDSP Harmonic synth — REMOVED (Task 13). The field + setter existed but
+  // setDDSP had zero callers: an unreachable render branch. Archived under
+  // archive/neural-onnx-research/ with revival conditions.
 
   // trigger() params — stored in fields and used throughout render()
   // Default to LEAD_SPEC values; trigger() overrides from params argument.
@@ -405,16 +403,10 @@ export class PsyLead {
   }
 
   /**
-   * setDDSP — connect a DDSP harmonic synth (Phase 3 neural mode).
-   * When set, replaces the fundamental layer with a differentiable harmonic
-   * additive synthesizer (60 harmonics). Pass null to restore legacy behavior.
+   * setDDSP — REMOVED (Task 13). Never called anywhere in the repo; the
+   * fundamental-layer branch it controlled was unreachable. See
+   * archive/neural-onnx-research/README.md for revival conditions.
    */
-  setDDSP(synth: DDSPHarmonic | null): void {
-    this.ddsp = synth
-    if (synth) {
-      synth.setPreset('psyLead')
-    }
-  }
 
   trigger(
     freq: number,
@@ -488,15 +480,11 @@ export class PsyLead {
 
     const attackEnv = Math.min(1, this.t / 0.001) // faster attack: 3ms → 1ms = sharper transients
 
-    // ── Layer 1: Fundamental — DDSP (if connected) OR wavetable OR 2 detuned saws ──
-    // Priority: DDSP > Wavetable > BLSaw (legacy)
+    // ── Layer 1: Fundamental — wavetable OR 2 detuned saws ──
+    // (The DDSP branch was removed in Task 13 — setDDSP had no callers, so
+    // the branch was unreachable. Priority was DDSP > Wavetable > BLSaw.)
     let fundSig: number
-    if (this.ddsp) {
-      // DDSP neural synthesis — set freq and process
-      this.ddsp.setFreq(this.freq)
-      this.ddsp.setAmplitude(this.amp)
-      fundSig = this.ddsp.process()
-    } else if (this.wavetable) {
+    if (this.wavetable) {
       const inc = this.freq / SR
       fundSig = this.wavetable.process(inc)
     } else {

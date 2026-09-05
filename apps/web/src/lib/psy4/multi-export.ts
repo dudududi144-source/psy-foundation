@@ -7,57 +7,15 @@
  * - MP3: lossy, small (good for preview/sharing)
  * - AIFF: lossless, Pro Tools compatible
  *
- * This module provides encoders for FLAC and AIFF (MP3 requires a library).
- * WAV encoding is in forensic-bridge.ts (encodeWav function).
+ * This module provides encoders for AIFF (FLAC requires a native encoder
+ * library and throws an honest error — see encodeFlacPlaceholder).
+ * WAV encoding lives in forensic-bridge.ts (encodeWav) — the md5-locked
+ * canonical encoder; a second WAV encoder here would be a divergent copy.
  *
  * Usage:
- *   import { encodeFlac, encodeAiff, encodeWav as encodeWavFmt } from './multi-export'
- *   const flac = encodeFlac(samplesL, samplesR, 44100)
+ *   import { encodeAiff, getMimeType } from './multi-export'
  *   const aiff = encodeAiff(samplesL, samplesR, 44100)
  */
-
-// ── WAV (16-bit PCM, stereo) ──
-
-export function encodeWavFmt(
-  samplesL: Float32Array,
-  samplesR: Float32Array,
-  sr: number
-): ArrayBuffer {
-  const numSamples = Math.min(samplesL.length, samplesR.length)
-  const buffer = new ArrayBuffer(44 + numSamples * 4)
-  const view = new DataView(buffer)
-
-  // RIFF header
-  view.setUint32(0, 0x52494646, false) // "RIFF"
-  view.setUint32(4, 36 + numSamples * 4, true)
-  view.setUint32(8, 0x57415645, false) // "WAVE"
-
-  // fmt chunk
-  view.setUint32(12, 0x666d7420, false) // "fmt "
-  view.setUint32(16, 16, true) // chunk size
-  view.setUint16(20, 1, true) // PCM format
-  view.setUint16(22, 2, true) // stereo
-  view.setUint32(24, sr, true) // sample rate
-  view.setUint32(28, sr * 4, true) // byte rate
-  view.setUint16(32, 4, true) // block align
-  view.setUint16(34, 16, true) // bits per sample
-
-  // data chunk
-  view.setUint32(36, 0x64617461, false) // "data"
-  view.setUint32(40, numSamples * 4, true)
-
-  // Samples (interleaved 16-bit PCM)
-  let offset = 44
-  for (let i = 0; i < numSamples; i++) {
-    const l = Math.max(-1, Math.min(1, samplesL[i]!))
-    const r = Math.max(-1, Math.min(1, samplesR[i]!))
-    view.setInt16(offset, l * 32767, true)
-    view.setInt16(offset + 2, r * 32767, true)
-    offset += 4
-  }
-
-  return buffer
-}
 
 // ── AIFF (Audio Interchange File Format, big-endian) ──
 
@@ -200,32 +158,9 @@ export function encodeFlacPlaceholder(
   throw new FlacNotSupportedError()
 }
 
-// ── Export helper ──
+// ── Export helpers ──
 
 export type ExportFormat = 'wav' | 'aiff' | 'flac'
-
-export interface ExportOptions {
-  format: ExportFormat
-  sampleRate?: number
-}
-
-export function encodeAudio(
-  samplesL: Float32Array,
-  samplesR: Float32Array,
-  sr: number,
-  format: ExportFormat = 'wav'
-): ArrayBuffer {
-  switch (format) {
-    case 'wav':
-      return encodeWavFmt(samplesL, samplesR, sr)
-    case 'aiff':
-      return encodeAiff(samplesL, samplesR, sr)
-    case 'flac':
-      return encodeFlacPlaceholder(samplesL, samplesR, sr)
-    default:
-      return encodeWavFmt(samplesL, samplesR, sr)
-  }
-}
 
 export function getMimeType(format: ExportFormat): string {
   switch (format) {
@@ -237,18 +172,5 @@ export function getMimeType(format: ExportFormat): string {
       return 'audio/flac'
     default:
       return 'audio/wav'
-  }
-}
-
-export function getFileExtension(format: ExportFormat): string {
-  switch (format) {
-    case 'wav':
-      return '.wav'
-    case 'aiff':
-      return '.aiff'
-    case 'flac':
-      return '.flac'
-    default:
-      return '.wav'
   }
 }
