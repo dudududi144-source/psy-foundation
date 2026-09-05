@@ -141,3 +141,16 @@ get the same ladder the moment the owner activates them.
   steps — anthem after the test step, psysampler in the coverage job.
   Lesson refined: a gate that CI does not run is documentation, not a
   gate.
+- **Task 25 — the one-codec law closes from the consumer side
+  (foundation `c5235e8`, anthem `8556e40`, psysampler `8c9538d`).**
+  family-sync-check gained `--only <repo>` (default unchanged: the full
+  7-file matrix in foundation CI), and BOTH consumer repos now check out
+  foundation and verify their own vendored codec against foundation HEAD
+  on every push — until now a vendored-file edit in a consumer stayed
+  green there until the NEXT foundation push. Proven before push: clean
+  sims exit 0 (FAMILY IN SYNC), injected one-line drift fails both with
+  DRIFT + md5 (exit 1), bogus flag exits 2; the sim also caught a real
+  TDZ bug pre-push. Step-level CI verification: "Family sync check"
+  success in anthem and psysampler runs. Fourth workspace wipe in this
+  round too — recovery from GitHub again matched every expected SHA
+  (05d0af8 / a7aa120 / 4a065bd / bbe81c2), zero loss.

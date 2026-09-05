@@ -4422,3 +4422,22 @@ Work Log:
 
 Stage Summary:
 - The family's quality gates are no longer voluntary: coverage floors are enforced on GitHub for both consumer repos, the last suspected blocker was disproven by direct measurement, and the matrix/worklog reflect Tasks 23–24 truthfully. Remaining open items are ALL owner-gated: psyreason onboarding, psy-sampler vs psysampler duplication decision, and (only if ever authorized) psy5's coverage floor.
+
+---
+Task ID: 25 (The one-codec law closes from the consumer side — owner mandate "no new folders, keep working on the defined ones")
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- Continue family work strictly inside the defined folders (psy-foundation, psy-anthem, psysampler). No psyreason, no new repos, psy5 untouched.
+
+Work Log:
+- FOURTH WORKSPACE WIPE: /home/z/psy-work was gone again at round start. Recovery from GitHub matched every expected pushed SHA exactly (foundation 05d0af8, anthem a7aa120, psysampler 4a065bd, psy5 bbe81c2) — zero loss, tokens scrubbed from all .git/configs after clone.
+- GAP: family-sync-check (the drift detector for vendored PSYBUS v2 codecs) ran ONLY in foundation's CI. A vendored-file edit pushed to a consumer stayed green there until the NEXT foundation push — drift could hide for days.
+- FOUNDATION SCRIPT (c5235e8): new `--only <repo>` flag checks one consumer's vendored files against this repo's canonical codec; default behavior unchanged (full 7-file matrix, missing clone = failure). Documented in the header: consumer CI usage = checkout foundation + `--family-root .. --only <repo>`.
+- PROOF BEFORE PUSH: full check FAMILY IN SYNC 7/7 on the live family tree; consumer-layout simulations (exact CI checkout naming: workspace named psy-anthem/psysampler, foundation at family/psy-foundation) exit 0 with 2 files each; INJECTED one-line drift in a vendored file fails BOTH sims (DRIFT + md5 mismatch, exit 1); bogus --only exits 2. The simulation caught a REAL TDZ bug pre-push (--only validation ran before MANIFEST was initialized) — the negative test is what exposes this class of bug.
+- CONSUMER WIRING: anthem ci.yml (8556e40, v0.3.4, CHANGELOG 13.9.5) + psysampler ci.yml (8c9538d) gain checkout-foundation + family-sync-check as their FINAL test-job steps (zero leakage into earlier gates). Step-level GitHub API verification: "Checkout foundation" and "Family sync check (vendored codec vs foundation HEAD)" both success in real runs, alongside Task 24's "Coverage floor" step.
+- DOCS: FAMILY_MATRIX §6 Task 25 entry; README journey row (this commit).
+- BOUNDARY: psy5 untouched (bbe81c2); no new repos; all three authorized repos' CI verified green at step level.
+
+Stage Summary:
+- The one-codec rule is now enforced from BOTH directions: foundation checks all consumers on its pushes, and each consumer checks itself against foundation HEAD on every push of its own. Vendored-codec drift has nowhere left to hide. Remaining open items stay owner-gated: psyreason onboarding, psy-sampler vs psysampler duplication, psy5's coverage floor (only if ever authorized).
