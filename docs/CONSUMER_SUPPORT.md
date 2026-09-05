@@ -107,9 +107,12 @@ First 3 sounds broken:  <what, since when, what changed before it broke>
   `ts` (seconds) × bpm; `track` must be one of the 16 foundation voices;
   sparse note streams master to a lower LUFS than full mixes (quiet is a
   property of your arrangement, not a bug) — true peak safety is enforced
-  by an FIR meter either way. Worked example: psy-anthem's repo runs the
-  full pipeline (generate → map → POST → acceptance-check) in
-  `scripts/e2e-pipeline.ts`.
+  by an FIR meter either way. Worked examples (both proven end-to-end with
+  the same claim pattern): psy-anthem's repo (Task 17-b, 53/53 claims,
+  `scripts/e2e-pipeline.ts`) and psysampler's repo (Task 18, 23/23 claims,
+  `scripts/e2e-pipeline.mjs` — plus a measured density/melody loudness-lever
+  experiment: hat density bought +0.5 LU for +15.5 KB of wire, a sustained
+  lead line bought +1.8 LU for −7 KB; melody is the loudness lever).
 
 ## 6. The honest boundary
 

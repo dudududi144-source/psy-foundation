@@ -175,7 +175,8 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 | **Z.ai Task 14** | **Stereo truth: record correction, `LeadRecipe.stereoWidth` deleted — runtime proof the reference render IS true stereo (width 0.884); baselines identical** | `52f7432` |
 | **Z.ai Task 15** | **Self-review fixes + family support: `acceptance-check.mjs` standalone consumer gate, `docs/CONSUMER_SUPPORT_PSY5.md` rescue guide, STATUS.md rewritten, audit-tool `--json` fix — canonical baseline re-proven live (`f2f81ed6`)** | `ee7383f` |
 | **Z.ai Task 16** | **Family-wide support kit (`docs/CONSUMER_SUPPORT.md`) for incoming agents (psy-anthem next); historical roadmaps bannered as superseded — no stale checkboxes read as open work** | `22afa14` |
-| **Z.ai Task 17** | **The WHAT→HOW wire: `POST /api/render-notes` renders external PSYBUS v2 note streams faithfully through the full sound chain (voices → ChannelFX → bus glue → master chain); FIR true-peak meter + faithful-mode safety pass (the verify gate caught a real +1.3 dBTP ISP overshoot — now −1.4); locked md5 baselines byte-identical** | this commit |
+| **Z.ai Task 17** | **The WHAT→HOW wire: `POST /api/render-notes` renders external PSYBUS v2 note streams faithfully through the full sound chain (voices → ChannelFX → bus glue → master chain); FIR true-peak meter + faithful-mode safety pass (the verify gate caught a real +1.3 dBTP ISP overshoot — now −1.4); locked md5 baselines byte-identical** | `0b1e77c` |
+| **Z.ai Task 18** | **Second family adoption proven: psysampler's repo wired to `POST /api/render-notes` (verbatim v2 shim, layered drum lanes, e2e 23/23 claims incl. HTTP determinism + measured loudness levers); its suite fixed 24→0 failures (392/392) and lint made real (`biome` placeholder → @biomejs/biome, 0 errors)** | this commit |
 
 ## Tech Stack
 
