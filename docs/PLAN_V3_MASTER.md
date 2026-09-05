@@ -99,6 +99,22 @@
 
 **Gate 4:** a user can open the app, play notes properly (with release), load/save a session, and the realtime path uses the same DSP build as the offline render; load test: 20 concurrent renders at bars=88 → no event-loop starvation.
 
+> **4.2 EXECUTED (2026-09-05, follow-up session): streaming WAV shipped
+> header-first.** The original deferral (2026-09-04) held that streaming
+> requires incremental PCM emission, which would reorder the 2-pass master
+> chain (integrated-LUFS feedback → static gain → re-limit) and invalidate
+> every locked md5 + LUFS/TP baseline. That premise stands — and was
+> respected: the DSP is untouched. What shipped instead: the exact WAV size
+> is known before the render (shared `computeRenderGeometry`, one source for
+> both the render and the response), so the 44-byte RIFF header streams
+> immediately (verify-locked TTFB 24 ms, first chunk = 44 B) and
+> bit-identical PCM follows in backpressured 64 KiB chunks once the render
+> lands (`Content-Length` exact → truncation is loud). Cache writes moved
+> into the coalesced task (run once per render, independent of stream
+> consumption). Locked baselines unchanged: 8-bar md5 `f2f81ed6…`, 88-bar
+> md5 `88ecc4b8…` across independent renders, LUFS/TP identical. verify
+> 28/28; bun test 957/0/0.
+
 ---
 
 ## Phase 5 — "VST: fix or archive" (decision gate first)

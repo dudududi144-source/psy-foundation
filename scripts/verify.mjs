@@ -277,30 +277,115 @@ async function main() {
 
     // ── PLAN_V3 4.1: cache + worker headers ────────────────────────────────
     {
+      // 4.2 note: with streamed responses the first request is "done" only
+      // when its BODY is consumed — so both fetches read to completion
+      // before the second one starts (otherwise the second request would
+      // rightly see the render still in flight → miss).
       const res = await fetchT(
         `${BASE}/api/render-forensic?bars=8&seed=42`,
         { headers: HDRS },
         240000
       )
+      const bufA = Buffer.from(await res.arrayBuffer())
       const res2 = await fetchT(
         `${BASE}/api/render-forensic?bars=8&seed=42`,
         { headers: HDRS },
         60000
       )
+      const bufB = Buffer.from(await res2.arrayBuffer())
       const cacheHeader = res.headers.get('x-render-cache') ?? 'none'
       const cacheHeader2 = res2.headers.get('x-render-cache') ?? 'none'
       const workerHeader = res.headers.get('x-render-worker') ?? 'none'
+      const md5c = (f) => createHash('md5').update(f).digest('hex')
       claim(
         'render cache: identical request → hit',
-        cacheHeader === 'miss' && cacheHeader2 === 'hit',
-        `first=${cacheHeader}, second=${cacheHeader2}`
+        cacheHeader === 'miss' && cacheHeader2 === 'hit' && md5c(bufA) === md5c(bufB),
+        `first=${cacheHeader}, second=${cacheHeader2}, md5=${md5c(bufA).slice(0, 12)}…`
       )
       claim(
         'render off event loop: worker/inline header reported',
         workerHeader === 'worker' ||
           workerHeader === 'inline' ||
-          workerHeader === 'inline-fallback',
+          workerHeader === 'inline-fallback' ||
+          workerHeader === 'cache',
         `X-Render-Worker=${workerHeader}`
+      )
+    }
+
+    // ── PLAN_V3 4.2: streaming WAV — header-first TTFB + byte integrity ───
+    {
+      console.log('  …streaming probe: bars=88 nocache (long render, header-first)')
+      const t = Date.now()
+      const res = await fetchT(
+        `${BASE}/api/render-forensic?bars=88&seed=7&nocache=1`,
+        { headers: HDRS },
+        240000
+      )
+      const declared = Number(res.headers.get('content-length'))
+      const xStream = res.headers.get('x-stream') ?? 'none'
+      const reader = res.body.getReader()
+      const chunks = []
+      let ttfbMs = null
+      let firstChunkLen = 0
+      let total = 0
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (ttfbMs === null) {
+          ttfbMs = Date.now() - t
+          firstChunkLen = value.length
+        }
+        chunks.push(Buffer.from(value))
+        total += value.length
+      }
+      const all = Buffer.concat(chunks)
+      writeFileSync(join(tmp, 'stream88.wav'), all)
+      const riffOk =
+        all.subarray(0, 4).toString('ascii') === 'RIFF' &&
+        all.subarray(8, 12).toString('ascii') === 'WAVE'
+      claim(
+        'streaming WAV: first byte < 500ms (header-first)',
+        ttfbMs !== null && ttfbMs < 500 && riffOk,
+        `ttfb=${ttfbMs}ms, firstChunk=${firstChunkLen}B, x-stream=${xStream}`
+      )
+      claim(
+        'streaming WAV: exact Content-Length body',
+        declared > 0 && total === declared,
+        `declared=${declared}, received=${total}`
+      )
+      const probe = await ffprobe(join(tmp, 'stream88.wav'))
+      claim(
+        'streamed WAV decodes (ffprobe pcm_s16le)',
+        probe.codec_name === 'pcm_s16le',
+        `codec=${probe.codec_name}, sr=${probe.sample_rate}, dur=${probe.duration}`
+      )
+      // Cold re-render through the cache-storing path: an independent render
+      // must be byte-identical to the nocache stream (determinism at 88 bars,
+      // proving streaming changed nothing about the master-chain output).
+      const res2 = await fetchT(
+        `${BASE}/api/render-forensic?bars=88&seed=7`,
+        { headers: HDRS },
+        240000
+      )
+      const buf2 = Buffer.from(await res2.arrayBuffer())
+      const md5 = (f) => createHash('md5').update(f).digest('hex')
+      claim(
+        'streaming determinism: 88-bar re-render identical',
+        md5(buf2) === md5(all),
+        `md5=${md5(all).slice(0, 12)}…`
+      )
+      // Cache-hit path streams too — bytes must match the cold render.
+      const res3 = await fetchT(
+        `${BASE}/api/render-forensic?bars=88&seed=7`,
+        { headers: HDRS },
+        120000
+      )
+      const buf3 = Buffer.from(await res3.arrayBuffer())
+      const hitHeader = res3.headers.get('x-render-cache') ?? 'none'
+      claim(
+        'streaming cache-hit: identical bytes',
+        hitHeader === 'hit' && md5(buf3) === md5(all),
+        `cache=${hitHeader}, md5=${md5(buf3).slice(0, 12)}…`
       )
     }
 

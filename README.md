@@ -1,14 +1,14 @@
 # PSY Foundation — Procedural Psytrance Synthesis Engine
 
-> **Status: Phases 0–3 complete, Phase 4 "Product" underway (PLAN_V3_MASTER).
+> **Status: PLAN_V3_MASTER all phases (0–5) complete + 4.2 streaming follow-up shipped.
 > Foundation v2.0.0 — One DSP, honest metrics, PSYBUS v2, device conformance.
-> Every claim below is reproduced by `node scripts/verify.mjs` (23 claims,
+> Every claim below is reproduced by `node scripts/verify.mjs` (28 claims,
 > 0 fail).** A TypeScript DSP engine that renders psytrance audio via HTTP API,
 > with a 10-package musical foundation, a JUCE plugin prototype, and a
 > real-time AudioWorklet. Independent forensic audit: `docs/AUDIT_FORENSIC_2026-09-04.md`.
 
-[![tests](https://img.shields.io/badge/tests-942%20pass%2C%200%20fail-brightgreen)]()
-[![verify](https://img.shields.io/badge/verify-23%2F23%20claims%20green-success)]()
+[![tests](https://img.shields.io/badge/tests-957%20pass%2C%200%20fail-brightgreen)]()
+[![verify](https://img.shields.io/badge/verify-28%2F28%20claims%20green-success)]()
 [![version](https://img.shields.io/badge/foundation-v2.0.0-blue)]()
 [![license](https://img.shields.io/badge/license-UNLICENSED-red)]()
 
@@ -18,9 +18,9 @@
 
 ```bash
 bun install          # ~0.2s warm / ~10s cold
-bun test             # 942 pass, 0 fail, 0 skip
+bun test             # 957 pass, 0 fail, 0 skip
 bun run dev          # apps/web on http://localhost:3000 (PORT env respected)
-node scripts/verify.mjs   # executable truth: 23 endpoint/audio/infra claims, exit≠0 on any failure
+node scripts/verify.mjs   # executable truth: 28 endpoint/audio/infra claims, exit≠0 on any failure
 
 # render audio (deterministic — same seed → bit-identical WAV)
 curl "http://localhost:3000/api/render-forensic?bars=8&seed=42" -o out.wav
@@ -94,6 +94,14 @@ re-renders.
   processes (`X-Render-Worker: worker`), byte-identical to the in-thread path
   (parity-locked by test). Bounded queue → honest `503` under overload;
   worker crash → one reboot, then honest in-thread fallback.
+- **Streaming WAV (4.2)** — full-mix WAV responses stream header-first: the
+  44-byte RIFF header arrives in ~tens of ms (first-byte ≪ 500 ms even on
+  long renders — verify-locked), then bit-identical PCM follows in
+  backpressured 64 KiB chunks (no 25 MB contiguous body copy). Exact
+  `Content-Length` (known pre-render from the shared geometry math) makes
+  any truncation loud, never silent. The 2-pass master chain is untouched —
+  every md5 determinism + LUFS/TP baseline still holds. Stems/AIFF keep
+  buffered responses (their headers depend on post-render values).
 
 ---
 
@@ -103,8 +111,8 @@ re-renders.
 dsp, music, transport, protocol, analysis, learning, material, scheduler, device-sdk, fixtures
 
 ### Web app (`apps/web/`)
-- 942 tests pass, 0 fail, 0 skip
-- 6 HTTP API endpoints (all verified) + rate limiting + render cache + worker pool
+- 957 tests pass, 0 fail, 0 skip
+- 6 HTTP API endpoints (all verified) + rate limiting + render cache + worker pool + streaming WAV
 - Real-time AudioWorklet (13 voices) — generated from the CANONICAL
   `@psy-foundation/dsp` classes by `bun run build:worklet` (One-DSP: the
   offline render and the worklet share one implementation; parity fixtures
@@ -149,7 +157,8 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 | **Z.ai Phase 2** | **Honest metrics: critics de-gamed, hidden constants deleted, behavior locks** | `9a00067` |
 | **Z.ai Phase 3** | **Foundation for the family: v2.0.0, release ESM bundle, PSYBUS v2, device conformance, transport GAP closure** | `a579001`, tag `foundation-v2.0.0` |
 | **Z.ai Phase 4** | **Product: worker pool + render cache + coalescing, rate limiting + API-key mode, realtime tool-grade UI, session persistence** | `bc7abc2`, `c830c14` |
-| **Z.ai Phase 5** | **VST honestly archived to `archive/vst-prototype/` (decision B) — PLAN_V3 all phases complete** | this commit |
+| **Z.ai Phase 5** | **VST honestly archived to `archive/vst-prototype/` (decision B) — PLAN_V3 all phases complete** | `f44b323` |
+| **Z.ai 4.2 follow-up** | **Streaming WAV header-first (TTFB ≪ 500 ms verify-locked), byte-identical chunked PCM, shared render geometry** | this commit |
 
 ## Tech Stack
 
@@ -158,6 +167,6 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 - **Web:** Next.js 16 (App Router)
 - **Audio:** Web Audio API, AudioWorklet, ZDF SVF
 - **VST:** archived prototype (`archive/vst-prototype/`) — honest post-mortem inside
-- **Tests:** `bun test` (942) + `scripts/verify.mjs` (23 live claims)
+- **Tests:** `bun test` (957) + `scripts/verify.mjs` (28 live claims)
 - **Linter:** Biome 1.9.4
 - **License:** UNLICENSED (private; family adoption under separate agreement — see `docs/FAMILY_ADOPTION_OFFER.md`)

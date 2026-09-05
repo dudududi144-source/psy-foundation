@@ -1,7 +1,9 @@
 import { renderOnce, validateBarsSeed } from '@/lib/api-params'
+import { DEFAULT_SR } from '@/lib/psy4/constants'
 import {
   DEFAULT_RENDER_CONFIG,
   type RenderResult,
+  computeRenderGeometry,
   encodeWav,
   renderFoundationSection,
 } from '@/lib/psy4/forensic-bridge'
@@ -10,8 +12,13 @@ import { FACTORY_PRESETS } from '@/lib/psy4/preset-manager'
 import { enforceRateLimit } from '@/lib/rate-limit'
 import { getRenderCache, getRenderCoalescer } from '@/lib/render/render-cache'
 import { getRenderPool } from '@/lib/render/render-pool'
-import { CompositionEngine } from '@psy-foundation/music'
-import { createIdentityA } from '@psy-foundation/music'
+import {
+  encodeWavChunks,
+  encodeWavPcmChunks,
+  streamWavResponse,
+  wavHeaderBytes,
+} from '@/lib/render/wav-stream'
+import { CompositionEngine, createIdentityA, serializeRawScore } from '@psy-foundation/music'
 import { type NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -112,6 +119,13 @@ export async function GET(req: NextRequest) {
   const engine = new CompositionEngine({ seed, context: ctx, identity: createIdentityA() })
   const section = engine.composeSection({ bars })
 
+  // PLAN_V3 4.2 — exact WAV geometry BEFORE rendering, from the same shared
+  // formula the render itself uses (computeRenderGeometry). This is what lets
+  // the response stream the 44-byte RIFF header immediately (first byte ≪
+  // 500ms) while still declaring an exact Content-Length.
+  const geometry = computeRenderGeometry(serializeRawScore(section), ctx.bpm)
+  const totalWavFrames = geometry.totalSamples
+
   // PLAN_V3 4.1 — canonical cache key over EVERY render-affecting param.
   // ?nocache=1 forces a real re-render (verify's determinism claim must prove
   // re-render determinism, not cache determinism) and skips cache store.
@@ -132,9 +146,30 @@ export async function GET(req: NextRequest) {
   // buffers in place (idempotent peak normalization), so cached stems stay
   // correct, but we still only cache full mixes to keep the fast path pure.
   const cache = getRenderCache()
+  // PLAN_V3 4.2 — the full-mix WAV paths (cold + cached) stream header-first;
+  // stems and AIFF keep the buffered path (their response headers depend on
+  // post-render values — stem peak normalization — so they cannot start early).
+  const streamFullMix = stem === null && format === 'wav'
   if (stem === null && !nocache) {
     const cached = cache.get(cacheKey)
     if (cached) {
+      if (streamFullMix) {
+        // Cached bytes stream the same way as fresh ones (no 25 MB contiguous
+        // copy). Frames come from the cached buffers, so Content-Length is
+        // exact by construction.
+        return streamWavResponse(
+          encodeWavChunks(cached.samplesL, cached.samplesR, cached.sampleRate),
+          {
+            totalFrames: cached.samplesL.length,
+            sampleRate: cached.sampleRate,
+            headers: {
+              'X-Export-Format': format,
+              'X-Render-Cache': 'hit',
+              'X-Render-Worker': 'cache',
+            },
+          }
+        )
+      }
       const wav =
         format === 'aiff'
           ? encodeAiff(cached.samplesL, cached.samplesR, cached.sampleRate)
@@ -159,69 +194,143 @@ export async function GET(req: NextRequest) {
     | { kind: 'error'; response: NextResponse }
   const coalescer = getRenderCoalescer<RenderOutcome>()
   let viaWorker = 'inline'
-  const outcome: RenderOutcome = await coalescer.run(cacheKey, async (): Promise<RenderOutcome> => {
-    const pool = getRenderPool()
-    if (pool.isAvailable()) {
-      viaWorker = 'worker'
-      try {
-        const reply = await pool.render({
-          bars,
-          seed,
+  const runRender = (): Promise<RenderOutcome> =>
+    coalescer.run(cacheKey, async (): Promise<RenderOutcome> => {
+      const pool = getRenderPool()
+      if (pool.isAvailable()) {
+        viaWorker = 'worker'
+        try {
+          const reply = await pool.render({
+            bars,
+            seed,
+            useSamples,
+            bpm: ctx.bpm,
+            wantStems: stem !== null,
+            ctx,
+            config: renderConfig,
+          })
+          // WorkerRenderOk mirrors RenderResult exactly (stems included); the
+          // pool parity test locks byte-identical output vs the in-thread path.
+          const workerResult = reply as unknown as RenderResult
+          if (stem === null && !nocache) {
+            cache.set(cacheKey, { ...workerResult, stems: workerResult.stems ?? null })
+          }
+          return { kind: 'render', result: workerResult }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          if (message.includes('render queue full')) {
+            return {
+              kind: 'error',
+              response: NextResponse.json(
+                { error: 'render queue full — retry shortly' },
+                { status: 503, headers: { 'Retry-After': '5' } }
+              ),
+            }
+          }
+          console.error('Worker render failed, falling back in-thread:', message)
+          viaWorker = 'inline-fallback'
+        }
+      }
+      // In-thread fallback (dev without artifact / degraded pool). Phase 0
+      // (truth): single render attempt, honest 500 on failure.
+      const rendered = await renderOnce(() =>
+        renderFoundationSection(section, {
           useSamples,
           bpm: ctx.bpm,
-          wantStems: stem !== null,
-          ctx,
           config: renderConfig,
+          stems: stem !== null,
         })
-        // WorkerRenderOk mirrors RenderResult exactly (stems included); the
-        // pool parity test locks byte-identical output vs the in-thread path.
-        return { kind: 'render', result: reply as unknown as RenderResult }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        if (message.includes('render queue full')) {
-          return {
-            kind: 'error',
-            response: NextResponse.json(
-              { error: 'render queue full — retry shortly' },
-              { status: 503, headers: { 'Retry-After': '5' } }
-            ),
-          }
+      )
+      if (!rendered.ok) {
+        return {
+          kind: 'error',
+          response: NextResponse.json(
+            { error: `Render failed: ${rendered.error.message}` },
+            { status: 500 }
+          ),
         }
-        console.error('Worker render failed, falling back in-thread:', message)
-        viaWorker = 'inline-fallback'
       }
+      // PLAN_V3 4.2: the cache write lives in the coalesced task (runs exactly
+      // once per render, at completion) — NOT in the streaming body, which a
+      // client may abandon mid-render. Same semantics as the buffered era for
+      // every render that reaches completion.
+      if (stem === null && !nocache) {
+        cache.set(cacheKey, { ...rendered.result, stems: rendered.result.stems ?? null })
+      }
+      return { kind: 'render', result: rendered.result }
+    })
+
+  // PLAN_V3 4.2 — header-first streaming for full-mix WAV (the long-render
+  // path the plan targets). The response starts BEFORE the render finishes:
+  // the RIFF header (sized from the shared geometry math) streams at once,
+  // then the stream pulls the render outcome and emits PCM chunks.
+  //
+  // Overload contract preserved: the capacity gate and the coalesced submit
+  // happen in the SAME synchronous tick (coalescer.run invokes its task
+  // synchronously, and pool.render enqueues synchronously), so no other
+  // request can slip between the check and the submit — "queue full → honest
+  // 503" stays race-free. If the worker dies mid-render, the task falls back
+  // in-thread INSIDE the stream; bytes are identical either way (pool parity
+  // is test-locked), so X-Render-Worker reports the PLANNED path.
+  if (streamFullMix) {
+    const pool = getRenderPool()
+    const viaWorkerPlanned = pool.isAvailable()
+    if (viaWorkerPlanned && pool.stats.queued >= pool.maxQueue) {
+      return NextResponse.json(
+        { error: 'render queue full — retry shortly' },
+        { status: 503, headers: { 'Retry-After': '5' } }
+      )
     }
-    // In-thread fallback (dev without artifact / degraded pool). Phase 0
-    // (truth): single render attempt, honest 500 on failure.
-    const rendered = await renderOnce(() =>
-      renderFoundationSection(section, {
-        useSamples,
-        bpm: ctx.bpm,
-        config: renderConfig,
-        stems: stem !== null,
-      })
+    const outcomePromise = runRender()
+    return streamWavResponse(
+      (async function* (): AsyncGenerator<Uint8Array> {
+        // THE WHOLE POINT OF 4.2: the RIFF header is yielded BEFORE awaiting
+        // the render — first byte reaches the client in milliseconds, the
+        // PCM chunks follow once the (unchanged, byte-identical) render lands.
+        yield wavHeaderBytes(totalWavFrames, DEFAULT_SR)
+        const outcome = await outcomePromise
+        if (outcome.kind === 'error') {
+          // Status is already 200 — fail LOUD (truncated body ≠ declared
+          // Content-Length) instead of emitting silence.
+          console.error(
+            `[render-forensic] stream aborted after start (outcome status ${outcome.response.status})`
+          )
+          throw new Error('render failed after stream start')
+        }
+        const r = outcome.result
+        if (r.samplesL.length !== totalWavFrames) {
+          // Impossible unless computeRenderGeometry drifts from the render —
+          // abort loudly rather than send a malformed WAV.
+          throw new Error(
+            `geometry drift: render produced ${r.samplesL.length} frames, header declared ${totalWavFrames}`
+          )
+        }
+        // Header already streamed — PCM only (header + PCM ≡ encodeWav,
+        // parity-locked by tests/wav-stream.test.ts). Cache writes live in
+        // the coalesced task, not here (a client may abandon the stream).
+        yield* encodeWavPcmChunks(r.samplesL, r.samplesR)
+      })(),
+      {
+        totalFrames: totalWavFrames,
+        sampleRate: DEFAULT_SR,
+        headers: {
+          'X-Export-Format': 'wav',
+          'X-Render-Cache': 'miss',
+          'X-Render-Worker': viaWorkerPlanned ? 'worker' : 'inline',
+        },
+      }
     )
-    if (!rendered.ok) {
-      return {
-        kind: 'error',
-        response: NextResponse.json(
-          { error: `Render failed: ${rendered.error.message}` },
-          { status: 500 }
-        ),
-      }
-    }
-    return { kind: 'render', result: rendered.result }
-  })
+  }
+
+  // Buffered paths (stems + AIFF): response headers depend on post-render
+  // values, so the outcome is awaited before the response starts.
+  const outcome: RenderOutcome = await runRender()
 
   if (outcome.kind === 'error') {
     return outcome.response
   }
   const result: RenderResult = outcome.result
-
-  // Cache the completed full-mix render (stems/nocache paths skip caching).
-  if (stem === null && !nocache) {
-    cache.set(cacheKey, { ...result, stems: result.stems ?? null })
-  }
+  // Cache writes already happened inside the coalesced task (4.2).
   const renderHeaders: Record<string, string> = {
     'X-Render-Worker': viaWorker,
     'X-Render-Cache': 'miss',

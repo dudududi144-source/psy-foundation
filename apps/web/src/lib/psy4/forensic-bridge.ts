@@ -240,6 +240,38 @@ export interface RenderResult {
   }
 }
 
+// ── Render geometry (PLAN_V3 4.2 — single source of size truth) ───────────
+
+/** Exact sample geometry of a render, derived from the serialized score + bpm.
+ *
+ * The streaming WAV response must declare the exact data size BEFORE the
+ * render finishes (the 44-byte RIFF header names the byte count). This is
+ * the ONLY place the samples-per-step/bar formula lives —
+ * `renderFoundationSection` and the route's header-first stream both call
+ * it, so the streamed header can never drift from the render's own math.
+ * (Defense in depth: the wav-stream parity test locks streamed bytes to
+ * `encodeWav`, and the route aborts loudly on any length mismatch.) */
+export interface RenderGeometry {
+  samplesPerStep: number
+  samplesPerBar: number
+  /** samplesPerBar × bar count — the render's exact frame count. */
+  totalSamples: number
+}
+
+export function computeRenderGeometry(
+  rawScore: ReturnType<typeof serializeRawScore>,
+  bpm: number
+): RenderGeometry {
+  const secondsPerStep = 60 / bpm / (rawScore.groove.stepsPerBar / 4)
+  const samplesPerStep = Math.ceil(secondsPerStep * SR)
+  const samplesPerBar = samplesPerStep * rawScore.groove.stepsPerBar
+  return {
+    samplesPerStep,
+    samplesPerBar,
+    totalSamples: samplesPerBar * rawScore.bars.length,
+  }
+}
+
 export async function renderFoundationSection(
   section: ComposedSection,
   options: {
@@ -255,9 +287,9 @@ export async function renderFoundationSection(
   const rawScore = serializeRawScore(section)
   const bpm = options.bpm ?? 145
   const targetLufs = cfg.targetLufs
-  const secondsPerStep = 60 / bpm / (rawScore.groove.stepsPerBar / 4)
-  const samplesPerStep = Math.ceil(secondsPerStep * SR)
-  const samplesPerBar = samplesPerStep * rawScore.groove.stepsPerBar
+  // PLAN_V3 4.2: geometry comes from the ONE shared function (the render
+  // route calls the same function to size the streamed RIFF header).
+  const { samplesPerStep, samplesPerBar, totalSamples } = computeRenderGeometry(rawScore, bpm)
 
   // Phase 2 Day 4: render ALL bars (including INTRO/OUTRO).
   // Previously INTRO/OUTRO were filtered out → silence. Now we keep them
@@ -266,7 +298,6 @@ export async function renderFoundationSection(
   const renderBars = rawScore.bars
   const barRemap = new Map<number, number>()
   renderBars.forEach((b, i) => barRemap.set(b.barIndex, i))
-  const totalSamples = samplesPerBar * renderBars.length
 
   const samplesL = new Float32Array(totalSamples)
   const samplesR = new Float32Array(totalSamples)
