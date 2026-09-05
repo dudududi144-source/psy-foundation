@@ -4196,3 +4196,27 @@ Work Log:
 
 Stage Summary:
 - The last internal LOW finding from the 2026-09-04 forensic audit is CLOSED. Every export in the repo is now either public v2.0.0 surface, in-repo-consumed, or one of 2 documented vendored shadcn symbols. The only remaining scorecard gap is family adoption (external by mandate). The dead-export check is now a permanent repo tool (audit-exports.mjs) usable with --strict as a regression gate.
+
+---
+Task ID: 14 (Stereo truth: record correction + LeadRecipe.stereoWidth deletion)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- User resumed ("תמשיך ותדאג לדחוף בסוף"). Next item per the repo's own guidance was AUDIT_FOLLOWUP §4 item 2: "Stereo lead path". Investigation FALSIFIED the item's premise; the honest resolution changed shape accordingly.
+
+Work Log:
+- Evidence-first investigation of the stereo story across all render paths:
+  - ChannelFX.process(monoIn) → [L,R] is a full mono→stereo stage (EQ → ping-pong delay with per-channel delays → stereo CompactReverb → equal-power pan → Haas width + M/S side gain); CHANNEL_PRESETS.lead.width = 0.9, delay stereoOffsetMs = 15.
+  - renderFoundationSection routes EVERY channel through ChannelFX ([ll,lr] etc.) and the master applies StereoWidener(cfg.stereoWidth = MASTER_SPEC 1.3, automation-wired) + M/S widen 1.5.
+  - RUNTIME PROOF (2-bar reference render via renderFoundationSection, seed 42): stereoWidth metric 0.8839, monoCompatibility 0.6550, max |L−R| 1.135205, side RMS 0.200850 → the reference render IS true stereo.
+  - The music-package renderer (audio-renderer.ts) is honestly mono ("Mixes all voices into a mono Float32Array (stereo later)") — but it owns no locked md5s; the locked baselines are forensic renders.
+  - UI truth: page.tsx displays the MEASURED flag (`renderInfo.stereo ? 'stereo' : 'mono'`) and measured stereoWidth — there is no hardcoded "lead is mono" label. Task 12's claim about UI labels was wrong.
+- Conclusion: "the lead renders mono" (Task 12 doc + the field's own RESERVED comment) described the VOICE, not the RENDER. LeadRecipe.stereoWidth was a DUPLICATE declaration of width that is owned, wired, and measured at the channel/master bus. Wiring it would have been a redundant second knob (two controls, one behavior — the ambiguity the charter forbids). Per wire-or-delete: DELETE.
+- Changes:
+  - packages/music/src/audio/lead-voice.ts: deleted the stereoWidth interface field, its false "the lead renders MONO today… UI honesty labels describe the lead as mono" doc comment, and all 6 recipe assignments (DEFAULT 0.5 + five families 0.6/0.7/0.4/0.9/0.5). Zero readers repo-wide (Task 13 tool + tsc).
+  - packages/music/src/sound-dna.ts: SoundDNA.stereoWidth + StereoConfig.width are F21 contract surface frozen by the documented Vertical-Proof Freeze (raw-score-serializer header) — kept, but their "drives stereo width" comment theater replaced with honest CONTRACT-SURFACE-ONLY notes pointing at the real owners (ChannelFX.width, RenderConfig.stereoWidth).
+  - docs/AUDIT_FOLLOWUP_2026-09-05.md: §2 dead-flag row and §4 item 2 rewritten with the measured evidence and the corrected resolution (record correction + deletion, NOT a feature); §5 unchanged (no md5 re-baseline needed — nothing that fed a render changed).
+- Five Gates: bun test 957/0/0skip (115.2s), tsc 0 (17 packages), biome 0 (257 files), audit-exports 2 remaining (vendored, by policy), verify FULL 28/28 (138.8s) with BYTE-IDENTICAL baselines: 8-bar f2f81ed62a25, 88-bar 88ecc4b826cd — proving the deleted field fed zero bits into any render.
+
+Stage Summary:
+- §4 item 2 closed honestly: the "stereo lead path" was never missing — it was mislabeled. The repo's stereo width story is now single-source: channel-bus width (per-channel, wired) + master width (wired, automated, measured), with no duplicate voice-level declaration. The internal gap list is now exactly ONE item: family adoption (external). Scorecard claim stands at 7.5 with every internal finding closed on fresh evidence.

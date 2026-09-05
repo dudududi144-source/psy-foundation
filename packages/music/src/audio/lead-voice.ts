@@ -54,12 +54,6 @@ interface LeadRecipe {
   saturationDrive: number
   /** FM amount (0..1, for FM families). */
   fmAmount: number
-  /** RESERVED (NOT WIRED): stereo width 0..1. Documented honestly per the
-   *  2026-09-04 audit: the lead renders MONO today — no render path reads this
-   *  field yet. Wiring it requires a stereo render path (L/R buffers) and a
-   *  re-baseline of every locked md5; until then this is declared data, not
-   *  behavior, and the UI honesty labels describe the lead as mono. */
-  stereoWidth: number
   /** Overall gain 0..1. */
   gain: number
 }
@@ -79,7 +73,6 @@ const DEFAULT_LEAD_RECIPE: LeadRecipe = {
   saturationType: 'tanh',
   saturationDrive: 0.3,
   fmAmount: 0.5,
-  stereoWidth: 0.5,
   gain: 0.5,
 }
 
@@ -284,7 +277,6 @@ export function getRecipeForFamily(family: SoundFamily): LeadRecipe {
         saturationType: 'tanh',
         saturationDrive: 0.4,
         fmAmount: 0,
-        stereoWidth: 0.6,
         gain: 0.45,
       }
     case 'FM_PSY':
@@ -303,7 +295,6 @@ export function getRecipeForFamily(family: SoundFamily): LeadRecipe {
         saturationType: 'soft-clip',
         saturationDrive: 0.3,
         fmAmount: 0.7,
-        stereoWidth: 0.5,
         gain: 0.4,
       }
     case 'RUBBER_GOA':
@@ -322,7 +313,6 @@ export function getRecipeForFamily(family: SoundFamily): LeadRecipe {
         saturationType: 'tanh',
         saturationDrive: 0.5,
         fmAmount: 0,
-        stereoWidth: 0.7,
         gain: 0.4,
       }
     case 'METALLIC':
@@ -341,7 +331,6 @@ export function getRecipeForFamily(family: SoundFamily): LeadRecipe {
         saturationType: 'hard-clip',
         saturationDrive: 0.6,
         fmAmount: 0.9,
-        stereoWidth: 0.4,
         gain: 0.35,
       }
     case 'ATMOSPHERIC':
@@ -360,7 +349,6 @@ export function getRecipeForFamily(family: SoundFamily): LeadRecipe {
         saturationType: 'tanh',
         saturationDrive: 0.2,
         fmAmount: 0,
-        stereoWidth: 0.9,
         gain: 0.35,
       }
     case 'PLUCK':
@@ -379,7 +367,6 @@ export function getRecipeForFamily(family: SoundFamily): LeadRecipe {
         saturationType: 'soft-clip',
         saturationDrive: 0.25,
         fmAmount: 0,
-        stereoWidth: 0.5,
         gain: 0.4,
       }
   }

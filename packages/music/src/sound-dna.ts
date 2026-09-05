@@ -85,6 +85,8 @@ export interface LfoConfig {
 
 /** Stereo configuration. */
 export interface StereoConfig {
+  /** CONTRACT-SURFACE ONLY (F21 freeze): see SoundDNA.stereoWidth note —
+   *  not consumed by any render path today. */
   width: number
   /** Ping-pong delay amount 0..1. */
   pingPong: number
@@ -137,7 +139,10 @@ export interface SoundDNA {
   roughness: number
   /** Transient character 0..1 (drives envelope decay). */
   transientCharacter: number
-  /** Stereo width 0..1 (drives stereo width). */
+  /** Stereo width 0..1. CONTRACT-SURFACE ONLY (F21 freeze): no render path
+   *  reads this today — width is owned by the channel/master bus
+   *  (ChannelFX.width, RenderConfig.stereoWidth), which are wired and
+   *  measured. Do not present this field as active behavior. */
   stereoWidth: number
 }
 
