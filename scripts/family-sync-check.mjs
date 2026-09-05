@@ -14,10 +14,18 @@
  *     other delta is drift and fails.
  *
  * Usage:
- *   node scripts/family-sync-check.mjs [--family-root <dir>] [--json <out>]
+ *   node scripts/family-sync-check.mjs [--family-root <dir>] [--only <repo>] [--json <out>]
  *
  * --family-root: directory containing the consumer clones (default:
  *   <repo-root>/../family). Exit: 0 all in sync · 1 drift/missing · 2 usage.
+ * --only: check just one consumer repo's vendored files (e.g. --only
+ *   psy-anthem). For consumer-side CI: the consumer checks out THIS repo
+ *   and verifies its own vendored codec against foundation HEAD on every
+ *   push — drift can no longer hide until the next foundation push.
+ *   Without --only, all MANIFEST repos are checked (foundation CI mode:
+ *   a missing consumer clone is a failure, so the full matrix stays honest).
+ *   With --only, ONLY the named repo is checked; sibling repos are not
+ *   required to exist.
  */
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -43,6 +51,7 @@ function argValue(flag) {
   return v
 }
 const familyRoot = resolve(argValue('--family-root') || resolve(ROOT, '..', 'family'))
+const only = argValue('--only')
 const jsonOut = argValue('--json')
 
 // The only allowed non-byte-identical adaptation so far: anthem's shim
@@ -75,6 +84,11 @@ const MANIFEST = {
   },
 }
 
+if (only && !(only in MANIFEST)) {
+  console.error(`family-sync-check: --only must be one of: ${Object.keys(MANIFEST).join(', ')}`)
+  process.exit(2)
+}
+
 const md5 = (buf) => createHash('md5').update(buf).digest('hex')
 function normalize(repo, text) {
   const rules = IMPORT_NORMALIZATION[repo] || []
@@ -83,11 +97,13 @@ function normalize(repo, text) {
   return out
 }
 
+const checkedRepos = Object.keys(MANIFEST).filter((r) => !only || r === only)
 const results = []
 let drift = 0
 let missing = 0
 
 for (const [repo, files] of Object.entries(MANIFEST)) {
+  if (only && repo !== only) continue
   const repoDir = resolve(familyRoot, repo)
   if (!existsSync(repoDir)) {
     for (const [file] of Object.entries(files)) {
@@ -154,7 +170,7 @@ const summary = {
   checkedAt: new Date().toISOString(),
   familyRoot,
   foundation: `${md5(readFileSync(CANON.types))} (types)`,
-  repos: Object.keys(MANIFEST),
+  repos: checkedRepos,
   results,
   drift,
   missing,
@@ -174,7 +190,7 @@ for (const r of results) {
   )
 }
 console.log(
-  `\nsummary: ${results.length} vendored files across ${Object.keys(MANIFEST).length} repos — ` +
+  `\nsummary: ${results.length} vendored files across ${checkedRepos.length} repo(s) — ` +
     `${drift} drift, ${missing} missing → ${ok ? 'FAMILY IN SYNC' : 'SYNC BROKEN (exit 1)'}`
 )
 process.exit(ok ? 0 : 1)
