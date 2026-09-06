@@ -218,3 +218,57 @@ get the same ladder the moment the owner activates them.
   strict tsc → 78 tests → ui tsc + build; bun 1.1.44). Next stages
   (owner-approved, multi-stage): the PSYBUS v2 wire, the 53-style e2e,
   the coverage floor.
+
+### Task 29 (2026-09-06) — PsyTT: the canonization pass (foundation HEAD + conformance + determinism)
+
+Owner command: re-read psyreason (updated again by the other agent — 53 new
+commits since PsyTT's birth pin) and push PsyTT "several levels above" it.
+Writes: PsyTT only (psyreason untouched, still read-only for this agent).
+
+- **The vineyard re-read**: psyreason@`d09b139` (v7.9) landed 53 commits of
+  commercial-music work since `103e463`. PsyTT had evolved its own way
+  (+36K lines) but was missing the DEEP & SOUL family (17 style ids), the
+  contour/call-and-response melody brain, polishForm, the harmony pools,
+  the whole commercial FX stage, and any behavioral gate.
+- **Composition brain**: 9th family DEEP & SOUL (5 styles, 12 subs, deep
+  flag driving grounded bass / sparse vocal leads / no ghost-kick + the
+  DEEP GROOVE→EMOTIONAL BREAK→DUB OUTRO journey), leadRegister +
+  contour-genLead + genLeadAnswer (call-and-response in one singable
+  register), extended cadential harmony pools, chordsB (DROP 2 gets its
+  own progression, consumed by bass/lead/pad/pluck), polishForm wired into
+  every arrangement path.
+- **Commercial FX stage ported**: M/S imager (mono-safe lows, band-split
+  widening, per-section automation), 3-band multiband glue comp, DJ master
+  filter (continuous form sweeps), harmonic exciter, ping-pong delay with
+  kick-ducked returns, Freeverb-style cached IR + pre-delay + HPF,
+  chorus+phaser pad bus, trance-gate (16-step, section-aware, stutter
+  glitch, post-gate sends), NY parallel drums, pad motion LFO, atmos ring
+  mod, kick transient shaper, formant stabs/risers, whispers, FM bells,
+  deterministic grains, true portamento (the glide param was configured
+  but never applied), TPDF export dither, smooth-flow transition semantics.
+- **The one-codec law enforced for real**: PsyTT's vendored `foundation/`
+  was pinned months ago (87/98 comparable files drifted, 0 identical). It
+  is now re-vendored BYTE-IDENTICAL from foundation HEAD (106 files) and
+  `scripts/foundation-sync-check.mjs` fails the gate on drift / deleted
+  vendored files / undocumented divergence / lost patch markers (negative-
+  tested: 3/3 injected faults caught). The shim became live re-export
+  barrels — no hand-copied contracts remain.
+- **Canonical conformance (family first)**: PsyTT's subtractor and redrum
+  now pass the canonical C1..C8 suite run LIVE from the vendored
+  device-sdk — the first consumer whose devices are conformance-certified
+  against HEAD, with gate-has-teeth negative tests in the same suite.
+- **Behavioral gates**: headless smoke (full render path, SSR App, no
+  dead-air probe per family, lead-register band/variety, acid-303
+  portamento verified on actual automation, CUT analyzer — zero
+  transition cutoffs, DETERMINISM — same seed → byte-identical control
+  stream) + coverage floor (own-code 57.93% vs floor 56, vendored tree
+  excluded as upstream-certified and byte-verified here).
+- **CI**: the full ladder green on GitHub (lint → strict tsc → tests +
+  conformance → coverage floor → smoke → ui build → no-secrets →
+  foundation sync vs HEAD), Pages deploy green, site live. CI lessons
+  re-learned in CI: the nested family checkout must land AFTER bun test
+  discovery (bun's `tests/` filter matched foundation's suite), and the
+  no-secrets grep needed the bracket trick to not match itself.
+- Two dead files with unresolvable imports deleted (composer.js,
+  worklet-engine.js); PsyTT rebranded (App/title/package); PROVENANCE
+  records the canonization pass.

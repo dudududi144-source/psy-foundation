@@ -4498,3 +4498,22 @@ Work Log:
 
 Stage Summary:
 - The owner now has a flagship repo that is honest at every layer: provenance pinned, install works, all 78 behavioral tests pass (each former failure a measured, root-caused DSP fix), the whole tree typechecks strict, biome is at zero error-level findings, and CI runs everything the repo claims — green on the first run. Next stages (owner-approved multi-stage): the PSYBUS v2 wire (vendored codec + brain→render-notes mapping), the family-standard e2e, and the coverage floor.
+
+---
+Task ID: 29 (PsyTT canonization — re-read psyreason@d09b139, push PsyTT several levels above it)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- Owner command: go over psyreason again (READ only — the other agent keeps updating it) and improve PsyTT to be several levels above it, much more developed, writes to the PsyTT folder/repo ONLY. Re-clone from GitHub after the 5th sandbox wipe (owner: "all the information is in GitHub" — followed exactly).
+
+Work Log:
+- SANDBOX RESTORE: /home/z/psy-work was gone again. Re-cloned psy-foundation@496016d, PsyTT@e0939f8, psyreason@d09b139 (fresh HEADs); token scrubbed from all three .git/configs; deps installed before any gate.
+- RE-READ psyreason@d09b139 (v7.9, 53 commits since PsyTT's birth pin 103e463): feature-matrix diff vs PsyTT (17 style ids missing, the whole commercial FX stack, melody brain upgrades, behavioral smoke). Also caught a display artifact claiming `branches: ain]` in both CI files — od -c proved `branches: [main]`; no fix was needed (the family's od-verification lesson saved a phantom commit).
+- COMPOSITION BRAIN (PsyTT 012e24f): DEEP & SOUL family (5 styles/12 subs + deep-flag behavior + journey form), contour genLead + leadRegister + genLeadAnswer, cadential harmony pools, chordsB for DROP 2 (engine consumes it in 3 places + explicit chord picks cover both), polishForm wired everywhere.
+- COMMERCIAL FX STAGE (PsyTT 28814cc): full port + integration — M/S imager, multiband glue, DJ master filter, exciter, ping-pong + ducked returns, freeverb IR + pre-delay, chorus/phaser, trance-gate with stutter, NY parallel drums, pad motion LFO, ring mod, transient shaper, formant stabs/risers/whispers/bells/grains, true portamento (glide was configured but never applied — now verified on the automation stream), TPDF dither, smooth-flow semantics, exportWav 45-field restore list.
+- VENDOR CANONIZATION (PsyTT 63f21ad): foundation/ re-vendored byte-identical from HEAD (106 files; previously 87/98 drifted, pinned ~4ae95d3 era); shim → live re-export barrels; bidirectional sync gate with 3 negative tests; C1..C8 conformance suite run live against subtractor + redrum (family first) with gate-has-teeth negatives; coverage floor (own-code 57.93% vs floor 56); headless smoke with CUT analyzer + determinism; CI ladder + no-secrets.
+- CI/PROVE on GitHub: 4 fix-forward commits (biome must also ignore the family/ CI checkout layout; bun pinned 1.3.14 for the new lockfile; foundation checkout moved AFTER bun test discovery per the family convention; no-secrets grep bracket trick) → **CI fully green + Pages deploy green + site live** at PsyTT@c0354e5/e103d16.
+- BOUNDARY: writes to PsyTT + foundation docs only; psyreason untouched (read-only), psy5 untouched, anthem/psysampler untouched.
+
+Stage Summary:
+- PsyTT is now measurably ahead of its sibling on the engineering axis: the only family repo with vendored-foundation byte-sync enforced bidirectionally, canonical C1..C8 device conformance, deterministic-render verification, and a CI ladder that runs everything the README claims. The owner's "several levels above" bar: style library 9 families/54 styles/114 subs, 98 tests + 20 conformance rows green, all gates reproducible locally. Next candidate stages (owner-gated): PSYBUS v2 wire adoption (vendored codec now lives in-tree), 53-style e2e over HTTP, harmony-strip editing UI.
