@@ -95,10 +95,16 @@ get the same ladder the moment the owner activates them.
    band-limited at the source, 2-pole 11 kHz, local per-burst state).
    Measured after: draft+drums 10/10 gates (I=−9.0, TP=−0.4, LRA 4.8);
    draft 0 FAIL 0 WARN; determinism byte-identical. v13.9.3.
-4. **psyreason** (pushed after this session started): next candidate for
-   the same READ→…→TAG adoption, pending owner authorization. **READ
-   phase COMPLETE without writing** (owner has another agent working
-   there; writes would collide): full recon in
+4. **psyreason → PsyTT (the owner's fork command, Task 28)**: psyreason
+   stays the sibling (another agent still works there); the owner ordered
+   a pinned copy into a NEW repo — **PsyTT** — and mandated building the
+   family's flagship device from it. Copy taken at `103e463` (the other
+   agent's freshest landing: exportWav bounce, crash voice, K-B-B-B bass).
+   **BASE phase COMPLETE and green on GitHub**: install story fixed,
+   9 missing vendored modules restored/created, 7 born-failing DSP tests
+   root-caused and fixed (78/0), 472 strict-typecheck errors → 0 across
+   the whole tree, biome 0 error-level findings, real CI (the family
+   ladder) green at step level. Recon details in
    `docs/PSYREASON_RECON.md` — anthem's engine is already vendored
    inside (createAnthemEngine + seeded mulberry32), PSYBUS tier-0
    in-process bus ≠ v2 wire (adoption maps, not replaces), offline
@@ -184,3 +190,31 @@ get the same ladder the moment the owner activates them.
   broken (workspaces without package.jsons), 71/7 tests, 16 tsc errors,
   CI green-over-red (build-only). §5 item 4 updated: plan staged, execute
   after the other agent lands + owner authorization.
+- **Task 28 — PsyTT born: the owner's fork command executed, and the base
+  phase landed green (this commit).** Owner: take psyreason, copy it to a
+  new repo PsyTT, and build the ultimate representative device. Copy pinned
+  at psyreason `103e463` (fresh HEAD with exportWav/crash/K-B-B-B), verified
+  359 files + md5 spot-checks, PROVENANCE.md records source/method/caveat.
+  The BASE phase cured the whole green-over-red syndrome in one sweep:
+  root install fixed (workspaces descope + missing aliases); **9 modules
+  restored that the vendored code was born without** (psy-foundation-shim
+  moved to its canonical import location; `learning/types.ts` restored
+  VERBATIM from foundation HEAD — the other 7 learning files were already
+  byte-identical; anthem's `validation/config-schema.ts` copied verbatim
+  from its canonical owner; 4 modules written to their measured call-site
+  contracts); **4 real DSP defects root-caused** (master compressor shared
+  between L/R; lookahead line reading stale zeros; Tustin one-pole
+  under-stating the feedback filter 4x; Thor release formula equilibrating
+  at 44% so gated notes rang forever; Europa unison sharing ONE phase
+  accumulator — pitch multiplied by the unison count) — 71/7 → **78/0**;
+  **472 strict-typecheck errors → 0** across the entire tree (first whole-
+  tree typecheck in the project's history; five parallel agent territories
+  + tests + ui); ui latent crash fixed (renderKong called triggerPad on the
+  raw synth, not the machine wrapper); **biome 0 error-level findings**
+  (the blanket --unsafe pass produced invalid optional-chain assignments,
+  was caught by the tests, reverted, and redone rule-by-rule with
+  verification between batches — the negative test saved the round);
+  **real CI green at step level on the first run** (install → biome →
+  strict tsc → 78 tests → ui tsc + build; bun 1.1.44). Next stages
+  (owner-approved, multi-stage): the PSYBUS v2 wire, the 53-style e2e,
+  the coverage floor.

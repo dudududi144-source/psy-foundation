@@ -198,3 +198,4 @@ web app already ships the engine. See `archive/vst-prototype/README.md`.
 - **Tests:** `bun test` (957) + `scripts/verify.mjs` (28 live claims) + `scripts/audit-exports.mjs` (dead-export audit: 2 remaining = vendored shadcn, by policy) + `scripts/acceptance-check.mjs` (consumer WAV gate)
 - **Linter:** Biome 1.9.4
 - **License:** UNLICENSED (private; family adoption under separate agreement — see `docs/FAMILY_ADOPTION_OFFER.md`)
+| **Z.ai Task 28** | **PsyTT born — the owner's fork command: psyreason@103e463 copied to the new flagship repo, BASE phase green end-to-end: 9 born-missing vendored modules restored (learning/types.ts verbatim from foundation), 4 real DSP defects fixed (71/7 → 78/0), 472 strict-typecheck errors → 0 whole-tree, biome 0 error-level, real CI green at step level on first run** | PsyTT `12817fa` / this commit |
