@@ -4441,3 +4441,21 @@ Work Log:
 
 Stage Summary:
 - The one-codec rule is now enforced from BOTH directions: foundation checks all consumers on its pushes, and each consumer checks itself against foundation HEAD on every push of its own. Vendored-codec drift has nowhere left to hide. Remaining open items stay owner-gated: psyreason onboarding, psy-sampler vs psysampler duplication, psy5's coverage floor (only if ever authorized).
+
+---
+Task ID: 26 (The last local-only gate joins CI + the wire re-proven — owner approval "אוקי אני מאשר" for the deep-gap work in the defined folders)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- Continue the approved deep-gap hunt strictly inside the defined folders (psy-foundation, psy-anthem, psysampler). psyreason and psy5 stay untouched — approval did NOT extend the write boundary.
+
+Work Log:
+- GAP FOUND: anthem's draft-render-check (Task 23's gate, the one that caught the stereo collapse + true-peak clipping) existed only as a local script — CI never ran it. Same disease as the coverage floor before Task 24: a gate CI does not run is documentation, not a gate.
+- LOCAL PROOF FIRST: draft+drums 10/10 (I=-9.0, TP=-0.4, LRA=4.8 — exactly Task 23's numbers), full+drums+determinism 10/10 in ~7s; acceptance-check needs ffmpeg/ffprobe (both).
+- ANTHEM CI (ab18f00, v0.3.5, CHANGELOG 13.9.6): ffmpeg apt step (the Task-21 lesson: runners ship no ffprobe) + BOTH render paths as CI steps: --drums on --quality draft, and --drums on --quality full --determinism (byte-identical double render).
+- E2E RE-PROOF (the wire as a reproducible property): foundation web dev on :3123 (:3000 belongs to the sandbox); psysampler e2e 23/23 claims exit 0 (C1-C8: wire accounting, 200+audio/wav, structural gates, C4 HTTP md5 determinism 106517d5…, C7 density lever, C8 melody lever); anthem e2e exit 0 → 53/53 claims, 0 FAIL 0 WARN, docs/E2E_PIPELINE_REPORT.md regenerated (f5c59ce) with fresh md5s, the 2000-note cap honest 400 + halves workaround, and HTTP determinism. Server stopped cleanly after.
+- DOCS: FAMILY_MATRIX §6 Task 26 entry + README journey row (this commit).
+- BOUNDARY: psyreason NOT touched (approval covered the defined folders only); psy5 untouched (bbe81c2); no new repos.
+
+Stage Summary:
+- After Tasks 24-26, the family's gate inventory is fully honest: every gate that exists is a CI step somewhere — coverage floors (both consumers), family sync (foundation full-matrix + both consumers via --only), render quality (anthem draft+full with determinism). And the adoption pipelines were re-proven against the current foundation HEAD, so the recorded evidence matches today's truth, not last week's.

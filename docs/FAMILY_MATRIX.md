@@ -154,3 +154,14 @@ get the same ladder the moment the owner activates them.
   success in anthem and psysampler runs. Fourth workspace wipe in this
   round too — recovery from GitHub again matched every expected SHA
   (05d0af8 / a7aa120 / 4a065bd / bbe81c2), zero loss.
+- **Task 26 — the last local-only gate joins CI + the wire re-proven
+  (anthem `ab18f00` + `f5c59ce`).** Task 23's draft-render-check existed
+  only as a local script — the "gate that CI does not run is
+  documentation" lesson applied again. Anthem CI now installs ffmpeg
+  (the Task-21 lesson) and runs BOTH measured render paths on every
+  push: draft+drums and full+drums with byte-identical determinism
+  (10/10 gates each, ~7 s). Same round: BOTH adoption pipelines
+  re-proven against foundation HEAD `8895305` — anthem 53/53 claims
+  (fresh E2E_PIPELINE_REPORT) and psysampler 23/23 (exit 0). The wire
+  survives every push of every repo, not just the sessions someone
+  remembers to test.
