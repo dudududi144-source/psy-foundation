@@ -96,7 +96,16 @@ get the same ladder the moment the owner activates them.
    Measured after: draft+drums 10/10 gates (I=−9.0, TP=−0.4, LRA 4.8);
    draft 0 FAIL 0 WARN; determinism byte-identical. v13.9.3.
 4. **psyreason** (pushed after this session started): next candidate for
-   the same READ→…→TAG adoption, pending owner authorization.
+   the same READ→…→TAG adoption, pending owner authorization. **READ
+   phase COMPLETE without writing** (owner has another agent working
+   there; writes would collide): full recon in
+   `docs/PSYREASON_RECON.md` — anthem's engine is already vendored
+   inside (createAnthemEngine + seeded mulberry32), PSYBUS tier-0
+   in-process bus ≠ v2 wire (adoption maps, not replaces), offline
+   renderer deterministic but browser-only, and the dated gate snapshot
+   (HEAD e438ce9): root install broken, 7 failing tests, 16 tsc errors,
+   CI green-over-red (build-only, no tests/lint/tsc). Adoption plan
+   staged; execute after the other agent lands and the owner says go.
 5. ~~**Coverage floors for consumer repos.**~~ **DONE (Tasks 22→24).**
    Bun's `coverageThreshold` is PER-FILE (proven 2026-09-05: psysampler
    overall 79.4% funcs / 81.6% lines still exits 1 at 0.75 because ui.js
@@ -165,3 +174,13 @@ get the same ladder the moment the owner activates them.
   (fresh E2E_PIPELINE_REPORT) and psysampler 23/23 (exit 0). The wire
   survives every push of every repo, not just the sessions someone
   remembers to test.
+- **Task 27 — psyreason recon: the READ phase of the fourth adoption,
+  performed without writing (this commit).** Owner has another agent
+  actively working in psyreason and granted read-only use — concurrent
+  writes would collide. Full recon in `docs/PSYREASON_RECON.md`:
+  family DNA already inside (anthem's engine + seeded mulberry32
+  vendored; PSYBUS tier-0 in-process bus; deterministic browser-only
+  offline renderer), and a dated honest-gate snapshot — root install
+  broken (workspaces without package.jsons), 71/7 tests, 16 tsc errors,
+  CI green-over-red (build-only). §5 item 4 updated: plan staged, execute
+  after the other agent lands + owner authorization.

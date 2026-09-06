@@ -4459,3 +4459,22 @@ Work Log:
 
 Stage Summary:
 - After Tasks 24-26, the family's gate inventory is fully honest: every gate that exists is a CI step somewhere — coverage floors (both consumers), family sync (foundation full-matrix + both consumers via --only), render quality (anthem draft+full with determinism). And the adoption pipelines were re-proven against the current foundation HEAD, so the recorded evidence matches today's truth, not last week's.
+
+---
+Task ID: 27 (psyreason recon — the READ phase of the fourth adoption, strictly without writing; owner: another agent works there, use it but don't write)
+Agent: Z.ai Code (lead engineer)
+
+Task:
+- Owner granted READ-ONLY access to psyreason (another agent is actively working there; concurrent writes would break each other). Perform the adoption's READ phase now so the eventual adoption is fast. Keep all WRITES inside the defined folders (foundation/anthem/psysampler).
+
+Work Log:
+- READ-ONLY DISCIPLINE: cloned psyreason locally (token scrubbed from .git/config immediately), zero pushes/branches/issues. Snapshot HEAD e438ce9, dated 2026-09-06, with an explicit staleness caveat (the other agent is mid-"Research phase" on DSP/mastering).
+- STRUCTURE: Reason-style rack in the browser — devices (Subtractor/NN-XT/Redrum/Thor/Mixer 14:2/Combinator/RPG-8/Matrix/7 FX), SVG patch cables, React/Vite UI, 9-style composition brain. foundation/ 1.2MB, devices/ 804KB, host/ 716KB.
+- FAMILY DNA ALREADY INSIDE: host/composition/engine.ts exports createAnthemEngine(AnthemConfig) — anthem's engine vendored; composition/rng.ts is the seeded mulberry32 with the "PSY ANTHEM — rng.ts" header; own foundation/ dir (device-sdk, scheduler, protocol/events, sound-dna); PSYBUS tier-0 in-process device bus (src/dst routing + dsp provenance fingerprints) — a DIFFERENT dialect from the v2 wire; adoption MAPS composition output to v2 envelopes, replaces nothing.
+- OFFLINE RENDER: host/audio-engine/offline-render.ts — deterministic (pattern, seed, bpm, bars, sampleRate) → byte-identical WAV, verified by their tests; HONESTLY documented as browser-only (OfflineAudioContext) — the HTTP proof path will ride foundation's render-notes like every prior adoption.
+- GATE SNAPSHOT (dated, honest): root bun install BROKEN (workspaces declare foundation/devices/host; only ui has package.json); bun test 71/7 (Mixer14 ×4, DigitalDelay feedback, Thor envelope release, Europa unison — DSP-behavioral, consistent with the other agent's WIP, not a verdict); ui tsc exit 2 / 16 errors (13 in src/audio/engine.ts); biome exit 1 (2 format-only findings on config files); GitHub CI GREEN — but it runs ONLY npm install + npm run build in ui/: NO tests, NO lint, NO typecheck. Green-over-red (the inverse of psysampler's red-on-green theater; same cure: CI must run what the repo claims).
+- ADOPTION PLAN STAGED in docs/PSYREASON_RECON.md §4: CLAIM (after other agent lands, fresh HEAD) → BASE (honest gates first: install story, test triage with the landed WIP, tsc 0, biome 0, family CI ladder + coverage floor + family-sync-check --only psyreason) → DO (verbatim v2 codec vendored + wire.ts mapping brain → render-notes) → GATE/PROVE (53-style e2e over HTTP + determinism) → LOG/TAG.
+- WRITES THIS TASK: foundation only (recon doc + matrix §5 item 4 + §6 + README + worklog). psyreason/anthem/psysampler untouched by this task; psy5 still untouched (bbe81c2).
+
+Stage Summary:
+- The fourth adoption's hardest phase (knowing what's actually there) is DONE and preserved in foundation, so nothing depends on my session memory. The recon also surfaced the family's oldest lesson in a new form — CI green over a red repo — which the BASE phase will cure first, before any wire work. Awaiting: (1) the other agent's landing, (2) owner's write authorization.
